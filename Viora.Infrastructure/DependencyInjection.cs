@@ -1,0 +1,54 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Viora.Infrastructure.Persistence;
+using Viora.Application.Accounts;
+using Viora.Infrastructure.Persistence.Repositories;
+using Viora.Infrastructure.Security;
+using Microsoft.Extensions.Options;
+using System.Text;
+using Viora.Application.Users;
+
+namespace Viora.Infrastructure;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "Missing required configuration 'ConnectionStrings:DefaultConnection'. " +
+                "Set it with the environment variable ConnectionStrings__DefaultConnection or User Secrets.");
+        }
+
+        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+        var jwtOptions = new JwtOptions
+        {
+            Key = configuration["Jwt:Key"] ?? string.Empty,
+            Issuer = configuration["Jwt:Issuer"] ?? "viora-BE",
+            Audience = configuration["Jwt:Audience"] ?? "viora-client"
+        };
+        if (int.TryParse(configuration["Jwt:AccessTokenMinutes"], out var accessTokenMinutes))
+        {
+            jwtOptions.AccessTokenMinutes = accessTokenMinutes;
+        }
+        if (Encoding.UTF8.GetByteCount(jwtOptions.Key) < 32)
+        {
+            throw new InvalidOperationException(
+                "Missing or invalid configuration 'Jwt:Key'. Set at least 32 UTF-8 bytes " +
+                "in appsettings.json or with the environment variable Jwt__Key.");
+        }
+        services.AddSingleton(Options.Create(jwtOptions));
+        services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<IUserProfileRepository, UserProfileRepository>();
+        services.AddScoped<IUserProfileService, UserProfileService>();
+        return services;
+    }
+}

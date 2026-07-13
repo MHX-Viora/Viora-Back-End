@@ -1,0 +1,52 @@
+# Build and publish output
+[Bb]in/
+[Oo]bj/
+artifacts/
+publish/
+*.nupkg
+*.snupkg
+
+# Visual Studio, VS Code, Rider and user state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.sln.iml
+
+# Test and coverage output
+TestResults/
+coverage/
+.coverage/
+*.coverage
+*.coveragexml
+*.trx
+
+# Local application configuration and secrets
+viora-BE/appsettings.json
+**/appsettings.Local.json
+**/appsettings.*.local.json
+.env
+.env.*
+!.env.example
+secrets.json
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
