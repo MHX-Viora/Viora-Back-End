@@ -17,7 +17,8 @@ Add this only to ignored `viora-BE/appsettings.json`, or provide `Jwt__Key` thro
   "Key": "replace-with-a-random-secret-of-at-least-32-bytes",
   "Issuer": "viora-BE",
   "Audience": "viora-client",
-  "AccessTokenMinutes": 15
+  "AccessTokenMinutes": 15,
+  "RefreshTokenDays": 30
 }
 ```
 
@@ -29,7 +30,7 @@ Do not commit the real key. Startup fails clearly when `Jwt:Key` is absent or to
 - Unknown account and wrong password share one response.
 - Login is limited to 5 requests/minute per client IP.
 - JWTs contain IDs, role, timestamps and token type; no email, phone, or password hash.
-- Login returns access tokens only; refresh tokens are not issued.
+- Login JSON returns only the access token; the refresh token is written to an HttpOnly cookie, stored server-side only as a hash, and rotated by `POST /api/accounts/refresh-token`.
 
 ## Verification
 

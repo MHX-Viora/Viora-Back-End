@@ -8,6 +8,7 @@ using Viora.Infrastructure.Security;
 using Microsoft.Extensions.Options;
 using System.Text;
 using Viora.Application.Users;
+using Viora.Infrastructure.Media;
 
 namespace Viora.Infrastructure;
 
@@ -36,6 +37,10 @@ public static class DependencyInjection
         {
             jwtOptions.AccessTokenMinutes = accessTokenMinutes;
         }
+        if (int.TryParse(configuration["Jwt:RefreshTokenDays"], out var refreshTokenDays))
+        {
+            jwtOptions.RefreshTokenDays = refreshTokenDays;
+        }
         if (Encoding.UTF8.GetByteCount(jwtOptions.Key) < 32)
         {
             throw new InvalidOperationException(
@@ -44,6 +49,22 @@ public static class DependencyInjection
         }
         services.AddSingleton(Options.Create(jwtOptions));
         services.AddSingleton<ITokenService, JwtTokenService>();
+        var cloudinaryOptions = new CloudinaryOptions
+        {
+            CloudName = configuration["Cloudinary:CloudName"] ?? string.Empty,
+            ApiKey = configuration["Cloudinary:ApiKey"] ?? string.Empty,
+            ApiSecret = configuration["Cloudinary:ApiSecret"] ?? string.Empty
+        };
+        if (string.IsNullOrWhiteSpace(cloudinaryOptions.CloudName) ||
+            string.IsNullOrWhiteSpace(cloudinaryOptions.ApiKey) ||
+            string.IsNullOrWhiteSpace(cloudinaryOptions.ApiSecret))
+        {
+            throw new InvalidOperationException(
+                "Missing Cloudinary configuration. Set Cloudinary:CloudName, Cloudinary:ApiKey, " +
+                "and Cloudinary:ApiSecret with User Secrets or environment variables.");
+        }
+        services.AddSingleton(Options.Create(cloudinaryOptions));
+        services.AddSingleton<IProfileImageStorage, CloudinaryProfileImageStorage>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IAccountService, AccountService>();

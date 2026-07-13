@@ -13,7 +13,7 @@ namespace Viora.Infrastructure.Tests;
 public sealed class JwtTokenServiceTests
 {
     [Fact]
-    public void CreateTokens_returns_only_a_signed_access_jwt_without_personal_identifiers()
+    public void CreateTokens_returns_access_and_opaque_refresh_tokens_without_personal_identifiers()
     {
         var service = new JwtTokenService(Options.Create(new JwtOptions
         {
@@ -30,14 +30,19 @@ public sealed class JwtTokenServiceTests
             User = new User { DisplayName = "Test User" }
         };
 
-        var tokens = service.CreateTokens(account);
+        var issue = service.CreateTokens(account);
+        var tokens = issue.Tokens;
         var accessPayload = DecodePayload(tokens.AccessToken);
 
         Assert.Equal("access", accessPayload.GetProperty("token_type").GetString());
         Assert.DoesNotContain("private@example.com", tokens.AccessToken);
         Assert.DoesNotContain("secret-hash", tokens.AccessToken);
         Assert.Equal(3, tokens.AccessToken.Split('.').Length);
-        Assert.Single(typeof(AccountTokens).GetProperties());
+        Assert.Equal(2, typeof(AccountTokens).GetProperties().Length);
+        Assert.NotEmpty(tokens.RefreshToken);
+        Assert.NotEqual(tokens.RefreshToken, issue.RefreshTokenHash);
+        Assert.Equal(issue.RefreshTokenHash, service.HashRefreshToken(tokens.RefreshToken));
+        Assert.True(issue.RefreshTokenExpiresAt > DateTime.UtcNow);
     }
 
     [Fact]
@@ -51,6 +56,20 @@ public sealed class JwtTokenServiceTests
     }
 
     [Fact]
+    public void Constructor_rejects_non_positive_token_lifetime()
+    {
+        var options = Options.Create(new JwtOptions
+        {
+            Key = "test-signing-key-with-at-least-32-bytes",
+            RefreshTokenDays = 0
+        });
+
+        var exception = Assert.Throws<InvalidOperationException>(() => new JwtTokenService(options));
+
+        Assert.Contains("greater than zero", exception.Message);
+    }
+
+    [Fact]
     public async Task Access_token_is_accepted_by_standard_jwt_validation()
     {
         const string key = "test-signing-key-with-at-least-32-bytes";
@@ -61,7 +80,7 @@ public sealed class JwtTokenServiceTests
             Audience = "viora-client"
         }));
         var account = new Account { Email = "user@example.com", PasswordHash = "hash" };
-        var token = service.CreateTokens(account).AccessToken;
+        var token = service.CreateTokens(account).Tokens.AccessToken;
 
         var result = await new JsonWebTokenHandler().ValidateTokenAsync(token, new TokenValidationParameters
         {

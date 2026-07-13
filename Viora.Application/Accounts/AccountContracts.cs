@@ -5,10 +5,22 @@ namespace Viora.Application.Accounts;
 
 public sealed record RegisterAccountCommand(string Identifier, string Password);
 public sealed record LoginAccountCommand(string Identifier, string Password);
+public sealed record RefreshAccountTokenCommand(string RefreshToken);
 
 public enum LoginOutcome { InvalidCredentials, Banned, Active, Deleted }
 
-public sealed record AccountTokens(string AccessToken);
+public sealed record AccountTokens(string AccessToken, string RefreshToken);
+public sealed record IssuedAccountTokens(
+    AccountTokens Tokens,
+    string RefreshTokenHash,
+    DateTime RefreshTokenExpiresAt);
+
+public enum RefreshTokenOutcome { Active, Invalid }
+
+public sealed record RefreshAccountTokenResult(
+    RefreshTokenOutcome Outcome,
+    AccountTokens? Tokens,
+    string? Message);
 
 public sealed record LoginAccountResult(
     LoginOutcome Outcome,
@@ -42,6 +54,9 @@ public interface IAccountService
     Task<AccountResponse?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<AccountResponse> RegisterAsync(RegisterAccountCommand command, CancellationToken cancellationToken);
     Task<LoginAccountResult> LoginAsync(LoginAccountCommand command, CancellationToken cancellationToken);
+    Task<RefreshAccountTokenResult> RefreshTokenAsync(
+        RefreshAccountTokenCommand command,
+        CancellationToken cancellationToken);
     Task<AccountResponse?> UpdateAsync(Guid id, UpdateAccountCommand command, CancellationToken cancellationToken);
     Task DeleteAsync(Guid id, CancellationToken cancellationToken);
 }
@@ -51,9 +66,16 @@ public interface IAccountRepository
     Task<(IReadOnlyList<Account> Items, int Total)> ListAsync(int skip, int take, CancellationToken cancellationToken);
     Task<Account?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Account?> FindByIdentifierAsync(string? email, string? phone, CancellationToken cancellationToken);
+    Task<RefreshToken?> FindRefreshTokenAsync(string tokenHash, CancellationToken cancellationToken);
     Task<bool> EmailExistsAsync(string email, Guid? excludingId, CancellationToken cancellationToken);
     Task<bool> PhoneExistsAsync(string phone, Guid? excludingId, CancellationToken cancellationToken);
     Task AddAsync(Account account, CancellationToken cancellationToken);
+    Task AddRefreshTokenAsync(RefreshToken refreshToken, CancellationToken cancellationToken);
+    Task<bool> RotateRefreshTokenAsync(
+        Guid currentTokenId,
+        RefreshToken replacement,
+        DateTime revokedAt,
+        CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
 
@@ -65,7 +87,8 @@ public interface IPasswordHasher
 
 public interface ITokenService
 {
-    AccountTokens CreateTokens(Account account);
+    IssuedAccountTokens CreateTokens(Account account);
+    string HashRefreshToken(string refreshToken);
 }
 
 public sealed class AccountConflictException(string code, string message) : Exception(message)

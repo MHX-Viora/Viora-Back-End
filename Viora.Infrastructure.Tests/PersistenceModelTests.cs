@@ -26,8 +26,9 @@ public sealed class PersistenceModelTests
             .Where(name => name is not null)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(24, tables.Count);
+        Assert.Equal(25, tables.Count);
         Assert.Contains("Accounts", tables);
+        Assert.Contains("RefreshTokens", tables);
         Assert.Contains("Users", tables);
         Assert.Contains("Posts", tables);
         Assert.Contains("Conversations", tables);
@@ -91,6 +92,24 @@ public sealed class PersistenceModelTests
             services.AddInfrastructure(configuration));
 
         Assert.Contains("Jwt:Key", exception.Message);
+    }
+
+    [Fact]
+    public void AddInfrastructure_rejects_missing_cloudinary_configuration()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Database=viora;Username=test",
+                ["Jwt:Key"] = "test-signing-key-with-at-least-32-bytes"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddInfrastructure(configuration));
+
+        Assert.Contains("Cloudinary", exception.Message);
     }
 
     [Fact]

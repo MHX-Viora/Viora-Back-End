@@ -2,16 +2,17 @@
 
 ## Endpoints
 
-- `POST /api/users/profile` creates the current account's profile and returns HTTP 201 with the user object.
-- `PUT /api/users/profile` replaces editable profile fields and returns HTTP 200 with the user object.
+- `POST /api/users/profile` consumes multipart fields `displayName`, `gender`, optional `avatar`, and optional `cover`; it returns HTTP 201.
+- `PATCH /api/users/profile` consumes the same multipart fields, updates only supplied values, and returns HTTP 200; an empty request returns HTTP 400.
+- There are no separate avatar/cover PATCH routes and clients cannot submit image URLs.
 - Both require `Authorization: Bearer <accessToken>`; `accountId` comes from the validated JWT `sub` claim.
-- Body: `displayName`, nullable `avatarUrl`, nullable `coverUrl`, and numeric `gender` (`0=Unknown`, `1=Male`, `2=Female`).
+- Images accept JPEG, PNG, or WebP up to 5 MB each. The server uploads them to Cloudinary and persists only returned HTTPS URLs.
 
 Business failures return `{ "message": "..." }` in Vietnamese: duplicate create=409, missing profile=404, inactive account=403, invalid profile=400. Missing/invalid token returns 401.
 
 ## Login Change
 
-`POST /api/accounts/login` now returns only `accessToken`; refresh-token generation and response fields were removed.
+`POST /api/accounts/login` returns `accessToken` in JSON and sets refresh token as an HttpOnly cookie; profile authorization still accepts access tokens only.
 
 ## Security
 

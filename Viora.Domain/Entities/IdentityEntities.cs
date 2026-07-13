@@ -10,6 +10,17 @@ public sealed class Account : AuditableEntity
     public DateTime? LastLoginAt { get; set; }
     public DateTime? DeletedAt { get; set; }
     public User? User { get; set; }
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
+}
+
+public sealed class RefreshToken : AuditableEntity
+{
+    public Guid AccountId { get; set; }
+    public string TokenHash { get; set; } = null!;
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? RevokedAt { get; set; }
+    public string? ReplacedByTokenHash { get; set; }
+    public Account Account { get; set; } = null!;
 }
 
 public sealed class User : AuditableEntity

@@ -96,8 +96,14 @@ public sealed class AccountService(
             return InvalidCredentials();
         }
 
-        var tokens = (tokenService ?? throw new InvalidOperationException("Token service is not configured."))
+        var issuedTokens = (tokenService ?? throw new InvalidOperationException("Token service is not configured."))
             .CreateTokens(account);
+        await repository.AddRefreshTokenAsync(new RefreshToken
+        {
+            AccountId = account.Id,
+            TokenHash = issuedTokens.RefreshTokenHash,
+            ExpiresAt = issuedTokens.RefreshTokenExpiresAt
+        }, cancellationToken);
         account.LastLoginAt = DateTime.UtcNow;
         await repository.SaveChangesAsync(cancellationToken);
 
@@ -105,8 +111,45 @@ public sealed class AccountService(
             LoginOutcome.Active,
             account.Status,
             null,
-            tokens,
+            issuedTokens.Tokens,
             MapLoginUser(account));
+    }
+
+    public async Task<RefreshAccountTokenResult> RefreshTokenAsync(
+        RefreshAccountTokenCommand command,
+        CancellationToken cancellationToken)
+    {
+        var tokens = tokenService ?? throw new InvalidOperationException("Token service is not configured.");
+        if (string.IsNullOrWhiteSpace(command.RefreshToken))
+        {
+            return InvalidRefreshToken();
+        }
+
+        var current = await repository.FindRefreshTokenAsync(
+            tokens.HashRefreshToken(command.RefreshToken),
+            cancellationToken);
+        if (current is null || current.RevokedAt is not null || current.ExpiresAt <= DateTime.UtcNow ||
+            current.Account.Status != AccountStatus.Active || current.Account.DeletedAt is not null)
+        {
+            return InvalidRefreshToken();
+        }
+
+        var issued = tokens.CreateTokens(current.Account);
+        var replacement = new RefreshToken
+        {
+            AccountId = current.AccountId,
+            TokenHash = issued.RefreshTokenHash,
+            ExpiresAt = issued.RefreshTokenExpiresAt
+        };
+        var rotated = await repository.RotateRefreshTokenAsync(
+            current.Id,
+            replacement,
+            DateTime.UtcNow,
+            cancellationToken);
+
+        return rotated
+            ? new RefreshAccountTokenResult(RefreshTokenOutcome.Active, issued.Tokens, null)
+            : InvalidRefreshToken();
     }
 
     public async Task<AccountResponse?> UpdateAsync(
@@ -202,6 +245,11 @@ public sealed class AccountService(
         null,
         null);
 
+    private static RefreshAccountTokenResult InvalidRefreshToken() => new(
+        RefreshTokenOutcome.Invalid,
+        null,
+        "Refresh token không hợp lệ hoặc đã hết hạn.");
+
     private static UserResponse? MapLoginUser(Account account) => account.User is null
         ? null
         : new UserResponse(
@@ -210,6 +258,7 @@ public sealed class AccountService(
             account.User.DisplayName,
             account.User.AvatarUrl,
             account.User.CoverUrl,
+            account.User.Gender,
             account.Role,
             account.User.IsVerified,
             account.User.IdentityStatus);

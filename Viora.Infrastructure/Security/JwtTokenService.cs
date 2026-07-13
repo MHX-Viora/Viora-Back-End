@@ -14,6 +14,7 @@ public sealed class JwtOptions
     public string Issuer { get; set; } = "viora-BE";
     public string Audience { get; set; } = "viora-client";
     public int AccessTokenMinutes { get; set; } = 15;
+    public int RefreshTokenDays { get; set; } = 30;
 }
 
 public sealed class JwtTokenService : ITokenService
@@ -30,14 +31,27 @@ public sealed class JwtTokenService : ITokenService
         {
             throw new InvalidOperationException("Jwt:Key must contain at least 32 UTF-8 bytes.");
         }
+        if (this.options.AccessTokenMinutes <= 0 || this.options.RefreshTokenDays <= 0)
+        {
+            throw new InvalidOperationException("JWT token lifetimes must be greater than zero.");
+        }
     }
 
-    public AccountTokens CreateTokens(Account account)
+    public IssuedAccountTokens CreateTokens(Account account)
     {
         var now = DateTimeOffset.UtcNow;
-        return new AccountTokens(
-            CreateToken(account, "access", now, now.AddMinutes(options.AccessTokenMinutes)));
+        var refreshToken = Base64Url(RandomNumberGenerator.GetBytes(64));
+        var refreshExpiresAt = now.AddDays(options.RefreshTokenDays);
+        return new IssuedAccountTokens(
+            new AccountTokens(
+                CreateToken(account, "access", now, now.AddMinutes(options.AccessTokenMinutes)),
+                refreshToken),
+            HashRefreshToken(refreshToken),
+            refreshExpiresAt.UtcDateTime);
     }
+
+    public string HashRefreshToken(string refreshToken) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
 
     private string CreateToken(
         Account account,

@@ -184,7 +184,7 @@ public sealed class AccountCrudTests
 
         Assert.Equal(LoginOutcome.Active, result.Outcome);
         Assert.Equal(AccountStatus.Active, result.Status);
-        Assert.Equal(new AccountTokens("access-token"), result.Tokens);
+        Assert.Equal(new AccountTokens("access-token", "refresh-token"), result.Tokens);
         Assert.Null(result.User);
         Assert.NotNull(account.LastLoginAt);
         Assert.Equal(1, repository.SaveCount);
@@ -223,12 +223,62 @@ public sealed class AccountCrudTests
         Assert.Equal(UserIdentityState.Verified, result.User.VerificationStatus);
     }
 
+    [Fact]
+    public async Task Refresh_token_rotates_once_and_reuse_is_rejected()
+    {
+        var account = new Account { Email = "user@example.com", PasswordHash = "hash" };
+        var current = new RefreshToken
+        {
+            AccountId = account.Id,
+            Account = account,
+            TokenHash = "hash:valid-refresh-token",
+            ExpiresAt = DateTime.UtcNow.AddDays(1)
+        };
+        var repository = new FakeAccountRepository { Accounts = { account }, RefreshTokens = { current } };
+        var service = CreateLoginService(repository);
+
+        var first = await service.RefreshTokenAsync(
+            new RefreshAccountTokenCommand("valid-refresh-token"), CancellationToken.None);
+        var reused = await service.RefreshTokenAsync(
+            new RefreshAccountTokenCommand("valid-refresh-token"), CancellationToken.None);
+
+        Assert.Equal(RefreshTokenOutcome.Active, first.Outcome);
+        Assert.Equal(new AccountTokens("access-token", "refresh-token"), first.Tokens);
+        Assert.NotNull(current.RevokedAt);
+        Assert.Equal(RefreshTokenOutcome.Invalid, reused.Outcome);
+        Assert.Null(reused.Tokens);
+    }
+
+    [Fact]
+    public async Task Refresh_token_rejects_expired_token()
+    {
+        var account = new Account { Email = "user@example.com", PasswordHash = "hash" };
+        var repository = new FakeAccountRepository { Accounts = { account } };
+        repository.RefreshTokens.Add(new RefreshToken
+        {
+            AccountId = account.Id,
+            Account = account,
+            TokenHash = "hash:expired-token",
+            ExpiresAt = DateTime.UtcNow.AddMinutes(-1)
+        });
+
+        var result = await CreateLoginService(repository).RefreshTokenAsync(
+            new RefreshAccountTokenCommand("expired-token"), CancellationToken.None);
+
+        Assert.Equal(RefreshTokenOutcome.Invalid, result.Outcome);
+    }
+
     private static AccountService CreateLoginService(FakeAccountRepository repository) =>
         new(repository, new FakePasswordHasher(), new FakeTokenService());
 
     private sealed class FakeTokenService : ITokenService
     {
-        public AccountTokens CreateTokens(Account account) => new("access-token");
+        public IssuedAccountTokens CreateTokens(Account account) => new(
+            new AccountTokens("access-token", "refresh-token"),
+            "refresh-token-hash",
+            DateTime.UtcNow.AddDays(30));
+
+        public string HashRefreshToken(string refreshToken) => $"hash:{refreshToken}";
     }
 
     private sealed class FakePasswordHasher : IPasswordHasher
@@ -240,6 +290,7 @@ public sealed class AccountCrudTests
     private sealed class FakeAccountRepository : IAccountRepository
     {
         public List<Account> Accounts { get; } = [];
+        public List<RefreshToken> RefreshTokens { get; } = [];
         public int SaveCount { get; private set; }
 
         public Task AddAsync(Account account, CancellationToken cancellationToken)
@@ -257,6 +308,9 @@ public sealed class AccountCrudTests
         public Task<Account?> FindByIdentifierAsync(string? email, string? phone, CancellationToken cancellationToken) =>
             Task.FromResult(Accounts.SingleOrDefault(x => email is not null ? x.Email == email : x.Phone == phone));
 
+        public Task<RefreshToken?> FindRefreshTokenAsync(string tokenHash, CancellationToken cancellationToken) =>
+            Task.FromResult(RefreshTokens.SingleOrDefault(x => x.TokenHash == tokenHash));
+
         public Task<(IReadOnlyList<Account> Items, int Total)> ListAsync(int skip, int take, CancellationToken cancellationToken)
         {
             var active = Accounts.Where(x => x.DeletedAt is null).OrderByDescending(x => x.CreatedAt).ToList();
@@ -270,6 +324,31 @@ public sealed class AccountCrudTests
         {
             SaveCount++;
             return Task.CompletedTask;
+        }
+
+        public Task AddRefreshTokenAsync(RefreshToken refreshToken, CancellationToken cancellationToken)
+        {
+            RefreshTokens.Add(refreshToken);
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> RotateRefreshTokenAsync(
+            Guid currentTokenId,
+            RefreshToken replacement,
+            DateTime revokedAt,
+            CancellationToken cancellationToken)
+        {
+            var current = RefreshTokens.SingleOrDefault(x => x.Id == currentTokenId);
+            if (current is null || current.RevokedAt is not null || current.ExpiresAt <= revokedAt)
+            {
+                return Task.FromResult(false);
+            }
+
+            current.RevokedAt = revokedAt;
+            current.ReplacedByTokenHash = replacement.TokenHash;
+            replacement.Account = Accounts.Single(x => x.Id == replacement.AccountId);
+            RefreshTokens.Add(replacement);
+            return Task.FromResult(true);
         }
     }
 }

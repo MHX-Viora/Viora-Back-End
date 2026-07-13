@@ -7,39 +7,49 @@ namespace Viora.Infrastructure.Tests;
 public sealed class UserProfileServiceTests
 {
     [Fact]
-    public async Task Create_returns_profile_for_active_account()
+    public async Task Create_uploads_images_then_persists_provider_urls()
     {
-        var account = new Account { Status = AccountStatus.Active, Role = AccountRole.User, Email = "user@example.com", PasswordHash = "hash" };
+        var account = ActiveAccount();
         var repository = new FakeUserProfileRepository(account);
-        var service = new UserProfileService(repository);
+        var storage = new FakeProfileImageStorage();
+        var service = new UserProfileService(repository, storage);
+        await using var avatar = new MemoryStream([1, 2, 3]);
+        await using var cover = new MemoryStream([4, 5, 6]);
 
         var result = await service.CreateAsync(
             account.Id,
-            new SaveUserProfileCommand(" Trịnh Trọng Quyền ", "https://cdn.viora.com/avatar.jpg", "https://cdn.viora.com/cover.jpg", Gender.Male),
+            new SaveUserProfileCommand(
+                " Display name ",
+                Gender.Male,
+                new ProfileImageFile(avatar, "avatar.jpg"),
+                new ProfileImageFile(cover, "cover.jpg")),
             CancellationToken.None);
 
-        Assert.Equal(account.Id, result.AccountId);
-        Assert.Equal("Trịnh Trọng Quyền", result.DisplayName);
-        Assert.Equal(Gender.Male, account.User!.Gender);
-        Assert.Equal(AccountRole.User, result.Role);
-        Assert.False(result.IsVerified);
-        Assert.Equal(UserIdentityState.NotVerified, result.VerificationStatus);
+        Assert.Equal("Display name", result.DisplayName);
+        Assert.Equal(Gender.Male, result.Gender);
+        Assert.Equal("https://res.cloudinary.com/viora/avatar.jpg", result.AvatarUrl);
+        Assert.Equal("https://res.cloudinary.com/viora/cover.jpg", result.CoverUrl);
+        Assert.Equal(["avatar", "cover"], storage.Uploads.Select(x => x.PublicId));
+        Assert.All(storage.Uploads, upload =>
+            Assert.Equal($"viora/users/{account.Id:N}/profile", upload.Folder));
         Assert.Equal(1, repository.SaveCount);
     }
 
     [Fact]
-    public async Task Create_rejects_duplicate_profile_with_vietnamese_message()
+    public async Task Create_rejects_duplicate_profile_before_upload()
     {
         var account = ActiveAccountWithUser();
-        var service = new UserProfileService(new FakeUserProfileRepository(account));
+        var storage = new FakeProfileImageStorage();
+        var service = new UserProfileService(new FakeUserProfileRepository(account), storage);
+        await using var avatar = new MemoryStream([1]);
 
         var exception = await Assert.ThrowsAsync<UserProfileException>(() => service.CreateAsync(
             account.Id,
-            new SaveUserProfileCommand("Tên mới", null, null, Gender.Unknown),
+            new SaveUserProfileCommand("New name", Gender.Unknown, new ProfileImageFile(avatar, "a.jpg"), null),
             CancellationToken.None));
 
         Assert.Equal(UserProfileError.ProfileAlreadyExists, exception.Code);
-        Assert.Equal("Hồ sơ người dùng đã tồn tại.", exception.Message);
+        Assert.Empty(storage.Uploads);
     }
 
     [Fact]
@@ -50,50 +60,98 @@ public sealed class UserProfileServiceTests
 
         var exception = await Assert.ThrowsAsync<UserProfileException>(() => service.CreateAsync(
             account.Id,
-            new SaveUserProfileCommand("Tên người dùng", null, null, Gender.Unknown),
+            new SaveUserProfileCommand("Display name", Gender.Unknown, null, null),
             CancellationToken.None));
 
         Assert.Equal(UserProfileError.AccountUnavailable, exception.Code);
-        Assert.Equal("Tài khoản không tồn tại hoặc không ở trạng thái hoạt động.", exception.Message);
     }
 
     [Fact]
-    public async Task Update_changes_existing_profile_and_returns_it()
+    public async Task Update_changes_only_supplied_fields_and_uploads_supplied_cover()
     {
         var account = ActiveAccountWithUser();
         var repository = new FakeUserProfileRepository(account);
-        var service = new UserProfileService(repository);
+        var storage = new FakeProfileImageStorage();
+        var service = new UserProfileService(repository, storage);
+        await using var cover = new MemoryStream([1, 2, 3]);
 
         var result = await service.UpdateAsync(
             account.Id,
-            new SaveUserProfileCommand("Tên cập nhật", null, "https://cdn.viora.com/cover-new.jpg", Gender.Female),
+            new UpdateUserProfileCommand(
+                null,
+                Gender.Female,
+                null,
+                new ProfileImageFile(cover, "cover.jpg")),
             CancellationToken.None);
 
-        Assert.Equal("Tên cập nhật", result.DisplayName);
-        Assert.Null(result.AvatarUrl);
-        Assert.Equal(Gender.Female, account.User!.Gender);
+        Assert.Equal("Old name", result.DisplayName);
+        Assert.Equal("https://cdn.viora.com/avatar-old.jpg", result.AvatarUrl);
+        Assert.Equal("https://res.cloudinary.com/viora/cover.jpg", result.CoverUrl);
+        Assert.Equal(Gender.Female, result.Gender);
+        Assert.Single(storage.Uploads);
+        Assert.Equal("cover", storage.Uploads[0].PublicId);
         Assert.Equal(1, repository.SaveCount);
     }
 
     [Fact]
     public async Task Update_rejects_when_profile_does_not_exist()
     {
-        var account = new Account { Status = AccountStatus.Active, Email = "user@example.com", PasswordHash = "hash" };
+        var account = ActiveAccount();
         var service = new UserProfileService(new FakeUserProfileRepository(account));
 
         var exception = await Assert.ThrowsAsync<UserProfileException>(() => service.UpdateAsync(
             account.Id,
-            new SaveUserProfileCommand("Tên người dùng", null, null, Gender.Unknown),
+            new UpdateUserProfileCommand("New name", null, null, null),
             CancellationToken.None));
 
         Assert.Equal(UserProfileError.ProfileNotFound, exception.Code);
-        Assert.Equal("Không tìm thấy hồ sơ người dùng.", exception.Message);
     }
+
+    [Fact]
+    public async Task Update_rejects_empty_patch()
+    {
+        var account = ActiveAccountWithUser();
+        var service = new UserProfileService(new FakeUserProfileRepository(account));
+
+        var exception = await Assert.ThrowsAsync<UserProfileException>(() => service.UpdateAsync(
+            account.Id,
+            new UpdateUserProfileCommand(null, null, null, null),
+            CancellationToken.None));
+
+        Assert.Equal(UserProfileError.InvalidProfile, exception.Code);
+    }
+
+    [Fact]
+    public async Task Update_rejects_non_https_storage_url_without_saving()
+    {
+        var account = ActiveAccountWithUser();
+        var repository = new FakeUserProfileRepository(account);
+        var storage = new FakeProfileImageStorage("http://unsafe.example/avatar.jpg");
+        var service = new UserProfileService(repository, storage);
+        await using var avatar = new MemoryStream([1]);
+
+        await Assert.ThrowsAsync<ProfileImageStorageException>(() => service.UpdateAsync(
+            account.Id,
+            new UpdateUserProfileCommand(null, null, new ProfileImageFile(avatar, "avatar.jpg"), null),
+            CancellationToken.None));
+
+        Assert.Equal(0, repository.SaveCount);
+        Assert.Equal("https://cdn.viora.com/avatar-old.jpg", account.User!.AvatarUrl);
+    }
+
+    private static Account ActiveAccount() =>
+        new() { Status = AccountStatus.Active, Role = AccountRole.User, Email = "user@example.com", PasswordHash = "hash" };
 
     private static Account ActiveAccountWithUser()
     {
-        var account = new Account { Status = AccountStatus.Active, Email = "user@example.com", PasswordHash = "hash" };
-        account.User = new User { AccountId = account.Id, Account = account, DisplayName = "Tên cũ" };
+        var account = ActiveAccount();
+        account.User = new User
+        {
+            AccountId = account.Id,
+            Account = account,
+            DisplayName = "Old name",
+            AvatarUrl = "https://cdn.viora.com/avatar-old.jpg"
+        };
         return account;
     }
 
@@ -106,10 +164,7 @@ public sealed class UserProfileServiceTests
 
         public Task AddAsync(User user, CancellationToken cancellationToken)
         {
-            if (account is not null)
-            {
-                account.User = user;
-            }
+            if (account is not null) account.User = user;
             return Task.CompletedTask;
         }
 
@@ -117,6 +172,17 @@ public sealed class UserProfileServiceTests
         {
             SaveCount++;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeProfileImageStorage(string? fixedUrl = null) : IProfileImageStorage
+    {
+        public List<ProfileImageUpload> Uploads { get; } = [];
+
+        public Task<string> UploadAsync(ProfileImageUpload upload, CancellationToken cancellationToken)
+        {
+            Uploads.Add(upload);
+            return Task.FromResult(fixedUrl ?? $"https://res.cloudinary.com/viora/{upload.PublicId}.jpg");
         }
     }
 }

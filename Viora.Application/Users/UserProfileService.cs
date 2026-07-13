@@ -2,7 +2,9 @@ using Viora.Domain.Entities;
 
 namespace Viora.Application.Users;
 
-public sealed class UserProfileService(IUserProfileRepository repository) : IUserProfileService
+public sealed class UserProfileService(
+    IUserProfileRepository repository,
+    IProfileImageStorage? imageStorage = null) : IUserProfileService
 {
     public async Task<UserResponse> CreateAsync(
         Guid accountId,
@@ -18,13 +20,15 @@ public sealed class UserProfileService(IUserProfileRepository repository) : IUse
         }
 
         Validate(command);
+        var avatarUrl = await UploadImageAsync(account.Id, command.Avatar, "avatar", cancellationToken);
+        var coverUrl = await UploadImageAsync(account.Id, command.Cover, "cover", cancellationToken);
         var user = new User
         {
             AccountId = account.Id,
             Account = account,
             DisplayName = command.DisplayName.Trim(),
-            AvatarUrl = NormalizeUrl(command.AvatarUrl),
-            CoverUrl = NormalizeUrl(command.CoverUrl),
+            AvatarUrl = avatarUrl,
+            CoverUrl = coverUrl,
             Gender = command.Gender,
             IsVerified = false,
             IdentityStatus = UserIdentityState.NotVerified
@@ -38,7 +42,7 @@ public sealed class UserProfileService(IUserProfileRepository repository) : IUse
 
     public async Task<UserResponse> UpdateAsync(
         Guid accountId,
-        SaveUserProfileCommand command,
+        UpdateUserProfileCommand command,
         CancellationToken cancellationToken)
     {
         var account = await GetActiveAccountAsync(accountId, cancellationToken);
@@ -50,13 +54,56 @@ public sealed class UserProfileService(IUserProfileRepository repository) : IUse
         }
 
         Validate(command);
-        account.User.DisplayName = command.DisplayName.Trim();
-        account.User.AvatarUrl = NormalizeUrl(command.AvatarUrl);
-        account.User.CoverUrl = NormalizeUrl(command.CoverUrl);
-        account.User.Gender = command.Gender;
+        var avatarUrl = await UploadImageAsync(account.Id, command.Avatar, "avatar", cancellationToken);
+        var coverUrl = await UploadImageAsync(account.Id, command.Cover, "cover", cancellationToken);
+
+        if (command.DisplayName is not null)
+        {
+            account.User.DisplayName = command.DisplayName.Trim();
+        }
+        if (command.Gender.HasValue)
+        {
+            account.User.Gender = command.Gender.Value;
+        }
+        if (avatarUrl is not null)
+        {
+            account.User.AvatarUrl = avatarUrl;
+        }
+        if (coverUrl is not null)
+        {
+            account.User.CoverUrl = coverUrl;
+        }
 
         await repository.SaveChangesAsync(cancellationToken);
         return Map(account, account.User);
+    }
+
+    private async Task<string?> UploadImageAsync(
+        Guid accountId,
+        ProfileImageFile? image,
+        string publicId,
+        CancellationToken cancellationToken)
+    {
+        if (image is null)
+        {
+            return null;
+        }
+
+        var storage = imageStorage ?? throw new ProfileImageStorageException(
+            "Dịch vụ lưu trữ ảnh chưa được cấu hình.");
+        var url = await storage.UploadAsync(
+            new ProfileImageUpload(
+                image.Content,
+                image.FileName,
+                $"viora/users/{accountId:N}/profile",
+                publicId),
+            cancellationToken);
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new ProfileImageStorageException("Dịch vụ lưu trữ ảnh trả về URL không hợp lệ.");
+        }
+        return url;
     }
 
     private async Task<Account> GetActiveAccountAsync(Guid accountId, CancellationToken cancellationToken)
@@ -73,29 +120,40 @@ public sealed class UserProfileService(IUserProfileRepository repository) : IUse
 
     private static void Validate(SaveUserProfileCommand command)
     {
-        if (string.IsNullOrWhiteSpace(command.DisplayName))
-        {
-            throw new UserProfileException(UserProfileError.InvalidProfile, "Tên hiển thị không được để trống.");
-        }
+        ValidateDisplayName(command.DisplayName);
         if (!Enum.IsDefined(command.Gender))
         {
-            throw new UserProfileException(UserProfileError.InvalidProfile, "Giới tính không hợp lệ.");
-        }
-        if (!IsValidUrl(command.AvatarUrl) || !IsValidUrl(command.CoverUrl))
-        {
-            throw new UserProfileException(
-                UserProfileError.InvalidProfile,
-                "URL ảnh đại diện hoặc ảnh bìa không hợp lệ.");
+            throw InvalidProfile("Giới tính không hợp lệ.");
         }
     }
 
-    private static bool IsValidUrl(string? value) =>
-        string.IsNullOrWhiteSpace(value) ||
-        Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) &&
-        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    private static void Validate(UpdateUserProfileCommand command)
+    {
+        if (command.DisplayName is null && command.Gender is null &&
+            command.Avatar is null && command.Cover is null)
+        {
+            throw InvalidProfile("Yêu cầu cập nhật không có dữ liệu.");
+        }
+        if (command.DisplayName is not null)
+        {
+            ValidateDisplayName(command.DisplayName);
+        }
+        if (command.Gender.HasValue && !Enum.IsDefined(command.Gender.Value))
+        {
+            throw InvalidProfile("Giới tính không hợp lệ.");
+        }
+    }
 
-    private static string? NormalizeUrl(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static void ValidateDisplayName(string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName) || displayName.Trim().Length > 100)
+        {
+            throw InvalidProfile("Tên hiển thị phải có từ 1 đến 100 ký tự.");
+        }
+    }
+
+    private static UserProfileException InvalidProfile(string message) =>
+        new(UserProfileError.InvalidProfile, message);
 
     private static UserResponse Map(Account account, User user) => new(
         user.Id,
@@ -103,6 +161,7 @@ public sealed class UserProfileService(IUserProfileRepository repository) : IUse
         user.DisplayName,
         user.AvatarUrl,
         user.CoverUrl,
+        user.Gender,
         account.Role,
         user.IsVerified,
         user.IdentityStatus);
