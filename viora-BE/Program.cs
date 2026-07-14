@@ -94,20 +94,13 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 app.UseSwagger();
-app.UseSwaggerUI(options =>
-{
-	options.RoutePrefix = "swagger";
-	options.SwaggerEndpoint(
-		"/swagger/v1/swagger.json",
-		"Viora API v1"
-	);
-});
+app.UseSwaggerUI();
 
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-
+app.MapGet("/", () => Results.Redirect("/swagger"));
 app.MapGet("/health", () => Results.Ok(new
 {
 	status = "healthy",
