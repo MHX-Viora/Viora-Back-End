@@ -22,6 +22,7 @@ public sealed record PostFeedItemResponse(
     PostType PostType,
     PostVisibility Visibility,
     string? Location,
+    string? Link,
     DateTime CreatedAt,
     PostFeedUserResponse User,
     IReadOnlyList<PostFeedMediaResponse> Media,
@@ -32,7 +33,24 @@ public sealed record PostFeedItemResponse(
     int ViewCount,
     bool IsReacted,
     ReactionType? ReactionType,
-    bool IsSaved);
+    bool IsSaved,
+    PostFeedOriginalPostResponse? OriginalPost);
+
+public sealed record PostFeedOriginalPostResponse(
+    Guid Id,
+    string? Content,
+    PostType PostType,
+    PostVisibility Visibility,
+    string? Location,
+    string? Link,
+    DateTime CreatedAt,
+    PostFeedUserResponse User,
+    IReadOnlyList<PostFeedMediaResponse> Media,
+    int ReactionCount,
+    int CommentCount,
+    int ShareCount,
+    int SaveCount,
+    int ViewCount);
 
 public sealed record PostFeedUserResponse(
     Guid Id,

@@ -23,6 +23,20 @@
 - Keyword searches user display name, post content, and location.
 - Feed ordering uses deterministic score, not random and not created-at-only.
 - Cold start uses interaction counts plus freshness and stable tie-breakers.
+- Empty post links are returned as `null`.
+- Shared posts include `originalPost` with the original author's core post data and media.
+
+## Interaction APIs
+
+- `POST /api/posts/{postId}/reactions`
+- `POST /api/posts/{postId}/comments`
+- `POST /api/comments/{commentId}/replies`
+- `POST /api/posts/{postId}/save`
+- `POST /api/posts/{postId}/share`
+- `DELETE /api/posts/{postId}`
+- `POST /api/posts/{postId}/report`
+
+Implemented through `Viora.Application/Posts/PostInteraction*` and `PostInteractionRepository`.
 
 ## Verification
 

@@ -69,6 +69,11 @@ public static class DependencyInjection
         services.AddSingleton<IProfileImageStorage, CloudinaryProfileImageStorage>();
         services.AddSingleton<IMediaStorage, CloudinaryMediaStorage>();
         services.AddScoped<IValidator<CreatePostCommand>, CreatePostValidator>();
+        services.AddScoped<IValidator<ReactPostCommand>, ReactPostValidator>();
+        services.AddScoped<IValidator<CreateCommentCommand>, CreateCommentValidator>();
+        services.AddScoped<IValidator<ReplyCommentCommand>, ReplyCommentValidator>();
+        services.AddScoped<IValidator<SharePostCommand>, SharePostValidator>();
+        services.AddScoped<IValidator<ReportPostCommand>, ReportPostValidator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IAccountService, AccountService>();
@@ -76,6 +81,7 @@ public static class DependencyInjection
         services.AddScoped<IUserProfileService, UserProfileService>();
         services.AddScoped<IPostFeedRepository, PostFeedRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
+        services.AddScoped<IPostInteractionRepository, PostInteractionRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         return services;
     }

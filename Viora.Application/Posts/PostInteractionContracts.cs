@@ -1,0 +1,147 @@
+using FluentValidation;
+using MediatR;
+using Viora.Domain.Entities;
+
+namespace Viora.Application.Posts;
+
+public enum PostInteractionError
+{
+    NotFound,
+    Forbidden,
+    Invalid,
+    Conflict
+}
+
+public sealed record Result<T>(bool IsSuccess, T? Value, PostInteractionError? Error, string? Message)
+{
+    public static Result<T> Success(T value) => new(true, value, null, null);
+    public static Result<T> Failure(PostInteractionError error, string message) => new(false, default, error, message);
+}
+
+public sealed record EmptyResponse;
+
+public sealed record ReactPostCommand(Guid UserId, Guid PostId, ReactionType ReactionType)
+    : IRequest<Result<PostReactionResponse>>;
+
+public sealed record CreateCommentCommand(Guid UserId, Guid PostId, string Content)
+    : IRequest<Result<CommentResponse>>;
+
+public sealed record ReplyCommentCommand(Guid UserId, Guid CommentId, string Content)
+    : IRequest<Result<CommentResponse>>;
+
+public sealed record ToggleSavePostCommand(Guid UserId, Guid PostId)
+    : IRequest<Result<SavePostResponse>>;
+
+public sealed record SharePostCommand(Guid UserId, Guid PostId, string? Content)
+    : IRequest<Result<SharePostResponse>>;
+
+public sealed record DeletePostCommand(Guid UserId, Guid PostId)
+    : IRequest<Result<EmptyResponse>>;
+
+public sealed record ReportPostCommand(Guid UserId, Guid PostId, ReportReason Reason, string? Description)
+    : IRequest<Result<ReportPostResponse>>;
+
+public sealed record PostReactionResponse(bool IsReacted, ReactionType? ReactionType, int ReactionCount);
+public sealed record SavePostResponse(bool IsSaved, int SaveCount);
+public sealed record ReportPostResponse(Guid Id);
+
+public sealed record CommentResponse(
+    Guid Id,
+    PostInteractionUserResponse User,
+    string Content,
+    DateTime CreatedAt,
+    int ReplyCount,
+    int LikeCount);
+
+public sealed record SharePostResponse(
+    Guid Id,
+    string? Content,
+    PostType PostType,
+    PostVisibility Visibility,
+    string? Link,
+    Guid OriginalPostId,
+    int ReactionCount,
+    int CommentCount,
+    int ShareCount,
+    int SaveCount,
+    int ViewCount,
+    DateTime CreatedAt);
+
+public sealed record PostInteractionUserResponse(
+    Guid Id,
+    string DisplayName,
+    string? AvatarUrl,
+    bool IsVerified);
+
+public sealed class ReactPostValidator : AbstractValidator<ReactPostCommand>
+{
+    public ReactPostValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.PostId).NotEmpty();
+        RuleFor(x => x.ReactionType).Must(Enum.IsDefined);
+    }
+}
+
+public sealed class CreateCommentValidator : AbstractValidator<CreateCommentCommand>
+{
+    public CreateCommentValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.PostId).NotEmpty();
+        RuleFor(x => x.Content).NotEmpty().MaximumLength(5000);
+    }
+}
+
+public sealed class ReplyCommentValidator : AbstractValidator<ReplyCommentCommand>
+{
+    public ReplyCommentValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.CommentId).NotEmpty();
+        RuleFor(x => x.Content).NotEmpty().MaximumLength(5000);
+    }
+}
+
+public sealed class SharePostValidator : AbstractValidator<SharePostCommand>
+{
+    public SharePostValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.PostId).NotEmpty();
+        RuleFor(x => x.Content).MaximumLength(5000);
+    }
+}
+
+public sealed class ReportPostValidator : AbstractValidator<ReportPostCommand>
+{
+    public ReportPostValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.PostId).NotEmpty();
+        RuleFor(x => x.Reason).Must(Enum.IsDefined);
+        RuleFor(x => x.Description).MaximumLength(1000);
+    }
+}
+
+public interface IPostInteractionRepository
+{
+    Task<User?> GetActiveUserAsync(Guid userId, CancellationToken cancellationToken);
+    Task<Post?> GetPostForInteractionAsync(Guid postId, CancellationToken cancellationToken);
+    Task<Post?> GetPostWithOriginalAsync(Guid postId, CancellationToken cancellationToken);
+    Task<Comment?> GetCommentForReplyAsync(Guid commentId, CancellationToken cancellationToken);
+    Task<PostReaction?> GetReactionAsync(Guid postId, Guid userId, CancellationToken cancellationToken);
+    Task<SavedPost?> GetSavedPostAsync(Guid postId, Guid userId, CancellationToken cancellationToken);
+    Task<bool> HasReportedPostAsync(Guid postId, Guid userId, CancellationToken cancellationToken);
+    Task AddReactionAsync(PostReaction reaction, CancellationToken cancellationToken);
+    void RemoveReaction(PostReaction reaction);
+    Task AddCommentAsync(Comment comment, CancellationToken cancellationToken);
+    Task AddSavedPostAsync(SavedPost savedPost, CancellationToken cancellationToken);
+    void RemoveSavedPost(SavedPost savedPost);
+    Task AddPostAsync(Post post, CancellationToken cancellationToken);
+    Task AddReportAsync(Report report, CancellationToken cancellationToken);
+    Task AddNotificationAsync(Notification notification, CancellationToken cancellationToken);
+    Task SaveChangesAsync(CancellationToken cancellationToken);
+    Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken);
+    Task<bool> CanViewPostAsync(Post post, Guid userId, CancellationToken cancellationToken);
+}

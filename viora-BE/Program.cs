@@ -96,7 +96,7 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
-	options.RoutePrefix = string.Empty;
+	options.RoutePrefix = "swagger";
 	options.SwaggerEndpoint(
 		"/swagger/v1/swagger.json",
 		"Viora API v1"

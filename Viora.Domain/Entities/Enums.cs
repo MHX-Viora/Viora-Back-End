@@ -21,9 +21,10 @@ public enum NotificationType : short
     System = 0, FriendRequest = 1, FriendAccepted = 2, Follow = 3, PostLike = 4,
     PostComment = 5, CommentReply = 6, Mention = 8, Message = 9, GroupInvite = 10,
     GroupRoleChanged = 11, GroupRemoved = 12, LiveStarted = 13, LiveEnded = 14,
-    IdentityApproved = 15, IdentityRejected = 16, AdminAnnouncement = 17, ShopNotification = 18
+    IdentityApproved = 15, IdentityRejected = 16, AdminAnnouncement = 17, ShopNotification = 18,
+    PostShare = 19
 }
 public enum NotificationReferenceType : short { User = 0, Post = 1, Comment = 2, Conversation = 3, Message = 4, Identity = 5 }
 public enum ReportTargetType : short { User = 0, Post = 1, Comment = 2, Message = 3 }
-public enum ReportReason : short { Other = 0 }
+public enum ReportReason : short { Spam = 0, Violence = 1, AdultContent = 2, HateSpeech = 3, FakeNews = 4, Scam = 5, Other = 6 }
 public enum ReportStatus : short { Pending = 0, Approved = 1, Rejected = 2 }

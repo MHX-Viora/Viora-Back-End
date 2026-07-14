@@ -100,6 +100,7 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                 item.Post.PostType,
                 item.Post.Visibility,
                 item.Post.Location,
+                string.IsNullOrWhiteSpace(item.Post.Link) ? null : item.Post.Link,
                 item.Post.CreatedAt,
                 new PostFeedUserResponse(
                     item.Post.User.Id,
@@ -120,7 +121,34 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                 item.Post.ViewCount,
                 item.IsReacted,
                 item.ReactionType,
-                item.IsSaved))
+                item.IsSaved,
+                item.Post.OriginalPost == null
+                    ? null
+                    : new PostFeedOriginalPostResponse(
+                        item.Post.OriginalPost.Id,
+                        item.Post.OriginalPost.Content,
+                        item.Post.OriginalPost.PostType,
+                        item.Post.OriginalPost.Visibility,
+                        item.Post.OriginalPost.Location,
+                        string.IsNullOrWhiteSpace(item.Post.OriginalPost.Link) ? null : item.Post.OriginalPost.Link,
+                        item.Post.OriginalPost.CreatedAt,
+                        new PostFeedUserResponse(
+                            item.Post.OriginalPost.User.Id,
+                            item.Post.OriginalPost.User.DisplayName,
+                            item.Post.OriginalPost.User.AvatarUrl,
+                            item.Post.OriginalPost.User.IsVerified),
+                        item.Post.OriginalPost.Media
+                            .OrderBy(media => media.CreatedAt)
+                            .Select(media => new PostFeedMediaResponse(
+                                media.Id,
+                                media.MediaUrl,
+                                media.ThumbnailUrl))
+                            .ToList(),
+                        item.Post.OriginalPost.ReactionCount,
+                        item.Post.OriginalPost.CommentCount,
+                        item.Post.OriginalPost.ShareCount,
+                        item.Post.OriginalPost.SaveCount,
+                        item.Post.OriginalPost.ViewCount)))
             .ToListAsync(cancellationToken);
 
         return new PostFeedResponse(page, pageSize, totalItems, totalPages, items);

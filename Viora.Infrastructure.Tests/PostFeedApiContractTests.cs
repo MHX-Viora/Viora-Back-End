@@ -20,6 +20,22 @@ public sealed class PostFeedApiContractTests
     }
 
     [Fact]
+    public void Posts_controller_exposes_post_interaction_routes()
+    {
+        var methods = typeof(PostsController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(PostsController))
+            .ToDictionary(method => method.Name);
+
+        Assert.Equal("{postId:guid}/reactions", methods[nameof(PostsController.React)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal("{postId:guid}/comments", methods[nameof(PostsController.Comment)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal("/api/comments/{commentId:guid}/replies", methods[nameof(PostsController.Reply)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal("{postId:guid}/save", methods[nameof(PostsController.Save)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal("{postId:guid}/share", methods[nameof(PostsController.Share)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal("{postId:guid}", methods[nameof(PostsController.Delete)].GetCustomAttribute<HttpDeleteAttribute>()!.Template);
+        Assert.Equal("{postId:guid}/report", methods[nameof(PostsController.Report)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+    }
+
+    [Fact]
     public void Post_feed_response_contract_has_only_expected_fields()
     {
         AssertProperties<PostFeedResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
@@ -29,6 +45,7 @@ public sealed class PostFeedApiContractTests
             "PostType",
             "Visibility",
             "Location",
+            "Link",
             "CreatedAt",
             "User",
             "Media",
@@ -39,7 +56,23 @@ public sealed class PostFeedApiContractTests
             "ViewCount",
             "IsReacted",
             "ReactionType",
-            "IsSaved");
+            "IsSaved",
+            "OriginalPost");
+        AssertProperties<PostFeedOriginalPostResponse>(
+            "Id",
+            "Content",
+            "PostType",
+            "Visibility",
+            "Location",
+            "Link",
+            "CreatedAt",
+            "User",
+            "Media",
+            "ReactionCount",
+            "CommentCount",
+            "ShareCount",
+            "SaveCount",
+            "ViewCount");
         AssertProperties<PostFeedUserResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified");
         AssertProperties<PostFeedMediaResponse>("Id", "MediaUrl", "ThumbnailUrl");
     }
