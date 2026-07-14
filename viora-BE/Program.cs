@@ -93,18 +93,27 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-app.UseHttpsRedirection();
+	options.RoutePrefix = string.Empty;
+	options.SwaggerEndpoint(
+		"/swagger/v1/swagger.json",
+		"Viora API v1"
+	);
+});
 
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+
+
+app.MapGet("/health", () => Results.Ok(new
+{
+	status = "healthy",
+	service = "viora-back-end",
+	timestamp = DateTime.UtcNow
+}));
 
 app.MapControllers();
 
