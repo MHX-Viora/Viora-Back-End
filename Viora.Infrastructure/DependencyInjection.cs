@@ -9,6 +9,8 @@ using Microsoft.Extensions.Options;
 using System.Text;
 using Viora.Application.Users;
 using Viora.Infrastructure.Media;
+using Viora.Application.Posts;
+using FluentValidation;
 
 namespace Viora.Infrastructure;
 
@@ -65,11 +67,16 @@ public static class DependencyInjection
         }
         services.AddSingleton(Options.Create(cloudinaryOptions));
         services.AddSingleton<IProfileImageStorage, CloudinaryProfileImageStorage>();
+        services.AddSingleton<IMediaStorage, CloudinaryMediaStorage>();
+        services.AddScoped<IValidator<CreatePostCommand>, CreatePostValidator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IUserProfileService, UserProfileService>();
+        services.AddScoped<IPostFeedRepository, PostFeedRepository>();
+        services.AddScoped<IPostRepository, PostRepository>();
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         return services;
     }
 }

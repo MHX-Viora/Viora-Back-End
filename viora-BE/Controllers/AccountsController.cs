@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Viora.Application.Accounts;
@@ -12,7 +14,7 @@ namespace viora_BE.Controllers;
 public sealed class AccountsController(IAccountService accountService) : ControllerBase
 {
     private const string RefreshTokenCookieName = "refreshToken";
-    private const string RefreshTokenCookiePath = "/api/accounts/refresh-token";
+    private const string RefreshTokenCookiePath = "/api/accounts";
 
     [HttpGet]
     [ProducesResponseType<PagedAccountResponse>(StatusCodes.Status200OK)]
@@ -115,6 +117,24 @@ public sealed class AccountsController(IAccountService accountService) : Control
         return Ok(new RefreshTokenSuccessResponse(result.Tokens.AccessToken));
     }
 
+    [HttpPost("logout")]
+    [Authorize]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    {
+        if (!TryGetAccountId(out var accountId))
+        {
+            return Unauthorized(new LoginMessageResponse(null, "Token không hợp lệ."));
+        }
+
+        Request.Cookies.TryGetValue(RefreshTokenCookieName, out var refreshToken);
+        await accountService.LogoutAsync(new LogoutAccountCommand(refreshToken, accountId), cancellationToken);
+        Response.Cookies.Delete(RefreshTokenCookieName, RefreshTokenCookieOptions());
+        return NoContent();
+    }
+
     [HttpPut("{id:guid}")]
     [ProducesResponseType<AccountResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -163,6 +183,12 @@ public sealed class AccountsController(IAccountService accountService) : Control
 
     private void SetRefreshTokenCookie(string refreshToken) =>
         Response.Cookies.Append(RefreshTokenCookieName, refreshToken, RefreshTokenCookieOptions());
+
+    private bool TryGetAccountId(out Guid accountId)
+    {
+        var value = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        return Guid.TryParse(value, out accountId);
+    }
 
     private static CookieOptions RefreshTokenCookieOptions() => new()
     {

@@ -90,6 +90,29 @@ public sealed class AccountRepository(AppDbContext dbContext) : IAccountReposito
         return true;
     }
 
+    public Task RevokeRefreshTokenAsync(string tokenHash, Guid accountId, DateTime revokedAt, CancellationToken cancellationToken) =>
+        dbContext.RefreshTokens
+            .Where(token => token.TokenHash == tokenHash &&
+                token.AccountId == accountId &&
+                token.RevokedAt == null &&
+                token.ExpiresAt > revokedAt)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(token => token.RevokedAt, revokedAt)
+                    .SetProperty(token => token.UpdatedAt, revokedAt),
+                cancellationToken);
+
+    public Task RevokeRefreshTokensForAccountAsync(Guid accountId, DateTime revokedAt, CancellationToken cancellationToken) =>
+        dbContext.RefreshTokens
+            .Where(token => token.AccountId == accountId &&
+                token.RevokedAt == null &&
+                token.ExpiresAt > revokedAt)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(token => token.RevokedAt, revokedAt)
+                    .SetProperty(token => token.UpdatedAt, revokedAt),
+                cancellationToken);
+
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         try

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using Viora.Application.Accounts;
 using Viora.Domain.Entities;
 using viora_BE.Controllers;
@@ -33,6 +34,7 @@ public sealed class AccountAuthCookieTests
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("path=/api/accounts", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -57,6 +59,27 @@ public sealed class AccountAuthCookieTests
         Assert.Contains("refreshToken=new-refresh-token", Assert.Single(controller.Response.Headers.SetCookie));
     }
 
+    [Fact]
+    public async Task Logout_revokes_cookie_refresh_token_and_clears_cookie()
+    {
+        var service = new FakeAccountService();
+        var controller = CreateController(service);
+        var accountId = Guid.NewGuid();
+        controller.ControllerContext.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("sub", accountId.ToString())],
+            "Bearer"));
+        controller.Request.Headers.Cookie = "refreshToken=refresh-token";
+
+        var result = await controller.Logout(CancellationToken.None);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal("refresh-token", service.ReceivedLogoutRefreshToken);
+        Assert.Equal(accountId, service.ReceivedLogoutAccountId);
+        var cookie = Assert.Single(controller.Response.Headers.SetCookie);
+        Assert.Contains("refreshToken=", cookie);
+        Assert.Contains("expires=", cookie, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static AccountsController CreateController(IAccountService service) => new(service)
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
@@ -67,6 +90,8 @@ public sealed class AccountAuthCookieTests
         public LoginAccountResult LoginResult { get; init; } = null!;
         public RefreshAccountTokenResult RefreshResult { get; init; } = null!;
         public string? ReceivedRefreshToken { get; private set; }
+        public string? ReceivedLogoutRefreshToken { get; private set; }
+        public Guid? ReceivedLogoutAccountId { get; private set; }
 
         public Task<LoginAccountResult> LoginAsync(LoginAccountCommand command, CancellationToken cancellationToken) =>
             Task.FromResult(LoginResult);
@@ -75,6 +100,13 @@ public sealed class AccountAuthCookieTests
         {
             ReceivedRefreshToken = command.RefreshToken;
             return Task.FromResult(RefreshResult);
+        }
+
+        public Task LogoutAsync(LogoutAccountCommand command, CancellationToken cancellationToken)
+        {
+            ReceivedLogoutRefreshToken = command.RefreshToken;
+            ReceivedLogoutAccountId = command.AccountId;
+            return Task.CompletedTask;
         }
 
         public Task<PagedAccountResponse> ListAsync(int page, int pageSize, CancellationToken cancellationToken) =>

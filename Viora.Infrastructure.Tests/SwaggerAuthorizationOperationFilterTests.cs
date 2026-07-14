@@ -13,6 +13,7 @@ public sealed class SwaggerAuthorizationOperationFilterTests
     [InlineData(nameof(AccountsController.Login))]
     [InlineData(nameof(AccountsController.Register))]
     [InlineData(nameof(AccountsController.RefreshToken))]
+    [InlineData(nameof(AccountsController.Logout))]
     public void Public_account_operations_do_not_require_bearer_token(string methodName)
     {
         var operation = Apply(typeof(AccountsController), methodName);

@@ -6,6 +6,7 @@ namespace Viora.Application.Accounts;
 public sealed record RegisterAccountCommand(string Identifier, string Password);
 public sealed record LoginAccountCommand(string Identifier, string Password);
 public sealed record RefreshAccountTokenCommand(string RefreshToken);
+public sealed record LogoutAccountCommand(string? RefreshToken, Guid AccountId);
 
 public enum LoginOutcome { InvalidCredentials, Banned, Active, Deleted }
 
@@ -57,6 +58,7 @@ public interface IAccountService
     Task<RefreshAccountTokenResult> RefreshTokenAsync(
         RefreshAccountTokenCommand command,
         CancellationToken cancellationToken);
+    Task LogoutAsync(LogoutAccountCommand command, CancellationToken cancellationToken);
     Task<AccountResponse?> UpdateAsync(Guid id, UpdateAccountCommand command, CancellationToken cancellationToken);
     Task DeleteAsync(Guid id, CancellationToken cancellationToken);
 }
@@ -76,6 +78,8 @@ public interface IAccountRepository
         RefreshToken replacement,
         DateTime revokedAt,
         CancellationToken cancellationToken);
+    Task RevokeRefreshTokenAsync(string tokenHash, Guid accountId, DateTime revokedAt, CancellationToken cancellationToken);
+    Task RevokeRefreshTokensForAccountAsync(Guid accountId, DateTime revokedAt, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
 

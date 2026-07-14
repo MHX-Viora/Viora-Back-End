@@ -16,6 +16,8 @@ internal sealed class PostConfiguration : IEntityTypeConfiguration<Post>
         builder.Property(x => x.Visibility).HasDefaultValue(PostVisibility.Public);
         builder.Property(x => x.Status).HasDefaultValue(PostStatus.Published).HasSentinel(PostStatus.Published);
         builder.Property(x => x.Location).HasMaxLength(255);
+        builder.Property(x => x.Latitude);
+        builder.Property(x => x.Longitude);
         builder.Property(x => x.Link).HasMaxLength(255);
         builder.Property(x => x.ReactionCount).HasDefaultValue(0);
         builder.Property(x => x.CommentCount).HasDefaultValue(0);

@@ -268,6 +268,58 @@ public sealed class AccountCrudTests
         Assert.Equal(RefreshTokenOutcome.Invalid, result.Outcome);
     }
 
+    [Fact]
+    public async Task Logout_revokes_matching_refresh_token_and_is_idempotent()
+    {
+        var account = new Account { Email = "user@example.com", PasswordHash = "hash" };
+        var current = new RefreshToken
+        {
+            AccountId = account.Id,
+            Account = account,
+            TokenHash = "hash:valid-refresh-token",
+            ExpiresAt = DateTime.UtcNow.AddDays(1)
+        };
+        var repository = new FakeAccountRepository { Accounts = { account }, RefreshTokens = { current } };
+        var service = CreateLoginService(repository);
+
+        await service.LogoutAsync(new LogoutAccountCommand("valid-refresh-token", account.Id), CancellationToken.None);
+        await service.LogoutAsync(new LogoutAccountCommand("valid-refresh-token", account.Id), CancellationToken.None);
+
+        Assert.NotNull(current.RevokedAt);
+    }
+
+    [Fact]
+    public async Task Logout_without_refresh_token_revokes_all_account_refresh_tokens()
+    {
+        var account = new Account { Email = "user@example.com", PasswordHash = "hash" };
+        var other = new Account { Email = "other@example.com", PasswordHash = "hash" };
+        var ownToken = new RefreshToken
+        {
+            AccountId = account.Id,
+            Account = account,
+            TokenHash = "hash:own-token",
+            ExpiresAt = DateTime.UtcNow.AddDays(1)
+        };
+        var otherToken = new RefreshToken
+        {
+            AccountId = other.Id,
+            Account = other,
+            TokenHash = "hash:other-token",
+            ExpiresAt = DateTime.UtcNow.AddDays(1)
+        };
+        var repository = new FakeAccountRepository
+        {
+            Accounts = { account, other },
+            RefreshTokens = { ownToken, otherToken }
+        };
+        var service = CreateLoginService(repository);
+
+        await service.LogoutAsync(new LogoutAccountCommand(null, account.Id), CancellationToken.None);
+
+        Assert.NotNull(ownToken.RevokedAt);
+        Assert.Null(otherToken.RevokedAt);
+    }
+
     private static AccountService CreateLoginService(FakeAccountRepository repository) =>
         new(repository, new FakePasswordHasher(), new FakeTokenService());
 
@@ -349,6 +401,30 @@ public sealed class AccountCrudTests
             replacement.Account = Accounts.Single(x => x.Id == replacement.AccountId);
             RefreshTokens.Add(replacement);
             return Task.FromResult(true);
+        }
+
+        public Task RevokeRefreshTokenAsync(string tokenHash, Guid accountId, DateTime revokedAt, CancellationToken cancellationToken)
+        {
+            var current = RefreshTokens.SingleOrDefault(x => x.TokenHash == tokenHash && x.AccountId == accountId);
+            if (current is not null && current.RevokedAt is null && current.ExpiresAt > revokedAt)
+            {
+                current.RevokedAt = revokedAt;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task RevokeRefreshTokensForAccountAsync(Guid accountId, DateTime revokedAt, CancellationToken cancellationToken)
+        {
+            foreach (var token in RefreshTokens.Where(x =>
+                x.AccountId == accountId &&
+                x.RevokedAt is null &&
+                x.ExpiresAt > revokedAt))
+            {
+                token.RevokedAt = revokedAt;
+            }
+
+            return Task.CompletedTask;
         }
     }
 }

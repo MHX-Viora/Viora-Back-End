@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using viora_BE.OpenApi;
 using System.Threading.RateLimiting;
+using Viora.Application.Posts;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -16,6 +17,8 @@ builder.Logging.AddDebug();
 // Add services to the container.
 
 builder.Services.AddControllers();
+builder.Services.AddMediatR(configuration =>
+    configuration.RegisterServicesFromAssembly(typeof(GetCommunityPostsQuery).Assembly));
 var jwtKey = builder.Configuration["Jwt:Key"] ?? string.Empty;
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "viora-BE";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "viora-client";

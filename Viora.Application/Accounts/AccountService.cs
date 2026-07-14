@@ -152,6 +152,25 @@ public sealed class AccountService(
             : InvalidRefreshToken();
     }
 
+    public async Task LogoutAsync(LogoutAccountCommand command, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.RefreshToken))
+        {
+            await repository.RevokeRefreshTokensForAccountAsync(
+                command.AccountId,
+                DateTime.UtcNow,
+                cancellationToken);
+            return;
+        }
+
+        var tokens = tokenService ?? throw new InvalidOperationException("Token service is not configured.");
+        await repository.RevokeRefreshTokenAsync(
+            tokens.HashRefreshToken(command.RefreshToken),
+            command.AccountId,
+            DateTime.UtcNow,
+            cancellationToken);
+    }
+
     public async Task<AccountResponse?> UpdateAsync(
         Guid id,
         UpdateAccountCommand command,

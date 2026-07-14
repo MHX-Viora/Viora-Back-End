@@ -9,6 +9,8 @@ public sealed class Post : AuditableEntity
     public PostVisibility Visibility { get; set; } = PostVisibility.Public;
     public PostStatus Status { get; set; } = PostStatus.Published;
     public string? Location { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
     public string? Link { get; set; }
     public int ReactionCount { get; set; }
     public int CommentCount { get; set; }
