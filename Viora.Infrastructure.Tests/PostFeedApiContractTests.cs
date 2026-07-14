@@ -77,6 +77,13 @@ public sealed class PostFeedApiContractTests
         AssertProperties<PostFeedMediaResponse>("Id", "MediaUrl", "ThumbnailUrl");
     }
 
+    [Fact]
+    public void Interaction_response_contracts_match_client_shape()
+    {
+        AssertProperties<PostReactionResponse>("ReactionType", "ReactionCount");
+        AssertProperties<SharePostResponse>("IsShared", "ShareCount");
+    }
+
     private static void AssertProperties<T>(params string[] names)
     {
         var properties = typeof(T).GetProperties().Select(property => property.Name).Order().ToArray();

@@ -32,7 +32,7 @@ public sealed record ReplyCommentCommand(Guid UserId, Guid CommentId, string Con
 public sealed record ToggleSavePostCommand(Guid UserId, Guid PostId)
     : IRequest<Result<SavePostResponse>>;
 
-public sealed record SharePostCommand(Guid UserId, Guid PostId, string? Content)
+public sealed record SharePostCommand(Guid UserId, Guid PostId)
     : IRequest<Result<SharePostResponse>>;
 
 public sealed record DeletePostCommand(Guid UserId, Guid PostId)
@@ -41,7 +41,7 @@ public sealed record DeletePostCommand(Guid UserId, Guid PostId)
 public sealed record ReportPostCommand(Guid UserId, Guid PostId, ReportReason Reason, string? Description)
     : IRequest<Result<ReportPostResponse>>;
 
-public sealed record PostReactionResponse(bool IsReacted, ReactionType? ReactionType, int ReactionCount);
+public sealed record PostReactionResponse(ReactionType? ReactionType, int ReactionCount);
 public sealed record SavePostResponse(bool IsSaved, int SaveCount);
 public sealed record ReportPostResponse(Guid Id);
 
@@ -53,19 +53,7 @@ public sealed record CommentResponse(
     int ReplyCount,
     int LikeCount);
 
-public sealed record SharePostResponse(
-    Guid Id,
-    string? Content,
-    PostType PostType,
-    PostVisibility Visibility,
-    string? Link,
-    Guid OriginalPostId,
-    int ReactionCount,
-    int CommentCount,
-    int ShareCount,
-    int SaveCount,
-    int ViewCount,
-    DateTime CreatedAt);
+public sealed record SharePostResponse(bool IsShared, int ShareCount);
 
 public sealed record PostInteractionUserResponse(
     Guid Id,
@@ -103,16 +91,6 @@ public sealed class ReplyCommentValidator : AbstractValidator<ReplyCommentComman
     }
 }
 
-public sealed class SharePostValidator : AbstractValidator<SharePostCommand>
-{
-    public SharePostValidator()
-    {
-        RuleFor(x => x.UserId).NotEmpty();
-        RuleFor(x => x.PostId).NotEmpty();
-        RuleFor(x => x.Content).MaximumLength(5000);
-    }
-}
-
 public sealed class ReportPostValidator : AbstractValidator<ReportPostCommand>
 {
     public ReportPostValidator()
@@ -138,7 +116,6 @@ public interface IPostInteractionRepository
     Task AddCommentAsync(Comment comment, CancellationToken cancellationToken);
     Task AddSavedPostAsync(SavedPost savedPost, CancellationToken cancellationToken);
     void RemoveSavedPost(SavedPost savedPost);
-    Task AddPostAsync(Post post, CancellationToken cancellationToken);
     Task AddReportAsync(Report report, CancellationToken cancellationToken);
     Task AddNotificationAsync(Notification notification, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);

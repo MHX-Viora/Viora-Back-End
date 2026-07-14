@@ -65,9 +65,6 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
 
     public void RemoveSavedPost(SavedPost savedPost) => dbContext.SavedPosts.Remove(savedPost);
 
-    public Task AddPostAsync(Post post, CancellationToken cancellationToken) =>
-        dbContext.Posts.AddAsync(post, cancellationToken).AsTask();
-
     public Task AddReportAsync(Report report, CancellationToken cancellationToken) =>
         dbContext.Reports.AddAsync(report, cancellationToken).AsTask();
 

@@ -132,11 +132,10 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
     [ProducesResponseType<SharePostResponse>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Share(
         Guid postId,
-        SharePostRequest request,
         CancellationToken cancellationToken)
     {
         if (!TryGetViewerUserId(out var userId)) return Unauthorized();
-        var result = await mediator.Send(new SharePostCommand(userId, postId, request.Content), cancellationToken);
+        var result = await mediator.Send(new SharePostCommand(userId, postId), cancellationToken);
         return ToActionResult(result, StatusCodes.Status201Created);
     }
 
@@ -246,7 +245,6 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
 public sealed record ReactionPostRequest(ReactionType ReactionType);
 public sealed record CommentPostRequest([param: Required, MaxLength(5000)] string Content);
 public sealed record ReplyCommentRequest([param: Required, MaxLength(5000)] string Content);
-public sealed record SharePostRequest([param: MaxLength(5000)] string? Content);
 public sealed record ReportPostRequest(ReportReason Reason, [param: MaxLength(1000)] string? Description);
 
 public sealed class CreatePostFormRequest

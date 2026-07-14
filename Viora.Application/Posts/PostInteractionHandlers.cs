@@ -33,7 +33,7 @@ public sealed class ReactPostHandler(
                 }, token);
                 post!.ReactionCount++;
                 await AddPostNotificationAsync(repository, post, request.UserId, NotificationType.PostLike, "Có người đã bày tỏ cảm xúc bài viết của bạn.", token);
-                response = new PostReactionResponse(true, request.ReactionType, post.ReactionCount);
+                response = new PostReactionResponse(request.ReactionType, post.ReactionCount);
                 return;
             }
 
@@ -41,12 +41,12 @@ public sealed class ReactPostHandler(
             {
                 repository.RemoveReaction(reaction);
                 post!.ReactionCount = Math.Max(0, post.ReactionCount - 1);
-                response = new PostReactionResponse(false, null, post.ReactionCount);
+                response = new PostReactionResponse(null, post.ReactionCount);
                 return;
             }
 
             reaction.ReactionType = request.ReactionType;
-            response = new PostReactionResponse(true, request.ReactionType, post!.ReactionCount);
+            response = new PostReactionResponse(request.ReactionType, post!.ReactionCount);
         }, cancellationToken);
 
         return Result<PostReactionResponse>.Success(response);
@@ -228,51 +228,29 @@ public sealed class ToggleSavePostHandler(IPostInteractionRepository repository)
     }
 }
 
-public sealed class SharePostHandler(
-    IPostInteractionRepository repository,
-    IValidator<SharePostCommand> validator)
+public sealed class SharePostHandler(IPostInteractionRepository repository)
     : IRequestHandler<SharePostCommand, Result<SharePostResponse>>
 {
     public async Task<Result<SharePostResponse>> Handle(SharePostCommand request, CancellationToken cancellationToken)
     {
-        var validation = await validator.ValidateAsync(request, cancellationToken);
-        if (!validation.IsValid) return Result<SharePostResponse>.Failure(PostInteractionError.Invalid, ReactPostHandler.FirstError(validation));
+        if (request.UserId == Guid.Empty || request.PostId == Guid.Empty)
+        {
+            return Result<SharePostResponse>.Failure(PostInteractionError.Invalid, "Dữ liệu không hợp lệ.");
+        }
+
         var user = await repository.GetActiveUserAsync(request.UserId, cancellationToken);
         var original = await repository.GetPostForInteractionAsync(request.PostId, cancellationToken);
         var valid = await ReactPostHandler.GuardPostAsync(repository, user, original, request.UserId, cancellationToken);
         if (!valid.IsSuccess) return Result<SharePostResponse>.Failure(valid.Error!.Value, valid.Message!);
-
-        var share = new Post
-        {
-            UserId = request.UserId,
-            User = user!,
-            OriginalPostId = original!.Id,
-            Content = string.IsNullOrWhiteSpace(request.Content) ? null : request.Content.Trim(),
-            PostType = original.PostType,
-            Visibility = PostVisibility.Public,
-            Status = PostStatus.Published
-        };
+        var post = original!;
 
         await repository.ExecuteInTransactionAsync(async token =>
         {
-            await repository.AddPostAsync(share, token);
-            original.ShareCount++;
-            await ReactPostHandler.AddPostNotificationAsync(repository, original, request.UserId, NotificationType.PostShare, "Bài viết của bạn đã được chia sẻ.", token);
+            post.ShareCount++;
+            await ReactPostHandler.AddPostNotificationAsync(repository, post, request.UserId, NotificationType.PostShare, "Bài viết của bạn đã được chia sẻ.", token);
         }, cancellationToken);
 
-        return Result<SharePostResponse>.Success(new SharePostResponse(
-            share.Id,
-            share.Content,
-            share.PostType,
-            share.Visibility,
-            string.IsNullOrWhiteSpace(share.Link) ? null : share.Link,
-            original.Id,
-            share.ReactionCount,
-            share.CommentCount,
-            share.ShareCount,
-            share.SaveCount,
-            share.ViewCount,
-            share.CreatedAt));
+        return Result<SharePostResponse>.Success(new SharePostResponse(true, post.ShareCount));
     }
 }
 

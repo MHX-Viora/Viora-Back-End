@@ -72,7 +72,6 @@ public static class DependencyInjection
         services.AddScoped<IValidator<ReactPostCommand>, ReactPostValidator>();
         services.AddScoped<IValidator<CreateCommentCommand>, CreateCommentValidator>();
         services.AddScoped<IValidator<ReplyCommentCommand>, ReplyCommentValidator>();
-        services.AddScoped<IValidator<SharePostCommand>, SharePostValidator>();
         services.AddScoped<IValidator<ReportPostCommand>, ReportPostValidator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
