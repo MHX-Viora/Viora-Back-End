@@ -7,6 +7,7 @@ public sealed record GetCommunityPostsQuery(
     int Page,
     int PageSize,
     string? Keyword,
+    Guid? UserId,
     Guid? ViewerUserId) : IRequest<PostFeedResponse>;
 
 public sealed record PostFeedResponse(

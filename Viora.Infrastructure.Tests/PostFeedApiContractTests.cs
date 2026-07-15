@@ -18,6 +18,10 @@ public sealed class PostFeedApiContractTests
 
         var action = typeof(FeedController).GetMethod(nameof(FeedController.ListCommunityPosts))!;
         Assert.NotNull(action.GetCustomAttribute<HttpGetAttribute>());
+
+        var userIdParameter = action.GetParameters().Single(parameter => parameter.Name == "userId");
+        Assert.Equal(typeof(Guid?), userIdParameter.ParameterType);
+        Assert.NotNull(userIdParameter.GetCustomAttribute<FromQueryAttribute>());
     }
 
     [Fact]

@@ -97,6 +97,18 @@ public sealed class CreatePostValidatorTests
         Assert.Contains(result.Errors, error => error.ErrorMessage == "Video toi da 100 MB.");
     }
 
+    [Fact]
+    public async Task Create_reel_rejects_image_file()
+    {
+        var result = await reelValidator.ValidateAsync(new CreateReelCommand(
+            Guid.NewGuid(),
+            null,
+            [],
+            Image("image/jpeg")));
+
+        Assert.False(result.IsValid);
+    }
+
     private static CreatePostFile Image(string contentType) => new(
         new MemoryStream([1]),
         "image.jpg",
