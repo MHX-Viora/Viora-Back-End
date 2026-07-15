@@ -35,6 +35,17 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
                 comment.DeletedAt == null,
                 cancellationToken);
 
+    public Task<Comment?> GetCommentForDeleteAsync(Guid commentId, CancellationToken cancellationToken) =>
+        dbContext.Comments
+            .Include(comment => comment.Post)
+            .Include(comment => comment.ParentComment)
+            .Include(comment => comment.Replies)
+            .SingleOrDefaultAsync(comment =>
+                comment.Id == commentId &&
+                comment.Status == CommentStatus.Published &&
+                comment.DeletedAt == null,
+                cancellationToken);
+
     public Task<PostReaction?> GetReactionAsync(Guid postId, Guid userId, CancellationToken cancellationToken) =>
         dbContext.PostReactions.SingleOrDefaultAsync(
             reaction => reaction.PostId == postId && reaction.UserId == userId,
@@ -97,5 +108,94 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
         return dbContext.Follows.AnyAsync(
             follow => follow.FollowerId == userId && follow.FollowingId == post.UserId,
             cancellationToken);
+    }
+
+    public async Task<VideoCommentsResponse> GetVideoCommentsAsync(
+        GetVideoCommentsQuery query,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var skip = (page - 1) * pageSize;
+
+        var comments = dbContext.Comments
+            .AsNoTracking()
+            .Where(comment =>
+                comment.PostId == query.VideoId &&
+                comment.ParentCommentId == null &&
+                comment.Status == CommentStatus.Published &&
+                comment.DeletedAt == null);
+
+        var totalItems = await comments.CountAsync(cancellationToken);
+        var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
+
+        var items = await comments
+            .OrderByDescending(comment => comment.CreatedAt)
+            .ThenBy(comment => comment.Id)
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(comment => new VideoCommentListItemResponse(
+                comment.Id,
+                comment.Content,
+                comment.CreatedAt,
+                comment.LikeCount,
+                comment.ReplyCount,
+                dbContext.CommentReactions.Any(reaction =>
+                    reaction.CommentId == comment.Id &&
+                    reaction.UserId == query.UserId),
+                new PostInteractionUserResponse(
+                    comment.User.Id,
+                    comment.User.DisplayName,
+                    comment.User.AvatarUrl,
+                    comment.User.IsVerified)))
+            .ToListAsync(cancellationToken);
+
+        return new VideoCommentsResponse(page, pageSize, totalItems, totalPages, items);
+    }
+
+    public async Task<VideoRepliesResponse> GetVideoRepliesAsync(
+        GetVideoRepliesQuery query,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var skip = (page - 1) * pageSize;
+
+        var replies = dbContext.Comments
+            .AsNoTracking()
+            .Where(comment =>
+                comment.ParentCommentId == query.CommentId &&
+                comment.Status == CommentStatus.Published &&
+                comment.DeletedAt == null);
+
+        var totalItems = await replies.CountAsync(cancellationToken);
+        var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
+
+        var items = await replies
+            .OrderByDescending(comment => comment.CreatedAt)
+            .ThenBy(comment => comment.Id)
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(comment => new VideoReplyListItemResponse(
+                comment.Id,
+                comment.Content,
+                comment.CreatedAt,
+                comment.LikeCount,
+                dbContext.CommentReactions.Any(reaction =>
+                    reaction.CommentId == comment.Id &&
+                    reaction.UserId == query.UserId),
+                new PostInteractionUserResponse(
+                    comment.ReplyToUser!.Id,
+                    comment.ReplyToUser.DisplayName,
+                    comment.ReplyToUser.AvatarUrl,
+                    comment.ReplyToUser.IsVerified),
+                new PostInteractionUserResponse(
+                    comment.User.Id,
+                    comment.User.DisplayName,
+                    comment.User.AvatarUrl,
+                    comment.User.IsVerified)))
+            .ToListAsync(cancellationToken);
+
+        return new VideoRepliesResponse(page, pageSize, totalItems, totalPages, items);
     }
 }

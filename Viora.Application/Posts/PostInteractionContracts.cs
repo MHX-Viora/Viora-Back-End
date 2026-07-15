@@ -108,6 +108,7 @@ public interface IPostInteractionRepository
     Task<Post?> GetPostForInteractionAsync(Guid postId, CancellationToken cancellationToken);
     Task<Post?> GetPostWithOriginalAsync(Guid postId, CancellationToken cancellationToken);
     Task<Comment?> GetCommentForReplyAsync(Guid commentId, CancellationToken cancellationToken);
+    Task<Comment?> GetCommentForDeleteAsync(Guid commentId, CancellationToken cancellationToken);
     Task<PostReaction?> GetReactionAsync(Guid postId, Guid userId, CancellationToken cancellationToken);
     Task<SavedPost?> GetSavedPostAsync(Guid postId, Guid userId, CancellationToken cancellationToken);
     Task<bool> HasReportedPostAsync(Guid postId, Guid userId, CancellationToken cancellationToken);
@@ -121,4 +122,6 @@ public interface IPostInteractionRepository
     Task SaveChangesAsync(CancellationToken cancellationToken);
     Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken);
     Task<bool> CanViewPostAsync(Post post, Guid userId, CancellationToken cancellationToken);
+    Task<VideoCommentsResponse> GetVideoCommentsAsync(GetVideoCommentsQuery query, CancellationToken cancellationToken);
+    Task<VideoRepliesResponse> GetVideoRepliesAsync(GetVideoRepliesQuery query, CancellationToken cancellationToken);
 }

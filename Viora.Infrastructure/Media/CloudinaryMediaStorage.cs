@@ -52,4 +52,49 @@ public sealed class CloudinaryMediaStorage : IMediaStorage
             throw new CreatePostException("MEDIA_UPLOAD_FAILED", "Không thể tải ảnh lên dịch vụ lưu trữ.", exception);
         }
     }
+
+    public async Task<UploadedMedia> UploadReelVideoAsync(
+        Guid userId,
+        CreatePostFile file,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await cloudinary.UploadAsync(new VideoUploadParams
+            {
+                File = new FileDescription(file.FileName, file.Content),
+                Folder = $"viora/users/{userId:N}/reels",
+                UseFilename = false,
+                UniqueFilename = true,
+                Overwrite = false,
+                EagerTransforms =
+                [
+                    new Transformation().StartOffset("0").Crop("fill").Width(720).Height(1280).FetchFormat("jpg")
+                ]
+            }, cancellationToken);
+
+            if (result.Error is not null || result.SecureUrl is null)
+            {
+                throw new CreatePostException("MEDIA_UPLOAD_FAILED", "Khong the tai video len dich vu luu tru.");
+            }
+
+            var thumbnailUrl = cloudinary.Api.UrlVideoUp
+                .Transform(new Transformation().StartOffset("0").Crop("fill").Width(720).Height(1280).FetchFormat("jpg"))
+                .BuildUrl(result.PublicId);
+
+            return new UploadedMedia(result.SecureUrl.AbsoluteUri, thumbnailUrl);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (CreatePostException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new CreatePostException("MEDIA_UPLOAD_FAILED", "Khong the tai video len dich vu luu tru.", exception);
+        }
+    }
 }

@@ -12,11 +12,18 @@ public sealed class PostFeedApiContractTests
     [Fact]
     public void Posts_controller_exposes_authenticated_paginated_get()
     {
+        Assert.NotNull(typeof(FeedController).GetCustomAttribute<AuthorizeAttribute>());
+        Assert.Equal("api/feed", typeof(FeedController).GetCustomAttribute<RouteAttribute>()!.Template);
+
+        var action = typeof(FeedController).GetMethod(nameof(FeedController.ListCommunityPosts))!;
+        Assert.NotNull(action.GetCustomAttribute<HttpGetAttribute>());
+    }
+
+    [Fact]
+    public void Posts_controller_keeps_common_post_interaction_route()
+    {
         Assert.NotNull(typeof(PostsController).GetCustomAttribute<AuthorizeAttribute>());
         Assert.Equal("api/posts", typeof(PostsController).GetCustomAttribute<RouteAttribute>()!.Template);
-
-        var action = typeof(PostsController).GetMethod(nameof(PostsController.ListCommunityPosts))!;
-        Assert.NotNull(action.GetCustomAttribute<HttpGetAttribute>());
     }
 
     [Fact]

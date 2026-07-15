@@ -35,3 +35,28 @@ public sealed class CreatePostValidator : AbstractValidator<CreatePostCommand>
         });
     }
 }
+
+public sealed class CreateReelValidator : AbstractValidator<CreateReelCommand>
+{
+    public CreateReelValidator()
+    {
+        RuleFor(command => command.UserId).NotEmpty();
+        RuleFor(command => command.Content).MaximumLength(5000);
+        RuleFor(command => command.Video).NotNull()
+            .WithMessage("Bat buoc upload 1 file video.");
+        RuleFor(command => command.Video!.Length)
+            .GreaterThan(0)
+            .When(command => command.Video is not null)
+            .WithMessage("Video khong duoc rong.");
+        RuleFor(command => command.Video!.ContentType)
+            .Must(contentType => contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+            .When(command => command.Video is not null)
+            .WithMessage("Chi ho tro upload video.");
+        RuleFor(command => command.Video!.ContentType)
+            .Must(contentType => !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            .When(command => command.Video is not null)
+            .WithMessage("Khong cho upload anh.");
+        RuleForEach(command => command.Hashtags)
+            .MaximumLength(100);
+    }
+}
