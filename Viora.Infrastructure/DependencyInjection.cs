@@ -10,6 +10,7 @@ using System.Text;
 using Viora.Application.Users;
 using Viora.Infrastructure.Media;
 using Viora.Application.Posts;
+using Viora.Application.Hashtags;
 using FluentValidation;
 
 namespace Viora.Infrastructure;
@@ -76,6 +77,8 @@ public static class DependencyInjection
         services.AddScoped<IValidator<ReportPostCommand>, ReportPostValidator>();
         services.AddScoped<IValidator<GetPostCommentsQuery>, GetPostCommentsValidator>();
         services.AddScoped<IValidator<GetCommentRepliesQuery>, GetCommentRepliesValidator>();
+        services.AddScoped<IValidator<CreateHashtagCommand>, CreateHashtagValidator>();
+        services.AddScoped<IValidator<SearchHashtagsQuery>, SearchHashtagsValidator>();
         services.AddScoped<IValidator<GetShortVideosQuery>, GetShortVideosValidator>();
         services.AddScoped<IValidator<ToggleVideoReactionCommand>, ToggleVideoReactionValidator>();
         services.AddScoped<IValidator<ToggleVideoSaveCommand>, ToggleVideoSaveValidator>();
@@ -93,6 +96,7 @@ public static class DependencyInjection
         services.AddScoped<IPostFeedRepository, PostFeedRepository>();
         services.AddScoped<IVideoFeedRepository, VideoFeedRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
+        services.AddScoped<IHashtagRepository, HashtagRepository>();
         services.AddScoped<IPostInteractionRepository, PostInteractionRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         return services;
