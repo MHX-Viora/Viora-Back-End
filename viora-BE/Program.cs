@@ -10,8 +10,11 @@ using System.Threading.RateLimiting;
 using Viora.Application.Posts;
 
 var builder = WebApplication.CreateBuilder(args);
-var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
-builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
@@ -94,7 +97,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
-app.Logger.LogInformation("Starting Viora API on port {Port}", port);
+app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
 
 app.UseHttpsRedirection();
 

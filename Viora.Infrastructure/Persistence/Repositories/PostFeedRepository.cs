@@ -14,6 +14,11 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var skip = (page - 1) * pageSize;
         var viewerUserId = query.ViewerUserId;
+        var now = DateTime.UtcNow;
+        var oneDayAgo = now.AddDays(-1);
+        var threeDaysAgo = now.AddDays(-3);
+        var sevenDaysAgo = now.AddDays(-7);
+        var hasBehavior = viewerUserId.HasValue && await HasBehaviorAsync(viewerUserId.Value, cancellationToken);
 
         var posts = dbContext.Posts
             .AsNoTracking()
@@ -49,6 +54,35 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
         var ranked = posts.Select(post => new
         {
             Post = post,
+            IsFollowed = viewerUserId.HasValue && dbContext.Follows.Any(follow =>
+                follow.FollowerId == viewerUserId.Value &&
+                follow.FollowingId == post.UserId),
+            IsFriend = viewerUserId.HasValue && dbContext.Friendships.Any(friendship =>
+                friendship.Status == FriendshipStatus.Accepted &&
+                ((friendship.RequesterUserId == viewerUserId.Value && friendship.AddresseeUserId == post.UserId) ||
+                    (friendship.AddresseeUserId == viewerUserId.Value && friendship.RequesterUserId == post.UserId))),
+            HasViewed = viewerUserId.HasValue && dbContext.ViewHistories.Any(view =>
+                view.UserId == viewerUserId.Value &&
+                view.PostId == post.Id),
+            HasInterestedHashtag = viewerUserId.HasValue && dbContext.PostHashtags.Any(postTag =>
+                postTag.PostId == post.Id &&
+                dbContext.PostHashtags.Any(historyTag =>
+                    historyTag.HashtagId == postTag.HashtagId &&
+                    (
+                        dbContext.ViewHistories.Any(view =>
+                            view.UserId == viewerUserId.Value &&
+                            view.PostId == historyTag.PostId) ||
+                        dbContext.PostReactions.Any(reaction =>
+                            reaction.UserId == viewerUserId.Value &&
+                            reaction.PostId == historyTag.PostId) ||
+                        dbContext.SavedPosts.Any(saved =>
+                            saved.UserId == viewerUserId.Value &&
+                            saved.PostId == historyTag.PostId)
+                    ))),
+            PopularHashtagScore = dbContext.PostHashtags
+                .Where(postHashtag => postHashtag.PostId == post.Id)
+                .Select(postHashtag => (int?)postHashtag.Hashtag.PostCount)
+                .Max() ?? 0,
             IsReacted = viewerUserId.HasValue && dbContext.PostReactions.Any(reaction =>
                 reaction.UserId == viewerUserId.Value &&
                 reaction.PostId == post.Id),
@@ -63,9 +97,35 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                 saved.PostId == post.Id)
         });
 
-        var items = await ranked
-            .OrderByDescending(item => item.Post.CreatedAt)
-            .ThenBy(item => item.Post.Id)
+        var ordered = ranked
+            .OrderByDescending(item => hasBehavior
+                ? (item.IsFriend ? 1300 : 0) +
+                    (item.IsFollowed ? 900 : 0) +
+                    (item.HasInterestedHashtag ? 600 : 0) +
+                    (item.Post.CreatedAt >= oneDayAgo ? 300 :
+                        item.Post.CreatedAt >= threeDaysAgo ? 180 :
+                        item.Post.CreatedAt >= sevenDaysAgo ? 80 : 20) +
+                    item.Post.ReactionCount * 4 +
+                    item.Post.CommentCount * 6 +
+                    item.Post.ShareCount * 8 +
+                    item.Post.SaveCount * 5 +
+                    item.Post.ViewCount -
+                    (item.HasViewed ? 250 : 0)
+                : item.PopularHashtagScore * 3 +
+                    item.Post.ReactionCount * 5 +
+                    item.Post.CommentCount * 7 +
+                    item.Post.ShareCount * 9 +
+                    item.Post.SaveCount * 6 +
+                    item.Post.ViewCount +
+                    (item.Post.CreatedAt >= oneDayAgo ? 180 :
+                        item.Post.CreatedAt >= threeDaysAgo ? 110 :
+                        item.Post.CreatedAt >= sevenDaysAgo ? 55 : 10))
+            .ThenByDescending(item => item.Post.ReactionCount + item.Post.CommentCount + item.Post.ShareCount + item.Post.SaveCount)
+            .ThenByDescending(item => item.PopularHashtagScore)
+            .ThenByDescending(item => item.Post.CreatedAt)
+            .ThenBy(item => item.Post.Id);
+
+        var items = await ordered
             .Skip(skip)
             .Take(pageSize)
             .Select(item => new PostFeedItemResponse(
@@ -127,4 +187,10 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
 
         return new PostFeedResponse(page, pageSize, totalItems, totalPages, items);
     }
+
+    private async Task<bool> HasBehaviorAsync(Guid viewerUserId, CancellationToken cancellationToken) =>
+        await dbContext.Follows.AsNoTracking().AnyAsync(follow => follow.FollowerId == viewerUserId, cancellationToken) ||
+        await dbContext.ViewHistories.AsNoTracking().AnyAsync(view => view.UserId == viewerUserId, cancellationToken) ||
+        await dbContext.PostReactions.AsNoTracking().AnyAsync(reaction => reaction.UserId == viewerUserId, cancellationToken) ||
+        await dbContext.SavedPosts.AsNoTracking().AnyAsync(saved => saved.UserId == viewerUserId, cancellationToken);
 }
