@@ -13,6 +13,7 @@ using Viora.Application.Posts;
 using Viora.Application.Hashtags;
 using Viora.Application.Social;
 using FluentValidation;
+using Viora.Application.Notifications;
 
 namespace Viora.Infrastructure;
 
@@ -109,6 +110,7 @@ public static class DependencyInjection
         services.AddScoped<IHashtagRepository, HashtagRepository>();
         services.AddScoped<ISocialRepository, SocialRepository>();
         services.AddScoped<IPostInteractionRepository, PostInteractionRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         return services;
     }

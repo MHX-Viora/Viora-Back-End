@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using Viora.Application.Notifications;
 using Viora.Domain.Entities;
 
 namespace Viora.Application.Posts;
@@ -32,7 +33,7 @@ public sealed class ReactPostHandler(
                     CreatedAt = DateTime.UtcNow
                 }, token);
                 post!.ReactionCount++;
-                await AddPostNotificationAsync(repository, post, request.UserId, NotificationType.PostLike, "Có người đã bày tỏ cảm xúc bài viết của bạn.", token);
+                await AddPostNotificationAsync(repository, post, user!, NotificationType.PostLike, post.Id, token);
                 response = new PostReactionResponse(request.ReactionType, post.ReactionCount);
                 return;
             }
@@ -75,21 +76,15 @@ public sealed class ReactPostHandler(
     internal static async Task AddPostNotificationAsync(
         IPostInteractionRepository repository,
         Post post,
-        Guid senderUserId,
+        User sender,
         NotificationType type,
-        string title,
+        Guid referenceId,
         CancellationToken cancellationToken)
     {
-        if (post.UserId == senderUserId) return;
-        await repository.AddNotificationAsync(new Notification
-        {
-            UserId = post.UserId,
-            SenderUserId = senderUserId,
-            NotificationType = type,
-            ReferenceId = post.Id,
-            ReferenceType = NotificationReferenceType.Post,
-            Title = title
-        }, cancellationToken);
+        if (post.UserId == sender.Id) return;
+        await repository.AddNotificationAsync(
+            PostNotificationFactory.Create(post.UserId, sender, type, post.PostType, referenceId),
+            cancellationToken);
     }
 
     internal static CommentResponse MapComment(Comment comment) => new(
@@ -135,7 +130,7 @@ public sealed class CreateCommentHandler(
         {
             await repository.AddCommentAsync(comment, token);
             post!.CommentCount++;
-            await ReactPostHandler.AddPostNotificationAsync(repository, post, request.UserId, NotificationType.PostComment, "Có bình luận mới trên bài viết của bạn.", token);
+            await ReactPostHandler.AddPostNotificationAsync(repository, post, user!, NotificationType.PostComment, post.Id, token);
         }, cancellationToken);
 
         return Result<CommentResponse>.Success(ReactPostHandler.MapComment(comment));
@@ -183,15 +178,14 @@ public sealed class ReplyCommentHandler(
             parent.ReplyCount++;
             if (parent.UserId != request.UserId)
             {
-                await repository.AddNotificationAsync(new Notification
-                {
-                    UserId = parent.UserId,
-                    SenderUserId = request.UserId,
-                    NotificationType = NotificationType.CommentReply,
-                    ReferenceId = parent.Id,
-                    ReferenceType = NotificationReferenceType.Comment,
-                    Title = "Có phản hồi mới cho bình luận của bạn."
-                }, token);
+                await repository.AddNotificationAsync(
+                    PostNotificationFactory.Create(
+                        parent.UserId,
+                        user,
+                        NotificationType.CommentReply,
+                        parent.Post.PostType,
+                        parent.Id),
+                    token);
             }
         }, cancellationToken);
 
@@ -256,7 +250,7 @@ public sealed class SharePostHandler(IPostInteractionRepository repository)
         await repository.ExecuteInTransactionAsync(async token =>
         {
             post.ShareCount++;
-            await ReactPostHandler.AddPostNotificationAsync(repository, post, request.UserId, NotificationType.PostShare, "Bài viết của bạn đã được chia sẻ.", token);
+            await ReactPostHandler.AddPostNotificationAsync(repository, post, user!, NotificationType.PostShare, post.Id, token);
         }, cancellationToken);
 
         return Result<SharePostResponse>.Success(new SharePostResponse(true, post.ShareCount));

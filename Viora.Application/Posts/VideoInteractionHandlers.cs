@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using Viora.Application.Notifications;
 using Viora.Domain.Entities;
 
 namespace Viora.Application.Posts;
@@ -78,7 +79,7 @@ public sealed class ToggleVideoReactionHandler(
                     CreatedAt = DateTime.UtcNow
                 }, token);
                 video!.ReactionCount++;
-                await ReactPostHandler.AddPostNotificationAsync(repository, video, request.UserId, NotificationType.PostLike, "Co nguoi da thich video cua ban.", token);
+                await ReactPostHandler.AddPostNotificationAsync(repository, video, user!, NotificationType.PostLike, video.Id, token);
                 response = new VideoReactionResponse(true, video.ReactionCount);
                 return;
             }
@@ -146,7 +147,7 @@ public sealed class ShareVideoHandler(
         await repository.ExecuteInTransactionAsync(async token =>
         {
             video!.ShareCount++;
-            await ReactPostHandler.AddPostNotificationAsync(repository, video, request.UserId, NotificationType.PostShare, "Video cua ban da duoc chia se.", token);
+            await ReactPostHandler.AddPostNotificationAsync(repository, video, user!, NotificationType.PostShare, video.Id, token);
         }, cancellationToken);
 
         return Result<VideoShareResponse>.Success(new VideoShareResponse(video!.ShareCount));
@@ -181,7 +182,7 @@ public sealed class CreateVideoCommentHandler(
         {
             await repository.AddCommentAsync(comment, token);
             video!.CommentCount++;
-            await ReactPostHandler.AddPostNotificationAsync(repository, video, request.UserId, NotificationType.PostComment, "Co binh luan moi tren video cua ban.", token);
+            await ReactPostHandler.AddPostNotificationAsync(repository, video, user!, NotificationType.PostComment, video.Id, token);
         }, cancellationToken);
 
         return Result<VideoCommentResponse>.Success(VideoInteractionGuard.MapComment(comment));
@@ -225,15 +226,14 @@ public sealed class ReplyVideoCommentHandler(
             parent.ReplyCount++;
             if (parent.UserId != request.UserId)
             {
-                await repository.AddNotificationAsync(new Notification
-                {
-                    UserId = parent.UserId,
-                    SenderUserId = request.UserId,
-                    NotificationType = NotificationType.CommentReply,
-                    ReferenceId = parent.Id,
-                    ReferenceType = NotificationReferenceType.Comment,
-                    Title = "Co phan hoi moi cho binh luan cua ban."
-                }, token);
+                await repository.AddNotificationAsync(
+                    PostNotificationFactory.Create(
+                        parent.UserId,
+                        user,
+                        NotificationType.CommentReply,
+                        parent.Post.PostType,
+                        parent.Id),
+                    token);
             }
         }, cancellationToken);
 
