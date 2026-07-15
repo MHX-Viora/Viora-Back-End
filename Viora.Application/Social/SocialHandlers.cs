@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using Viora.Application.Notifications;
 using Viora.Domain.Entities;
 
 namespace Viora.Application.Social;
@@ -13,8 +14,9 @@ public sealed class ToggleFollowHandler(
     {
         var validation = await validator.ValidateAsync(request, cancellationToken);
         if (!validation.IsValid) return SocialResult<FollowResponse>.Failure(SocialError.Invalid, FirstError(validation));
-        if (await repository.GetActiveUserAsync(request.CurrentUserId, cancellationToken) is null ||
-            await repository.GetActiveUserAsync(request.TargetUserId, cancellationToken) is null)
+        var currentUser = await repository.GetActiveUserAsync(request.CurrentUserId, cancellationToken);
+        var targetUser = await repository.GetActiveUserAsync(request.TargetUserId, cancellationToken);
+        if (currentUser is null || targetUser is null)
         {
             return SocialResult<FollowResponse>.Failure(SocialError.NotFound, "Khong tim thay nguoi dung.");
         }
@@ -30,7 +32,7 @@ public sealed class ToggleFollowHandler(
                     FollowerId = request.CurrentUserId,
                     FollowingId = request.TargetUserId
                 }, token);
-                await AddNotificationAsync(repository, request.TargetUserId, request.CurrentUserId, NotificationType.Follow, "Co nguoi moi theo doi ban.", request.CurrentUserId, NotificationReferenceType.User, token);
+                await AddNotificationAsync(repository, request.TargetUserId, currentUser, NotificationType.Follow, request.CurrentUserId, NotificationReferenceType.User, token);
                 isFollowing = true;
                 return;
             }
@@ -48,21 +50,14 @@ public sealed class ToggleFollowHandler(
     internal static Task AddNotificationAsync(
         ISocialRepository repository,
         Guid userId,
-        Guid senderUserId,
+        User sender,
         NotificationType type,
-        string title,
         Guid referenceId,
         NotificationReferenceType referenceType,
         CancellationToken cancellationToken) =>
-        repository.AddNotificationAsync(new Notification
-        {
-            UserId = userId,
-            SenderUserId = senderUserId,
-            NotificationType = type,
-            ReferenceId = referenceId,
-            ReferenceType = referenceType,
-            Title = title
-        }, cancellationToken);
+        repository.AddNotificationAsync(
+            NotificationFactory.Create(userId, type, sender, referenceId, referenceType),
+            cancellationToken);
 }
 
 public sealed class SendFriendRequestHandler(
@@ -74,8 +69,9 @@ public sealed class SendFriendRequestHandler(
     {
         var validation = await validator.ValidateAsync(request, cancellationToken);
         if (!validation.IsValid) return SocialResult<FriendshipResponse>.Failure(SocialError.Invalid, ToggleFollowHandler.FirstError(validation));
-        if (await repository.GetActiveUserAsync(request.CurrentUserId, cancellationToken) is null ||
-            await repository.GetActiveUserAsync(request.TargetUserId, cancellationToken) is null)
+        var currentUser = await repository.GetActiveUserAsync(request.CurrentUserId, cancellationToken);
+        var targetUser = await repository.GetActiveUserAsync(request.TargetUserId, cancellationToken);
+        if (currentUser is null || targetUser is null)
         {
             return SocialResult<FriendshipResponse>.Failure(SocialError.NotFound, "Khong tim thay nguoi dung.");
         }
@@ -101,7 +97,7 @@ public sealed class SendFriendRequestHandler(
         await repository.ExecuteInTransactionAsync(async token =>
         {
             await repository.AddFriendshipAsync(friendship, token);
-            await ToggleFollowHandler.AddNotificationAsync(repository, request.TargetUserId, request.CurrentUserId, NotificationType.FriendRequest, "Ban co loi moi ket ban moi.", friendship.Id, NotificationReferenceType.User, token);
+            await ToggleFollowHandler.AddNotificationAsync(repository, request.TargetUserId, currentUser, NotificationType.FriendRequest, friendship.Id, NotificationReferenceType.User, token);
         }, cancellationToken);
 
         return SocialResult<FriendshipResponse>.Success(new FriendshipResponse(friendship.Id, friendship.Status));
@@ -137,6 +133,9 @@ public sealed class AcceptFriendRequestHandler(
         if (friendship.AddresseeUserId != request.CurrentUserId) return SocialResult<AcceptFriendResponse>.Failure(SocialError.Forbidden, "Ban khong co quyen dong y loi moi nay.");
         if (friendship.Status != FriendshipStatus.Pending) return SocialResult<AcceptFriendResponse>.Failure(SocialError.Invalid, "Loi moi ket ban khong con cho xu ly.");
 
+        var currentUser = await repository.GetActiveUserAsync(request.CurrentUserId, cancellationToken);
+        if (currentUser is null) return SocialResult<AcceptFriendResponse>.Failure(SocialError.NotFound, "Khong tim thay nguoi dung.");
+
         var conversation = new Conversation
         {
             ConversationType = ConversationType.Private,
@@ -151,7 +150,7 @@ public sealed class AcceptFriendRequestHandler(
             conversation.Members.Add(new ConversationMember { Conversation = conversation, UserId = friendship.RequesterUserId, JoinedAt = DateTime.UtcNow });
             conversation.Members.Add(new ConversationMember { Conversation = conversation, UserId = friendship.AddresseeUserId, JoinedAt = DateTime.UtcNow });
             await repository.AddConversationAsync(conversation, token);
-            await ToggleFollowHandler.AddNotificationAsync(repository, friendship.RequesterUserId, request.CurrentUserId, NotificationType.FriendAccepted, "Loi moi ket ban cua ban da duoc chap nhan.", friendship.Id, NotificationReferenceType.User, token);
+            await ToggleFollowHandler.AddNotificationAsync(repository, friendship.RequesterUserId, currentUser, NotificationType.FriendAccepted, friendship.Id, NotificationReferenceType.User, token);
         }, cancellationToken);
 
         return SocialResult<AcceptFriendResponse>.Success(new AcceptFriendResponse(conversation.Id));
@@ -172,11 +171,14 @@ public sealed class RejectFriendRequestHandler(
         if (friendship.AddresseeUserId != request.CurrentUserId) return SocialResult<FriendshipResponse>.Failure(SocialError.Forbidden, "Ban khong co quyen tu choi loi moi nay.");
         if (friendship.Status != FriendshipStatus.Pending) return SocialResult<FriendshipResponse>.Failure(SocialError.Invalid, "Loi moi ket ban khong con cho xu ly.");
 
+        var currentUser = await repository.GetActiveUserAsync(request.CurrentUserId, cancellationToken);
+        if (currentUser is null) return SocialResult<FriendshipResponse>.Failure(SocialError.NotFound, "Khong tim thay nguoi dung.");
+
         await repository.ExecuteInTransactionAsync(async token =>
         {
             friendship.Status = FriendshipStatus.Rejected;
             friendship.RespondedAt = DateTime.UtcNow;
-            await ToggleFollowHandler.AddNotificationAsync(repository, friendship.RequesterUserId, request.CurrentUserId, NotificationType.FriendRejected, "Loi moi ket ban cua ban da bi tu choi.", friendship.Id, NotificationReferenceType.User, token);
+            await ToggleFollowHandler.AddNotificationAsync(repository, friendship.RequesterUserId, currentUser, NotificationType.FriendRejected, friendship.Id, NotificationReferenceType.User, token);
         }, cancellationToken);
 
         return SocialResult<FriendshipResponse>.Success(new FriendshipResponse(friendship.Id, friendship.Status));

@@ -83,7 +83,15 @@ public sealed class ReactPostHandler(
     {
         if (post.UserId == sender.Id) return;
         await repository.AddNotificationAsync(
-            PostNotificationFactory.Create(post.UserId, sender, type, post.PostType, referenceId),
+            NotificationFactory.Create(
+                post.UserId,
+                type,
+                sender,
+                referenceId,
+                type == NotificationType.CommentReply
+                    ? NotificationReferenceType.Comment
+                    : NotificationReferenceType.Post,
+                post.PostType),
             cancellationToken);
     }
 
@@ -179,12 +187,13 @@ public sealed class ReplyCommentHandler(
             if (parent.UserId != request.UserId)
             {
                 await repository.AddNotificationAsync(
-                    PostNotificationFactory.Create(
+                    NotificationFactory.Create(
                         parent.UserId,
-                        user,
                         NotificationType.CommentReply,
-                        parent.Post.PostType,
-                        parent.Id),
+                        user,
+                        parent.Id,
+                        NotificationReferenceType.Comment,
+                        parent.Post.PostType),
                     token);
             }
         }, cancellationToken);

@@ -227,12 +227,13 @@ public sealed class ReplyVideoCommentHandler(
             if (parent.UserId != request.UserId)
             {
                 await repository.AddNotificationAsync(
-                    PostNotificationFactory.Create(
+                    NotificationFactory.Create(
                         parent.UserId,
-                        user,
                         NotificationType.CommentReply,
-                        parent.Post.PostType,
-                        parent.Id),
+                        user,
+                        parent.Id,
+                        NotificationReferenceType.Comment,
+                        parent.Post.PostType),
                     token);
             }
         }, cancellationToken);
