@@ -98,59 +98,97 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
 
         var projected = friendships.Select(friendship => new
         {
-            Friendship = friendship,
+            friendship.Id,
+            friendship.Status,
+            friendship.CreatedAt,
+            friendship.RespondedAt,
             OtherUserId = friendship.RequesterUserId == query.CurrentUserId
                 ? friendship.AddresseeUserId
                 : friendship.RequesterUserId,
-            OtherUser = friendship.RequesterUserId == query.CurrentUserId
-                ? friendship.AddresseeUser
-                : friendship.RequesterUser
+            OtherDisplayName = friendship.RequesterUserId == query.CurrentUserId
+                ? friendship.AddresseeUser.DisplayName
+                : friendship.RequesterUser.DisplayName,
+            OtherAvatarUrl = friendship.RequesterUserId == query.CurrentUserId
+                ? friendship.AddresseeUser.AvatarUrl
+                : friendship.RequesterUser.AvatarUrl,
+            OtherIsVerified = friendship.RequesterUserId == query.CurrentUserId
+                ? friendship.AddresseeUser.IsVerified
+                : friendship.RequesterUser.IsVerified,
+            OtherAccountStatus = friendship.RequesterUserId == query.CurrentUserId
+                ? friendship.AddresseeUser.Account.Status
+                : friendship.RequesterUser.Account.Status,
+            OtherAccountDeletedAt = friendship.RequesterUserId == query.CurrentUserId
+                ? friendship.AddresseeUser.Account.DeletedAt
+                : friendship.RequesterUser.Account.DeletedAt
         })
         .Where(item =>
-            item.OtherUser.Account.Status == AccountStatus.Active &&
-            item.OtherUser.Account.DeletedAt == null);
+            item.OtherAccountStatus == AccountStatus.Active &&
+            item.OtherAccountDeletedAt == null);
 
         if (!string.IsNullOrWhiteSpace(query.Keyword))
         {
             var keyword = $"%{query.Keyword.Trim()}%";
-            projected = projected.Where(item => EF.Functions.ILike(item.OtherUser.DisplayName, keyword));
+            projected = projected.Where(item => EF.Functions.ILike(item.OtherDisplayName, keyword));
         }
 
         var totalItems = await projected.CountAsync(cancellationToken);
         var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
 
-        var items = await projected
-            .OrderByDescending(item => item.Friendship.CreatedAt)
-            .ThenByDescending(item => item.Friendship.Id)
+        var rows = await projected
+            .OrderByDescending(item => item.CreatedAt)
+            .ThenByDescending(item => item.Id)
             .Skip(skip)
             .Take(pageSize)
-            .Select(item => new FriendshipListItemResponse(
-                item.Friendship.Id,
-                item.Friendship.Status.ToString(),
-                item.Friendship.CreatedAt,
-                item.Friendship.RespondedAt,
-                new FriendshipUserResponse(
-                    item.OtherUser.Id,
-                    item.OtherUser.DisplayName,
-                    item.OtherUser.AvatarUrl,
-                    item.OtherUser.IsVerified,
-                    dbContext.Friendships.Count(otherFriend =>
-                        otherFriend.Status == FriendshipStatus.Accepted &&
-                        (otherFriend.RequesterUserId == item.OtherUserId ||
-                            otherFriend.AddresseeUserId == item.OtherUserId) &&
-                        dbContext.Friendships.Any(myFriend =>
-                            myFriend.Status == FriendshipStatus.Accepted &&
-                            (myFriend.RequesterUserId == query.CurrentUserId ||
-                                myFriend.AddresseeUserId == query.CurrentUserId) &&
-                            (
-                                myFriend.RequesterUserId == (otherFriend.RequesterUserId == item.OtherUserId
-                                    ? otherFriend.AddresseeUserId
-                                    : otherFriend.RequesterUserId) ||
-                                myFriend.AddresseeUserId == (otherFriend.RequesterUserId == item.OtherUserId
-                                    ? otherFriend.AddresseeUserId
-                                    : otherFriend.RequesterUserId)
-                            ))))))
             .ToListAsync(cancellationToken);
+
+        var currentUserFriendIds = await dbContext.Friendships
+            .AsNoTracking()
+            .Where(friendship =>
+                friendship.Status == FriendshipStatus.Accepted &&
+                (friendship.RequesterUserId == query.CurrentUserId ||
+                    friendship.AddresseeUserId == query.CurrentUserId))
+            .Select(friendship => friendship.RequesterUserId == query.CurrentUserId
+                ? friendship.AddresseeUserId
+                : friendship.RequesterUserId)
+            .ToListAsync(cancellationToken);
+
+        var currentFriendSet = currentUserFriendIds.ToHashSet();
+        var pageOtherUserIds = rows.Select(item => item.OtherUserId).Distinct().ToArray();
+        var pageOtherFriendRows = await dbContext.Friendships
+            .AsNoTracking()
+            .Where(friendship =>
+                friendship.Status == FriendshipStatus.Accepted &&
+                (pageOtherUserIds.Contains(friendship.RequesterUserId) ||
+                    pageOtherUserIds.Contains(friendship.AddresseeUserId)))
+            .Select(friendship => new
+            {
+                UserId = pageOtherUserIds.Contains(friendship.RequesterUserId)
+                    ? friendship.RequesterUserId
+                    : friendship.AddresseeUserId,
+                FriendId = pageOtherUserIds.Contains(friendship.RequesterUserId)
+                    ? friendship.AddresseeUserId
+                    : friendship.RequesterUserId
+            })
+            .ToListAsync(cancellationToken);
+
+        var mutualCounts = pageOtherFriendRows
+            .Where(item => currentFriendSet.Contains(item.FriendId))
+            .GroupBy(item => item.UserId)
+            .ToDictionary(group => group.Key, group => group.Select(item => item.FriendId).Distinct().Count());
+
+        var items = rows
+            .Select(item => new FriendshipListItemResponse(
+                item.Id,
+                item.Status.ToString(),
+                item.CreatedAt,
+                item.RespondedAt,
+                new FriendshipUserResponse(
+                    item.OtherUserId,
+                    item.OtherDisplayName,
+                    item.OtherAvatarUrl,
+                    item.OtherIsVerified,
+                    mutualCounts.GetValueOrDefault(item.OtherUserId))))
+            .ToList();
 
         return new FriendshipListResponse(page, pageSize, totalItems, totalPages, items);
     }
