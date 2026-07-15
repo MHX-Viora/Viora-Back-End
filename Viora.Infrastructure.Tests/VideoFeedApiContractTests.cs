@@ -18,6 +18,9 @@ public sealed class VideoFeedApiContractTests
 
         var action = typeof(ReelsController).GetMethod(nameof(ReelsController.List))!;
         Assert.NotNull(action.GetCustomAttribute<HttpGetAttribute>());
+        Assert.Equal("recommend", action.GetParameters().Single(parameter => parameter.Name == "sort").DefaultValue);
+        Assert.Equal(1, action.GetParameters().Single(parameter => parameter.Name == "page").DefaultValue);
+        Assert.Equal(20, action.GetParameters().Single(parameter => parameter.Name == "pageSize").DefaultValue);
 
         var createAction = typeof(ReelsController).GetMethod(nameof(ReelsController.Create))!;
         Assert.NotNull(createAction.GetCustomAttribute<HttpPostAttribute>());
@@ -100,7 +103,7 @@ public sealed class VideoFeedApiContractTests
     }
 
     [Fact]
-    public async Task Video_feed_validator_requires_user_id_for_user_sort()
+    public async Task Video_feed_validator_rejects_legacy_user_sort()
     {
         var validator = new GetShortVideosValidator();
 
@@ -113,6 +116,22 @@ public sealed class VideoFeedApiContractTests
             Guid.NewGuid()));
 
         Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public async Task Video_feed_validator_accepts_user_id_with_recommend_sort()
+    {
+        var validator = new GetShortVideosValidator();
+
+        var result = await validator.ValidateAsync(new GetShortVideosQuery(
+            1,
+            10,
+            "recommend",
+            null,
+            Guid.NewGuid(),
+            Guid.NewGuid()));
+
+        Assert.True(result.IsValid);
     }
 
     [Fact]

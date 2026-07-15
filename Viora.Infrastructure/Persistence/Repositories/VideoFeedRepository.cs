@@ -35,8 +35,13 @@ public sealed class VideoFeedRepository(AppDbContext dbContext) : IVideoFeedRepo
         var thirtyDaysAgo = now.AddDays(-30);
 
         var videos = BuildVisibleShortVideosQuery(viewerUserId);
+        if (query.UserId.HasValue)
+        {
+            videos = videos.Where(post => post.UserId == query.UserId.Value);
+        }
+
         videos = ApplyKeyword(videos, query.Keyword);
-        videos = ApplySortFilter(videos, sort, query.UserId, viewerUserId);
+        videos = ApplySortFilter(videos, sort, viewerUserId);
 
         var totalItems = await videos.CountAsync(cancellationToken);
         var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
@@ -78,7 +83,9 @@ public sealed class VideoFeedRepository(AppDbContext dbContext) : IVideoFeedRepo
                         view.PostId == historyTag.PostId)))
         });
 
-        ranked = ApplySort(ranked, sort, hasBehavior, oneDayAgo, threeDaysAgo, sevenDaysAgo, thirtyDaysAgo);
+        ranked = query.UserId.HasValue
+            ? ApplyLatestSort(ranked)
+            : ApplySort(ranked, sort, hasBehavior, oneDayAgo, threeDaysAgo, sevenDaysAgo, thirtyDaysAgo);
 
         // Phan trang sau khi da sap xep, roi chi lay cac field FE can hien thi.
         var items = await ranked
@@ -162,7 +169,6 @@ public sealed class VideoFeedRepository(AppDbContext dbContext) : IVideoFeedRepo
     private IQueryable<Post> ApplySortFilter(
         IQueryable<Post> videos,
         string sort,
-        Guid? userId,
         Guid viewerUserId) =>
         sort switch
         {
@@ -173,7 +179,6 @@ public sealed class VideoFeedRepository(AppDbContext dbContext) : IVideoFeedRepo
                 friendship.Status == FriendshipStatus.Accepted &&
                 ((friendship.RequesterUserId == viewerUserId && friendship.AddresseeUserId == post.UserId) ||
                     (friendship.AddresseeUserId == viewerUserId && friendship.RequesterUserId == post.UserId)))),
-            "user" => videos.Where(post => post.UserId == userId!.Value),
             _ => videos
         };
 

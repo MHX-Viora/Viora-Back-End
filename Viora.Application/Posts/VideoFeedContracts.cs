@@ -50,7 +50,7 @@ public sealed record VideoFeedUserResponse(
 
 public sealed class GetShortVideosValidator : AbstractValidator<GetShortVideosQuery>
 {
-    private static readonly string[] Sorts = ["recommend", "following", "friends", "latest", "popular", "user"];
+    private static readonly string[] Sorts = ["recommend", "following", "friends", "latest", "popular"];
 
     public GetShortVideosValidator()
     {
@@ -59,11 +59,7 @@ public sealed class GetShortVideosValidator : AbstractValidator<GetShortVideosQu
         RuleFor(query => query.Sort)
             .NotEmpty()
             .Must(sort => Sorts.Contains(sort.Trim().ToLowerInvariant()))
-            .WithMessage("Sort must be recommend, following, friends, latest, popular, or user.");
-        RuleFor(query => query.UserId)
-            .NotNull()
-            .When(query => string.Equals(query.Sort?.Trim(), "user", StringComparison.OrdinalIgnoreCase))
-            .WithMessage("UserId is required when sort is user.");
+            .WithMessage("Sort must be recommend, following, friends, latest, or popular.");
         RuleFor(query => query.Keyword).MaximumLength(255);
     }
 }

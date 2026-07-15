@@ -89,12 +89,12 @@ public sealed class ReelsController(IMediator mediator, ILogger<ReelsController>
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> List(
-        [FromQuery, Range(1, int.MaxValue)] int page,
-        [FromQuery, Range(1, 100)] int pageSize,
-        [FromQuery, Required] string sort,
-        [FromQuery, MaxLength(255)] string? keyword,
-        [FromQuery] Guid? userId,
-        CancellationToken cancellationToken)
+        [FromQuery, Range(1, int.MaxValue)] int page = 1,
+        [FromQuery, Range(1, 100)] int pageSize = 20,
+        [FromQuery] string sort = "recommend",
+        [FromQuery, MaxLength(255)] string? keyword = null,
+        [FromQuery] Guid? userId = null,
+        CancellationToken cancellationToken = default)
     {
         if (!TryGetViewerUserId(out var viewerUserId))
         {
