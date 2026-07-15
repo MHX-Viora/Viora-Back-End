@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Viora.Application.Social;
+using Viora.Domain.Entities;
 
 namespace viora_BE.Controllers;
 
@@ -12,9 +13,27 @@ namespace viora_BE.Controllers;
 [Authorize]
 public sealed class FriendsController(IMediator mediator) : ControllerBase
 {
-    [HttpPost("request")]
-    [ProducesResponseType<FriendshipResponse>(StatusCodes.Status200OK)]
+    [HttpGet]
+    [ProducesResponseType<FriendshipListResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> List(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] FriendshipStatus status = FriendshipStatus.Accepted,
+        [FromQuery] string? keyword = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetCurrentUserId(out var currentUserId)) return Unauthorized();
+        var result = await mediator.Send(
+            new GetFriendshipsQuery(currentUserId, page, pageSize, status, keyword),
+            cancellationToken);
+        return ToActionResult(result);
+    }
+
+    [HttpPost("request")]
+    [ProducesResponseType<SendFriendRequestResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SendRequest(
         SendFriendRequest request,
@@ -34,8 +53,8 @@ public sealed class FriendsController(IMediator mediator) : ControllerBase
         return ToActionResult(result);
     }
 
-    [HttpPost("{friendshipId:guid}/accept")]
-    [ProducesResponseType<AcceptFriendResponse>(StatusCodes.Status200OK)]
+    [HttpPut("{friendshipId:guid}/accept")]
+    [ProducesResponseType<FriendshipActionResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Accept(Guid friendshipId, CancellationToken cancellationToken)
@@ -45,8 +64,8 @@ public sealed class FriendsController(IMediator mediator) : ControllerBase
         return ToActionResult(result);
     }
 
-    [HttpPost("{friendshipId:guid}/reject")]
-    [ProducesResponseType<FriendshipResponse>(StatusCodes.Status200OK)]
+    [HttpPut("{friendshipId:guid}/reject")]
+    [ProducesResponseType<FriendshipActionResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Reject(Guid friendshipId, CancellationToken cancellationToken)

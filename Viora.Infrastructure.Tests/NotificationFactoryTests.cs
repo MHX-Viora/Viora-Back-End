@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Viora.Infrastructure.Tests;
 
-public sealed class PostNotificationFactoryTests
+public sealed class NotificationFactoryTests
 {
     [Theory]
     [InlineData(PostType.Post, "Nguyễn Văn A đã bày tỏ cảm xúc với bài viết của bạn.")]

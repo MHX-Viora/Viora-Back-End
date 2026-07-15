@@ -22,16 +22,23 @@ public sealed record ToggleFollowCommand(Guid CurrentUserId, Guid TargetUserId)
     : IRequest<SocialResult<FollowResponse>>;
 
 public sealed record SendFriendRequestCommand(Guid CurrentUserId, Guid TargetUserId)
-    : IRequest<SocialResult<FriendshipResponse>>;
+    : IRequest<SocialResult<SendFriendRequestResponse>>;
 
 public sealed record GetFriendRequestsQuery(Guid CurrentUserId)
     : IRequest<SocialResult<FriendRequestListResponse>>;
 
+public sealed record GetFriendshipsQuery(
+    Guid CurrentUserId,
+    int Page,
+    int PageSize,
+    FriendshipStatus Status,
+    string? Keyword) : IRequest<SocialResult<FriendshipListResponse>>;
+
 public sealed record AcceptFriendRequestCommand(Guid CurrentUserId, Guid FriendshipId)
-    : IRequest<SocialResult<AcceptFriendResponse>>;
+    : IRequest<SocialResult<FriendshipActionResponse>>;
 
 public sealed record RejectFriendRequestCommand(Guid CurrentUserId, Guid FriendshipId)
-    : IRequest<SocialResult<FriendshipResponse>>;
+    : IRequest<SocialResult<FriendshipActionResponse>>;
 
 public sealed record DeleteFriendCommand(Guid CurrentUserId, Guid Id)
     : IRequest<SocialResult<DeleteFriendResponse>>;
@@ -49,7 +56,37 @@ public sealed record FollowResponse(bool IsFollowing, int FollowerCount);
 
 public sealed record FriendshipResponse(Guid Id, FriendshipStatus Status);
 
+public sealed record SendFriendRequestResponse(
+    bool Success,
+    string Message,
+    SendFriendRequestData Data);
+
+public sealed record SendFriendRequestData(
+    Guid FriendshipId,
+    string Status);
+
 public sealed record FriendRequestListResponse(IReadOnlyList<FriendRequestItemResponse> Items);
+
+public sealed record FriendshipListResponse(
+    int Page,
+    int PageSize,
+    int TotalItems,
+    int TotalPages,
+    IReadOnlyList<FriendshipListItemResponse> Items);
+
+public sealed record FriendshipListItemResponse(
+    Guid FriendshipId,
+    string Status,
+    DateTime CreatedAt,
+    DateTime? RespondedAt,
+    FriendshipUserResponse User);
+
+public sealed record FriendshipUserResponse(
+    Guid Id,
+    string DisplayName,
+    string? AvatarUrl,
+    bool IsVerified,
+    int MutualFriendCount);
 
 public sealed record FriendRequestItemResponse(
     Guid Id,
@@ -60,6 +97,10 @@ public sealed record FriendRequestItemResponse(
     DateTime CreatedAt);
 
 public sealed record AcceptFriendResponse(Guid ConversationId);
+
+public sealed record FriendshipActionResponse(
+    bool Success,
+    string Message);
 
 public sealed record DeleteFriendResponse(FriendshipStatus? Status);
 
@@ -123,6 +164,19 @@ public sealed class GetFriendRequestsValidator : AbstractValidator<GetFriendRequ
     public GetFriendRequestsValidator() => RuleFor(query => query.CurrentUserId).NotEmpty();
 }
 
+public sealed class GetFriendshipsValidator : AbstractValidator<GetFriendshipsQuery>
+{
+    public GetFriendshipsValidator()
+    {
+        RuleFor(query => query.CurrentUserId).NotEmpty();
+        RuleFor(query => query.Page).GreaterThanOrEqualTo(1);
+        RuleFor(query => query.PageSize).GreaterThan(0);
+        RuleFor(query => query.Status).Must(status =>
+            status is FriendshipStatus.Pending or FriendshipStatus.Accepted or FriendshipStatus.Rejected);
+        RuleFor(query => query.Keyword).MaximumLength(255);
+    }
+}
+
 public sealed class AcceptFriendRequestValidator : AbstractValidator<AcceptFriendRequestCommand>
 {
     public AcceptFriendRequestValidator()
@@ -182,6 +236,7 @@ public interface ISocialRepository
     Task<Friendship?> GetFriendshipAsync(Guid friendshipId, CancellationToken cancellationToken);
     Task<Guid?> GetPrivateConversationIdAsync(Guid firstUserId, Guid secondUserId, CancellationToken cancellationToken);
     Task<FriendRequestListResponse> GetPendingRequestsAsync(Guid userId, CancellationToken cancellationToken);
+    Task<FriendshipListResponse> GetFriendshipsAsync(GetFriendshipsQuery query, CancellationToken cancellationToken);
     Task<UserStatisticsResponse?> GetStatisticsAsync(Guid userId, CancellationToken cancellationToken);
     Task<UserProfileSummaryResponse?> GetUserProfileSummaryAsync(Guid currentUserId, Guid targetUserId, CancellationToken cancellationToken);
     Task AddFollowAsync(Follow follow, CancellationToken cancellationToken);

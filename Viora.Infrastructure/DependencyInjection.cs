@@ -84,6 +84,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<ToggleFollowCommand>, ToggleFollowValidator>();
         services.AddScoped<IValidator<SendFriendRequestCommand>, SendFriendRequestValidator>();
         services.AddScoped<IValidator<GetFriendRequestsQuery>, GetFriendRequestsValidator>();
+        services.AddScoped<IValidator<GetFriendshipsQuery>, GetFriendshipsValidator>();
         services.AddScoped<IValidator<AcceptFriendRequestCommand>, AcceptFriendRequestValidator>();
         services.AddScoped<IValidator<RejectFriendRequestCommand>, RejectFriendRequestValidator>();
         services.AddScoped<IValidator<DeleteFriendCommand>, DeleteFriendValidator>();

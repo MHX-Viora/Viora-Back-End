@@ -32,10 +32,11 @@ public sealed class SocialApiContractTests
 
         var methods = Methods<FriendsController>();
 
+        Assert.NotNull(methods[nameof(FriendsController.List)].GetCustomAttribute<HttpGetAttribute>());
         Assert.Equal("request", methods[nameof(FriendsController.SendRequest)].GetCustomAttribute<HttpPostAttribute>()!.Template);
         Assert.Equal("requests", methods[nameof(FriendsController.ListRequests)].GetCustomAttribute<HttpGetAttribute>()!.Template);
-        Assert.Equal("{friendshipId:guid}/accept", methods[nameof(FriendsController.Accept)].GetCustomAttribute<HttpPostAttribute>()!.Template);
-        Assert.Equal("{friendshipId:guid}/reject", methods[nameof(FriendsController.Reject)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal("{friendshipId:guid}/accept", methods[nameof(FriendsController.Accept)].GetCustomAttribute<HttpPutAttribute>()!.Template);
+        Assert.Equal("{friendshipId:guid}/reject", methods[nameof(FriendsController.Reject)].GetCustomAttribute<HttpPutAttribute>()!.Template);
         Assert.Equal("{id:guid}", methods[nameof(FriendsController.Delete)].GetCustomAttribute<HttpDeleteAttribute>()!.Template);
     }
 
@@ -44,6 +45,12 @@ public sealed class SocialApiContractTests
     {
         AssertProperties<FollowResponse>("IsFollowing", "FollowerCount");
         AssertProperties<FriendshipResponse>("Id", "Status");
+        AssertProperties<SendFriendRequestResponse>("Success", "Message", "Data");
+        AssertProperties<SendFriendRequestData>("FriendshipId", "Status");
+        AssertProperties<FriendshipListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
+        AssertProperties<FriendshipListItemResponse>("FriendshipId", "Status", "CreatedAt", "RespondedAt", "User");
+        AssertProperties<FriendshipUserResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified", "MutualFriendCount");
+        AssertProperties<FriendshipActionResponse>("Success", "Message");
         AssertProperties<FriendRequestListResponse>("Items");
         AssertProperties<FriendRequestItemResponse>("Id", "UserId", "DisplayName", "AvatarUrl", "IsVerified", "CreatedAt");
         AssertProperties<AcceptFriendResponse>("ConversationId");

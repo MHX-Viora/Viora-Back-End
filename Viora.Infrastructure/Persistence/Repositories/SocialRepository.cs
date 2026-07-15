@@ -74,6 +74,87 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
         return new FriendRequestListResponse(items);
     }
 
+    public async Task<FriendshipListResponse> GetFriendshipsAsync(
+        GetFriendshipsQuery query,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var skip = (page - 1) * pageSize;
+
+        var friendships = dbContext.Friendships
+            .AsNoTracking()
+            .Where(friendship => friendship.Status == query.Status);
+
+        friendships = query.Status switch
+        {
+            FriendshipStatus.Pending => friendships.Where(friendship => friendship.AddresseeUserId == query.CurrentUserId),
+            FriendshipStatus.Rejected => friendships.Where(friendship => friendship.AddresseeUserId == query.CurrentUserId),
+            FriendshipStatus.Accepted => friendships.Where(friendship =>
+                friendship.RequesterUserId == query.CurrentUserId ||
+                friendship.AddresseeUserId == query.CurrentUserId),
+            _ => friendships.Where(_ => false)
+        };
+
+        var projected = friendships.Select(friendship => new
+        {
+            Friendship = friendship,
+            OtherUserId = friendship.RequesterUserId == query.CurrentUserId
+                ? friendship.AddresseeUserId
+                : friendship.RequesterUserId,
+            OtherUser = friendship.RequesterUserId == query.CurrentUserId
+                ? friendship.AddresseeUser
+                : friendship.RequesterUser
+        })
+        .Where(item =>
+            item.OtherUser.Account.Status == AccountStatus.Active &&
+            item.OtherUser.Account.DeletedAt == null);
+
+        if (!string.IsNullOrWhiteSpace(query.Keyword))
+        {
+            var keyword = $"%{query.Keyword.Trim()}%";
+            projected = projected.Where(item => EF.Functions.ILike(item.OtherUser.DisplayName, keyword));
+        }
+
+        var totalItems = await projected.CountAsync(cancellationToken);
+        var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
+
+        var items = await projected
+            .OrderByDescending(item => item.Friendship.CreatedAt)
+            .ThenByDescending(item => item.Friendship.Id)
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(item => new FriendshipListItemResponse(
+                item.Friendship.Id,
+                item.Friendship.Status.ToString(),
+                item.Friendship.CreatedAt,
+                item.Friendship.RespondedAt,
+                new FriendshipUserResponse(
+                    item.OtherUser.Id,
+                    item.OtherUser.DisplayName,
+                    item.OtherUser.AvatarUrl,
+                    item.OtherUser.IsVerified,
+                    dbContext.Friendships.Count(otherFriend =>
+                        otherFriend.Status == FriendshipStatus.Accepted &&
+                        (otherFriend.RequesterUserId == item.OtherUserId ||
+                            otherFriend.AddresseeUserId == item.OtherUserId) &&
+                        dbContext.Friendships.Any(myFriend =>
+                            myFriend.Status == FriendshipStatus.Accepted &&
+                            (myFriend.RequesterUserId == query.CurrentUserId ||
+                                myFriend.AddresseeUserId == query.CurrentUserId) &&
+                            (
+                                myFriend.RequesterUserId == (otherFriend.RequesterUserId == item.OtherUserId
+                                    ? otherFriend.AddresseeUserId
+                                    : otherFriend.RequesterUserId) ||
+                                myFriend.AddresseeUserId == (otherFriend.RequesterUserId == item.OtherUserId
+                                    ? otherFriend.AddresseeUserId
+                                    : otherFriend.RequesterUserId)
+                            ))))))
+            .ToListAsync(cancellationToken);
+
+        return new FriendshipListResponse(page, pageSize, totalItems, totalPages, items);
+    }
+
     public Task<UserStatisticsResponse?> GetStatisticsAsync(Guid userId, CancellationToken cancellationToken) =>
         dbContext.Users
             .AsNoTracking()

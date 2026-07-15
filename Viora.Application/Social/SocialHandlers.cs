@@ -63,45 +63,70 @@ public sealed class ToggleFollowHandler(
 public sealed class SendFriendRequestHandler(
     ISocialRepository repository,
     IValidator<SendFriendRequestCommand> validator)
-    : IRequestHandler<SendFriendRequestCommand, SocialResult<FriendshipResponse>>
+    : IRequestHandler<SendFriendRequestCommand, SocialResult<SendFriendRequestResponse>>
 {
-    public async Task<SocialResult<FriendshipResponse>> Handle(SendFriendRequestCommand request, CancellationToken cancellationToken)
+    public async Task<SocialResult<SendFriendRequestResponse>> Handle(SendFriendRequestCommand request, CancellationToken cancellationToken)
     {
         var validation = await validator.ValidateAsync(request, cancellationToken);
-        if (!validation.IsValid) return SocialResult<FriendshipResponse>.Failure(SocialError.Invalid, ToggleFollowHandler.FirstError(validation));
+        if (!validation.IsValid) return SocialResult<SendFriendRequestResponse>.Failure(SocialError.Invalid, ToggleFollowHandler.FirstError(validation));
         var currentUser = await repository.GetActiveUserAsync(request.CurrentUserId, cancellationToken);
         var targetUser = await repository.GetActiveUserAsync(request.TargetUserId, cancellationToken);
         if (currentUser is null || targetUser is null)
         {
-            return SocialResult<FriendshipResponse>.Failure(SocialError.NotFound, "Khong tim thay nguoi dung.");
+            return SocialResult<SendFriendRequestResponse>.Failure(SocialError.NotFound, "Khong tim thay nguoi dung.");
         }
 
-        var existing = await repository.GetFriendshipBetweenAsync(request.CurrentUserId, request.TargetUserId, cancellationToken);
-        if (existing is not null)
+        var friendship = await repository.GetFriendshipBetweenAsync(request.CurrentUserId, request.TargetUserId, cancellationToken);
+        if (friendship is not null)
         {
-            return existing.Status switch
+            var error = GetExistingFriendshipError(friendship, request.CurrentUserId);
+            if (error is not null)
             {
-                FriendshipStatus.Accepted => SocialResult<FriendshipResponse>.Failure(SocialError.Conflict, "Hai nguoi da la ban be."),
-                FriendshipStatus.Pending => SocialResult<FriendshipResponse>.Failure(SocialError.Conflict, "Loi moi ket ban dang cho xu ly."),
-                _ => SocialResult<FriendshipResponse>.Failure(SocialError.Conflict, "Quan he ban be da ton tai.")
-            };
+                return SocialResult<SendFriendRequestResponse>.Failure(SocialError.Conflict, error);
+            }
         }
-
-        var friendship = new Friendship
+        else
         {
-            RequesterUserId = request.CurrentUserId,
-            AddresseeUserId = request.TargetUserId,
-            Status = FriendshipStatus.Pending
-        };
+            friendship = new Friendship();
+        }
 
         await repository.ExecuteInTransactionAsync(async token =>
         {
-            await repository.AddFriendshipAsync(friendship, token);
+            if (friendship.Id == Guid.Empty)
+            {
+                friendship.Id = Guid.NewGuid();
+            }
+
+            var isNew = friendship.CreatedAt == default;
+            friendship.RequesterUserId = request.CurrentUserId;
+            friendship.AddresseeUserId = request.TargetUserId;
+            friendship.Status = FriendshipStatus.Pending;
+            friendship.RespondedAt = null;
+
+            if (isNew)
+            {
+                await repository.AddFriendshipAsync(friendship, token);
+            }
+
             await ToggleFollowHandler.AddNotificationAsync(repository, request.TargetUserId, currentUser, NotificationType.FriendRequest, friendship.Id, NotificationReferenceType.User, token);
         }, cancellationToken);
 
-        return SocialResult<FriendshipResponse>.Success(new FriendshipResponse(friendship.Id, friendship.Status));
+        return SocialResult<SendFriendRequestResponse>.Success(new SendFriendRequestResponse(
+            true,
+            "Đã gửi lời mời kết bạn.",
+            new SendFriendRequestData(friendship.Id, FriendshipStatus.Pending.ToString())));
     }
+
+    private static string? GetExistingFriendshipError(Friendship friendship, Guid currentUserId) =>
+        friendship.Status switch
+        {
+            FriendshipStatus.Pending when friendship.RequesterUserId == currentUserId => "Bạn đã gửi lời mời kết bạn.",
+            FriendshipStatus.Pending => "Người này đã gửi lời mời cho bạn.",
+            FriendshipStatus.Accepted => "Hai người đã là bạn.",
+            FriendshipStatus.Blocked => "Không thể gửi lời mời.",
+            FriendshipStatus.Cancelled or FriendshipStatus.Rejected => null,
+            _ => "Không thể gửi lời mời."
+        };
 }
 
 public sealed class GetFriendRequestsHandler(
@@ -119,69 +144,112 @@ public sealed class GetFriendRequestsHandler(
     }
 }
 
+public sealed class GetFriendshipsHandler(
+    ISocialRepository repository,
+    IValidator<GetFriendshipsQuery> validator)
+    : IRequestHandler<GetFriendshipsQuery, SocialResult<FriendshipListResponse>>
+{
+    public async Task<SocialResult<FriendshipListResponse>> Handle(GetFriendshipsQuery request, CancellationToken cancellationToken)
+    {
+        var validation = await validator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid) return SocialResult<FriendshipListResponse>.Failure(SocialError.Invalid, ToggleFollowHandler.FirstError(validation));
+
+        var response = await repository.GetFriendshipsAsync(
+            request with
+            {
+                Page = Math.Max(request.Page, 1),
+                PageSize = Math.Clamp(request.PageSize, 1, 100),
+                Keyword = string.IsNullOrWhiteSpace(request.Keyword) ? null : request.Keyword.Trim()
+            },
+            cancellationToken);
+
+        return SocialResult<FriendshipListResponse>.Success(response);
+    }
+}
+
 public sealed class AcceptFriendRequestHandler(
     ISocialRepository repository,
     IValidator<AcceptFriendRequestCommand> validator)
-    : IRequestHandler<AcceptFriendRequestCommand, SocialResult<AcceptFriendResponse>>
+    : IRequestHandler<AcceptFriendRequestCommand, SocialResult<FriendshipActionResponse>>
 {
-    public async Task<SocialResult<AcceptFriendResponse>> Handle(AcceptFriendRequestCommand request, CancellationToken cancellationToken)
+    public async Task<SocialResult<FriendshipActionResponse>> Handle(AcceptFriendRequestCommand request, CancellationToken cancellationToken)
     {
         var validation = await validator.ValidateAsync(request, cancellationToken);
-        if (!validation.IsValid) return SocialResult<AcceptFriendResponse>.Failure(SocialError.Invalid, ToggleFollowHandler.FirstError(validation));
+        if (!validation.IsValid) return SocialResult<FriendshipActionResponse>.Failure(SocialError.Invalid, ToggleFollowHandler.FirstError(validation));
         var friendship = await repository.GetFriendshipAsync(request.FriendshipId, cancellationToken);
-        if (friendship is null) return SocialResult<AcceptFriendResponse>.Failure(SocialError.NotFound, "Khong tim thay loi moi ket ban.");
-        if (friendship.AddresseeUserId != request.CurrentUserId) return SocialResult<AcceptFriendResponse>.Failure(SocialError.Forbidden, "Ban khong co quyen dong y loi moi nay.");
-        if (friendship.Status != FriendshipStatus.Pending) return SocialResult<AcceptFriendResponse>.Failure(SocialError.Invalid, "Loi moi ket ban khong con cho xu ly.");
+        if (friendship is null) return SocialResult<FriendshipActionResponse>.Failure(SocialError.NotFound, "Khong tim thay loi moi ket ban.");
+        if (friendship.AddresseeUserId != request.CurrentUserId) return SocialResult<FriendshipActionResponse>.Failure(SocialError.Forbidden, "Ban khong co quyen dong y loi moi nay.");
+        if (friendship.Status != FriendshipStatus.Pending) return SocialResult<FriendshipActionResponse>.Failure(SocialError.Invalid, "Loi moi ket ban khong con cho xu ly.");
 
         var currentUser = await repository.GetActiveUserAsync(request.CurrentUserId, cancellationToken);
-        if (currentUser is null) return SocialResult<AcceptFriendResponse>.Failure(SocialError.NotFound, "Khong tim thay nguoi dung.");
-
-        var conversation = new Conversation
-        {
-            ConversationType = ConversationType.Private,
-            CanSendMessage = ConversationSendPermission.Everyone,
-            CreatedBy = request.CurrentUserId
-        };
+        if (currentUser is null) return SocialResult<FriendshipActionResponse>.Failure(SocialError.NotFound, "Khong tim thay nguoi dung.");
 
         await repository.ExecuteInTransactionAsync(async token =>
         {
             friendship.Status = FriendshipStatus.Accepted;
             friendship.RespondedAt = DateTime.UtcNow;
-            conversation.Members.Add(new ConversationMember { Conversation = conversation, UserId = friendship.RequesterUserId, JoinedAt = DateTime.UtcNow });
-            conversation.Members.Add(new ConversationMember { Conversation = conversation, UserId = friendship.AddresseeUserId, JoinedAt = DateTime.UtcNow });
-            await repository.AddConversationAsync(conversation, token);
+            var existingConversationId = await repository.GetPrivateConversationIdAsync(
+                friendship.RequesterUserId,
+                friendship.AddresseeUserId,
+                token);
+            if (!existingConversationId.HasValue)
+            {
+                var now = DateTime.UtcNow;
+                var conversation = new Conversation
+                {
+                    ConversationType = ConversationType.Private,
+                    CanSendMessage = ConversationSendPermission.Everyone,
+                    CreatedBy = request.CurrentUserId
+                };
+                conversation.Members.Add(new ConversationMember
+                {
+                    Conversation = conversation,
+                    UserId = friendship.RequesterUserId,
+                    Role = ConversationMemberRole.Member,
+                    Status = ConversationMemberStatus.Active,
+                    JoinedAt = now,
+                    JoinedBy = request.CurrentUserId
+                });
+                conversation.Members.Add(new ConversationMember
+                {
+                    Conversation = conversation,
+                    UserId = friendship.AddresseeUserId,
+                    Role = ConversationMemberRole.Member,
+                    Status = ConversationMemberStatus.Active,
+                    JoinedAt = now,
+                    JoinedBy = request.CurrentUserId
+                });
+                await repository.AddConversationAsync(conversation, token);
+            }
             await ToggleFollowHandler.AddNotificationAsync(repository, friendship.RequesterUserId, currentUser, NotificationType.FriendAccepted, friendship.Id, NotificationReferenceType.User, token);
         }, cancellationToken);
 
-        return SocialResult<AcceptFriendResponse>.Success(new AcceptFriendResponse(conversation.Id));
+        return SocialResult<FriendshipActionResponse>.Success(new FriendshipActionResponse(true, "Đã đồng ý lời mời kết bạn."));
     }
 }
 
 public sealed class RejectFriendRequestHandler(
     ISocialRepository repository,
     IValidator<RejectFriendRequestCommand> validator)
-    : IRequestHandler<RejectFriendRequestCommand, SocialResult<FriendshipResponse>>
+    : IRequestHandler<RejectFriendRequestCommand, SocialResult<FriendshipActionResponse>>
 {
-    public async Task<SocialResult<FriendshipResponse>> Handle(RejectFriendRequestCommand request, CancellationToken cancellationToken)
+    public async Task<SocialResult<FriendshipActionResponse>> Handle(RejectFriendRequestCommand request, CancellationToken cancellationToken)
     {
         var validation = await validator.ValidateAsync(request, cancellationToken);
-        if (!validation.IsValid) return SocialResult<FriendshipResponse>.Failure(SocialError.Invalid, ToggleFollowHandler.FirstError(validation));
+        if (!validation.IsValid) return SocialResult<FriendshipActionResponse>.Failure(SocialError.Invalid, ToggleFollowHandler.FirstError(validation));
         var friendship = await repository.GetFriendshipAsync(request.FriendshipId, cancellationToken);
-        if (friendship is null) return SocialResult<FriendshipResponse>.Failure(SocialError.NotFound, "Khong tim thay loi moi ket ban.");
-        if (friendship.AddresseeUserId != request.CurrentUserId) return SocialResult<FriendshipResponse>.Failure(SocialError.Forbidden, "Ban khong co quyen tu choi loi moi nay.");
-        if (friendship.Status != FriendshipStatus.Pending) return SocialResult<FriendshipResponse>.Failure(SocialError.Invalid, "Loi moi ket ban khong con cho xu ly.");
-
-        var currentUser = await repository.GetActiveUserAsync(request.CurrentUserId, cancellationToken);
-        if (currentUser is null) return SocialResult<FriendshipResponse>.Failure(SocialError.NotFound, "Khong tim thay nguoi dung.");
+        if (friendship is null) return SocialResult<FriendshipActionResponse>.Failure(SocialError.NotFound, "Khong tim thay loi moi ket ban.");
+        if (friendship.AddresseeUserId != request.CurrentUserId) return SocialResult<FriendshipActionResponse>.Failure(SocialError.Forbidden, "Ban khong co quyen tu choi loi moi nay.");
+        if (friendship.Status != FriendshipStatus.Pending) return SocialResult<FriendshipActionResponse>.Failure(SocialError.Invalid, "Loi moi ket ban khong con cho xu ly.");
 
         await repository.ExecuteInTransactionAsync(async token =>
         {
             friendship.Status = FriendshipStatus.Rejected;
             friendship.RespondedAt = DateTime.UtcNow;
-            await ToggleFollowHandler.AddNotificationAsync(repository, friendship.RequesterUserId, currentUser, NotificationType.FriendRejected, friendship.Id, NotificationReferenceType.User, token);
+            await Task.CompletedTask;
         }, cancellationToken);
 
-        return SocialResult<FriendshipResponse>.Success(new FriendshipResponse(friendship.Id, friendship.Status));
+        return SocialResult<FriendshipActionResponse>.Success(new FriendshipActionResponse(true, "Đã từ chối lời mời kết bạn."));
     }
 }
 
