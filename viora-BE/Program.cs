@@ -9,6 +9,8 @@ using viora_BE.OpenApi;
 using System.Threading.RateLimiting;
 using Viora.Application.Posts;
 
+Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
+
 var builder = WebApplication.CreateBuilder(args);
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))
