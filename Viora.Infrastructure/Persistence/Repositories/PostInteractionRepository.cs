@@ -110,6 +110,101 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
             cancellationToken);
     }
 
+    public async Task<PostCommentsResponse> GetPostCommentsAsync(
+        GetPostCommentsQuery query,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var skip = (page - 1) * pageSize;
+
+        var comments = dbContext.Comments
+            .AsNoTracking()
+            .Where(comment =>
+                comment.PostId == query.PostId &&
+                comment.ParentCommentId == null &&
+                comment.Status == CommentStatus.Published &&
+                comment.DeletedAt == null);
+
+        var totalItems = await comments.CountAsync(cancellationToken);
+        var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
+
+        comments = string.Equals(query.Sort, "oldest", StringComparison.OrdinalIgnoreCase)
+            ? comments.OrderBy(comment => comment.CreatedAt).ThenBy(comment => comment.Id)
+            : comments.OrderByDescending(comment => comment.CreatedAt).ThenBy(comment => comment.Id);
+
+        var items = await comments
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(comment => new PostCommentListItemResponse(
+                comment.Id,
+                comment.Content,
+                comment.CreatedAt,
+                comment.UpdatedAt,
+                comment.LikeCount,
+                comment.ReplyCount,
+                dbContext.CommentReactions.Any(reaction =>
+                    reaction.CommentId == comment.Id &&
+                    reaction.UserId == query.UserId),
+                new PostInteractionUserResponse(
+                    comment.User.Id,
+                    comment.User.DisplayName,
+                    comment.User.AvatarUrl,
+                    comment.User.IsVerified)))
+            .ToListAsync(cancellationToken);
+
+        return new PostCommentsResponse(page, pageSize, totalItems, totalPages, items);
+    }
+
+    public async Task<CommentRepliesResponse> GetCommentRepliesAsync(
+        GetCommentRepliesQuery query,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var skip = (page - 1) * pageSize;
+
+        var replies = dbContext.Comments
+            .AsNoTracking()
+            .Where(comment =>
+                comment.ParentCommentId == query.CommentId &&
+                comment.Status == CommentStatus.Published &&
+                comment.DeletedAt == null);
+
+        var totalItems = await replies.CountAsync(cancellationToken);
+        var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
+
+        replies = string.Equals(query.Sort, "newest", StringComparison.OrdinalIgnoreCase)
+            ? replies.OrderByDescending(comment => comment.CreatedAt).ThenBy(comment => comment.Id)
+            : replies.OrderBy(comment => comment.CreatedAt).ThenBy(comment => comment.Id);
+
+        var items = await replies
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(comment => new CommentReplyListItemResponse(
+                comment.Id,
+                comment.Content,
+                comment.CreatedAt,
+                comment.UpdatedAt,
+                comment.LikeCount,
+                dbContext.CommentReactions.Any(reaction =>
+                    reaction.CommentId == comment.Id &&
+                    reaction.UserId == query.UserId),
+                comment.ReplyToUser == null
+                    ? null
+                    : new CommentReplyToUserResponse(
+                        comment.ReplyToUser.Id,
+                        comment.ReplyToUser.DisplayName),
+                new PostInteractionUserResponse(
+                    comment.User.Id,
+                    comment.User.DisplayName,
+                    comment.User.AvatarUrl,
+                    comment.User.IsVerified)))
+            .ToListAsync(cancellationToken);
+
+        return new CommentRepliesResponse(page, pageSize, totalItems, totalPages, items);
+    }
+
     public async Task<VideoCommentsResponse> GetVideoCommentsAsync(
         GetVideoCommentsQuery query,
         CancellationToken cancellationToken)

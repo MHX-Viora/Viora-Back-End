@@ -304,3 +304,47 @@ public sealed class ReportPostHandler(
         return Result<ReportPostResponse>.Success(new ReportPostResponse(report.Id));
     }
 }
+
+public sealed class GetPostCommentsHandler(
+    IPostInteractionRepository repository,
+    IValidator<GetPostCommentsQuery> validator)
+    : IRequestHandler<GetPostCommentsQuery, Result<PostCommentsResponse>>
+{
+    public async Task<Result<PostCommentsResponse>> Handle(GetPostCommentsQuery request, CancellationToken cancellationToken)
+    {
+        var validation = await validator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid) return Result<PostCommentsResponse>.Failure(PostInteractionError.Invalid, ReactPostHandler.FirstError(validation));
+
+        var post = await repository.GetPostForInteractionAsync(request.PostId, cancellationToken);
+        if (post is null) return Result<PostCommentsResponse>.Failure(PostInteractionError.NotFound, "Khong tim thay bai viet.");
+
+        var sort = string.Equals(request.Sort, "oldest", StringComparison.OrdinalIgnoreCase)
+            ? "oldest"
+            : "newest";
+
+        var response = await repository.GetPostCommentsAsync(request with { Sort = sort }, cancellationToken);
+        return Result<PostCommentsResponse>.Success(response);
+    }
+}
+
+public sealed class GetCommentRepliesHandler(
+    IPostInteractionRepository repository,
+    IValidator<GetCommentRepliesQuery> validator)
+    : IRequestHandler<GetCommentRepliesQuery, Result<CommentRepliesResponse>>
+{
+    public async Task<Result<CommentRepliesResponse>> Handle(GetCommentRepliesQuery request, CancellationToken cancellationToken)
+    {
+        var validation = await validator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid) return Result<CommentRepliesResponse>.Failure(PostInteractionError.Invalid, ReactPostHandler.FirstError(validation));
+
+        var comment = await repository.GetCommentForReplyAsync(request.CommentId, cancellationToken);
+        if (comment is null) return Result<CommentRepliesResponse>.Failure(PostInteractionError.NotFound, "Khong tim thay binh luan.");
+
+        var sort = string.Equals(request.Sort, "newest", StringComparison.OrdinalIgnoreCase)
+            ? "newest"
+            : "oldest";
+
+        var response = await repository.GetCommentRepliesAsync(request with { Sort = sort }, cancellationToken);
+        return Result<CommentRepliesResponse>.Success(response);
+    }
+}

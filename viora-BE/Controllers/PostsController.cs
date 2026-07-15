@@ -37,6 +37,22 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
         return ToActionResult(result, StatusCodes.Status201Created);
     }
 
+    [HttpGet("{postId:guid}/comments")]
+    [ProducesResponseType<PostCommentsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ListComments(
+        Guid postId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? sort = "newest",
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new GetPostCommentsQuery(userId, postId, page, pageSize, sort), cancellationToken);
+        return ToActionResult(result);
+    }
+
     [HttpPost("/api/comments/{commentId:guid}/replies")]
     [ProducesResponseType<CommentResponse>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Reply(
@@ -47,6 +63,22 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
         if (!TryGetViewerUserId(out var userId)) return Unauthorized();
         var result = await mediator.Send(new ReplyCommentCommand(userId, commentId, request.Content), cancellationToken);
         return ToActionResult(result, StatusCodes.Status201Created);
+    }
+
+    [HttpGet("/api/comments/{commentId:guid}/replies")]
+    [ProducesResponseType<CommentRepliesResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ListReplies(
+        Guid commentId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? sort = "oldest",
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new GetCommentRepliesQuery(userId, commentId, page, pageSize, sort), cancellationToken);
+        return ToActionResult(result);
     }
 
     [HttpPost("{postId:guid}/save")]

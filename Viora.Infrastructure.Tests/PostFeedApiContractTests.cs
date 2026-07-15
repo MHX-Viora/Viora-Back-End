@@ -35,7 +35,9 @@ public sealed class PostFeedApiContractTests
 
         Assert.Equal("{postId:guid}/reactions", methods[nameof(PostsController.React)].GetCustomAttribute<HttpPostAttribute>()!.Template);
         Assert.Equal("{postId:guid}/comments", methods[nameof(PostsController.Comment)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal("{postId:guid}/comments", methods[nameof(PostsController.ListComments)].GetCustomAttribute<HttpGetAttribute>()!.Template);
         Assert.Equal("/api/comments/{commentId:guid}/replies", methods[nameof(PostsController.Reply)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal("/api/comments/{commentId:guid}/replies", methods[nameof(PostsController.ListReplies)].GetCustomAttribute<HttpGetAttribute>()!.Template);
         Assert.Equal("{postId:guid}/save", methods[nameof(PostsController.Save)].GetCustomAttribute<HttpPostAttribute>()!.Template);
         Assert.Equal("{postId:guid}/share", methods[nameof(PostsController.Share)].GetCustomAttribute<HttpPostAttribute>()!.Template);
         Assert.Equal("{postId:guid}", methods[nameof(PostsController.Delete)].GetCustomAttribute<HttpDeleteAttribute>()!.Template);
@@ -82,6 +84,32 @@ public sealed class PostFeedApiContractTests
             "ViewCount");
         AssertProperties<PostFeedUserResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified");
         AssertProperties<PostFeedMediaResponse>("Id", "MediaUrl", "ThumbnailUrl");
+    }
+
+    [Fact]
+    public void Post_comment_response_contracts_match_client_shape()
+    {
+        AssertProperties<PostCommentsResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
+        AssertProperties<CommentRepliesResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
+        AssertProperties<PostCommentListItemResponse>(
+            "Id",
+            "Content",
+            "CreatedAt",
+            "UpdatedAt",
+            "LikeCount",
+            "ReplyCount",
+            "IsLiked",
+            "User");
+        AssertProperties<CommentReplyListItemResponse>(
+            "Id",
+            "Content",
+            "CreatedAt",
+            "UpdatedAt",
+            "LikeCount",
+            "IsLiked",
+            "ReplyToUser",
+            "User");
+        AssertProperties<CommentReplyToUserResponse>("Id", "DisplayName");
     }
 
     [Fact]

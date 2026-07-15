@@ -41,6 +41,12 @@ public sealed record DeletePostCommand(Guid UserId, Guid PostId)
 public sealed record ReportPostCommand(Guid UserId, Guid PostId, ReportReason Reason, string? Description)
     : IRequest<Result<ReportPostResponse>>;
 
+public sealed record GetPostCommentsQuery(Guid UserId, Guid PostId, int Page, int PageSize, string? Sort)
+    : IRequest<Result<PostCommentsResponse>>;
+
+public sealed record GetCommentRepliesQuery(Guid UserId, Guid CommentId, int Page, int PageSize, string? Sort)
+    : IRequest<Result<CommentRepliesResponse>>;
+
 public sealed record PostReactionResponse(ReactionType? ReactionType, int ReactionCount);
 public sealed record SavePostResponse(bool IsSaved, int SaveCount);
 public sealed record ReportPostResponse(Guid Id);
@@ -60,6 +66,44 @@ public sealed record PostInteractionUserResponse(
     string DisplayName,
     string? AvatarUrl,
     bool IsVerified);
+
+public sealed record PostCommentsResponse(
+    int Page,
+    int PageSize,
+    int TotalItems,
+    int TotalPages,
+    IReadOnlyList<PostCommentListItemResponse> Items);
+
+public sealed record CommentRepliesResponse(
+    int Page,
+    int PageSize,
+    int TotalItems,
+    int TotalPages,
+    IReadOnlyList<CommentReplyListItemResponse> Items);
+
+public sealed record PostCommentListItemResponse(
+    Guid Id,
+    string Content,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    int LikeCount,
+    int ReplyCount,
+    bool IsLiked,
+    PostInteractionUserResponse User);
+
+public sealed record CommentReplyListItemResponse(
+    Guid Id,
+    string Content,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    int LikeCount,
+    bool IsLiked,
+    CommentReplyToUserResponse? ReplyToUser,
+    PostInteractionUserResponse User);
+
+public sealed record CommentReplyToUserResponse(
+    Guid Id,
+    string DisplayName);
 
 public sealed class ReactPostValidator : AbstractValidator<ReactPostCommand>
 {
@@ -102,6 +146,28 @@ public sealed class ReportPostValidator : AbstractValidator<ReportPostCommand>
     }
 }
 
+public sealed class GetPostCommentsValidator : AbstractValidator<GetPostCommentsQuery>
+{
+    public GetPostCommentsValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.PostId).NotEmpty();
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.PageSize).GreaterThan(0);
+    }
+}
+
+public sealed class GetCommentRepliesValidator : AbstractValidator<GetCommentRepliesQuery>
+{
+    public GetCommentRepliesValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.CommentId).NotEmpty();
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.PageSize).GreaterThan(0);
+    }
+}
+
 public interface IPostInteractionRepository
 {
     Task<User?> GetActiveUserAsync(Guid userId, CancellationToken cancellationToken);
@@ -122,6 +188,8 @@ public interface IPostInteractionRepository
     Task SaveChangesAsync(CancellationToken cancellationToken);
     Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken);
     Task<bool> CanViewPostAsync(Post post, Guid userId, CancellationToken cancellationToken);
+    Task<PostCommentsResponse> GetPostCommentsAsync(GetPostCommentsQuery query, CancellationToken cancellationToken);
+    Task<CommentRepliesResponse> GetCommentRepliesAsync(GetCommentRepliesQuery query, CancellationToken cancellationToken);
     Task<VideoCommentsResponse> GetVideoCommentsAsync(GetVideoCommentsQuery query, CancellationToken cancellationToken);
     Task<VideoRepliesResponse> GetVideoRepliesAsync(GetVideoRepliesQuery query, CancellationToken cancellationToken);
 }

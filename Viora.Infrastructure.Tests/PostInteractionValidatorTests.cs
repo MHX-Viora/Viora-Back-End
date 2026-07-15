@@ -45,4 +45,34 @@ public sealed class PostInteractionValidatorTests
 
         Assert.True(result.IsValid);
     }
+
+    [Fact]
+    public async Task Get_post_comments_validator_rejects_invalid_paging()
+    {
+        var validator = new GetPostCommentsValidator();
+
+        var result = await validator.ValidateAsync(new GetPostCommentsQuery(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            0,
+            0,
+            "newest"));
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public async Task Get_comment_replies_validator_accepts_supported_paging()
+    {
+        var validator = new GetCommentRepliesValidator();
+
+        var result = await validator.ValidateAsync(new GetCommentRepliesQuery(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            1,
+            20,
+            "oldest"));
+
+        Assert.True(result.IsValid);
+    }
 }

@@ -74,6 +74,8 @@ public static class DependencyInjection
         services.AddScoped<IValidator<CreateCommentCommand>, CreateCommentValidator>();
         services.AddScoped<IValidator<ReplyCommentCommand>, ReplyCommentValidator>();
         services.AddScoped<IValidator<ReportPostCommand>, ReportPostValidator>();
+        services.AddScoped<IValidator<GetPostCommentsQuery>, GetPostCommentsValidator>();
+        services.AddScoped<IValidator<GetCommentRepliesQuery>, GetCommentRepliesValidator>();
         services.AddScoped<IValidator<GetShortVideosQuery>, GetShortVideosValidator>();
         services.AddScoped<IValidator<ToggleVideoReactionCommand>, ToggleVideoReactionValidator>();
         services.AddScoped<IValidator<ToggleVideoSaveCommand>, ToggleVideoSaveValidator>();
