@@ -22,6 +22,10 @@ public sealed class VideoFeedApiContractTests
         var createAction = typeof(ReelsController).GetMethod(nameof(ReelsController.Create))!;
         Assert.NotNull(createAction.GetCustomAttribute<HttpPostAttribute>());
         Assert.Equal("multipart/form-data", createAction.GetCustomAttribute<ConsumesAttribute>()!.ContentTypes.Single());
+        Assert.NotNull(createAction.GetCustomAttribute<RequestSizeLimitAttribute>());
+        Assert.Equal(
+            CreateReelValidator.MaxVideoBytes,
+            createAction.GetCustomAttribute<RequestFormLimitsAttribute>()!.MultipartBodyLengthLimit);
     }
 
     [Fact]

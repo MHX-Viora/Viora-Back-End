@@ -38,6 +38,8 @@ public sealed class CreatePostValidator : AbstractValidator<CreatePostCommand>
 
 public sealed class CreateReelValidator : AbstractValidator<CreateReelCommand>
 {
+    public const long MaxVideoBytes = 100 * 1024 * 1024;
+
     public CreateReelValidator()
     {
         RuleFor(command => command.UserId).NotEmpty();
@@ -48,6 +50,10 @@ public sealed class CreateReelValidator : AbstractValidator<CreateReelCommand>
             .GreaterThan(0)
             .When(command => command.Video is not null)
             .WithMessage("Video khong duoc rong.");
+        RuleFor(command => command.Video!.Length)
+            .LessThanOrEqualTo(MaxVideoBytes)
+            .When(command => command.Video is not null)
+            .WithMessage("Video toi da 100 MB.");
         RuleFor(command => command.Video!.ContentType)
             .Must(contentType => contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
             .When(command => command.Video is not null)

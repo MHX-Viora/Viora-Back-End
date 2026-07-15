@@ -7,6 +7,7 @@ namespace Viora.Infrastructure.Tests;
 public sealed class CreatePostValidatorTests
 {
     private readonly CreatePostValidator validator = new();
+    private readonly CreateReelValidator reelValidator = new();
 
     [Fact]
     public async Task Create_post_accepts_content_without_files()
@@ -83,9 +84,28 @@ public sealed class CreatePostValidatorTests
         Assert.False(tooMany.IsValid);
     }
 
+    [Fact]
+    public async Task Create_reel_rejects_video_over_max_size()
+    {
+        var result = await reelValidator.ValidateAsync(new CreateReelCommand(
+            Guid.NewGuid(),
+            null,
+            [],
+            Video(CreateReelValidator.MaxVideoBytes + 1)));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.ErrorMessage == "Video toi da 100 MB.");
+    }
+
     private static CreatePostFile Image(string contentType) => new(
         new MemoryStream([1]),
         "image.jpg",
         contentType,
         1);
+
+    private static CreatePostFile Video(long length) => new(
+        new MemoryStream([1]),
+        "video.mp4",
+        "video/mp4",
+        length);
 }

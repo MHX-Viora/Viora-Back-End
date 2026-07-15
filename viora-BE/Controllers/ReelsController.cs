@@ -11,13 +11,19 @@ namespace viora_BE.Controllers;
 [ApiController]
 [Route("api/reels")]
 [Authorize]
-public sealed class ReelsController(IMediator mediator) : ControllerBase
+public sealed class ReelsController(IMediator mediator, ILogger<ReelsController> logger) : ControllerBase
 {
+    private const long ReelRequestLimit = CreateReelValidator.MaxVideoBytes + (128 * 1024);
+
     [HttpPost]
     [Consumes("multipart/form-data")]
+    [RequestSizeLimit(ReelRequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = CreateReelValidator.MaxVideoBytes)]
     [ProducesResponseType<CreateReelResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway)]
     public async Task<IActionResult> Create(
         [FromForm] CreateReelFormRequest request,
         CancellationToken cancellationToken)
@@ -37,6 +43,13 @@ public sealed class ReelsController(IMediator mediator) : ControllerBase
                     request.Video.ContentType,
                     request.Video.Length);
 
+            logger.LogInformation(
+                "Creating reel. UserId={UserId}, FileName={FileName}, ContentType={ContentType}, Length={Length}",
+                userId,
+                request.Video?.FileName,
+                request.Video?.ContentType,
+                request.Video?.Length);
+
             var response = await mediator.Send(new CreateReelCommand(
                 userId,
                 request.Content,
@@ -54,6 +67,20 @@ public sealed class ReelsController(IMediator mediator) : ControllerBase
         catch (CreatePostException exception)
         {
             return BadRequestProblem(exception.Code, exception.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Unexpected reel upload failure. UserId={UserId}", userId);
+
+            return ProblemResponse(
+                StatusCodes.Status502BadGateway,
+                "REEL_UPLOAD_FAILED",
+                "Reel upload failed",
+                "Khong the dang video. Vui long thu lai.");
         }
     }
 
@@ -102,14 +129,19 @@ public sealed class ReelsController(IMediator mediator) : ControllerBase
 
     private ObjectResult BadRequestProblem(string code, string detail)
     {
+        return ProblemResponse(StatusCodes.Status400BadRequest, code, "Invalid reel", detail);
+    }
+
+    private static ObjectResult ProblemResponse(int statusCode, string code, string title, string detail)
+    {
         var problem = new ProblemDetails
         {
-            Status = StatusCodes.Status400BadRequest,
-            Title = "Invalid reel",
+            Status = statusCode,
+            Title = title,
             Detail = detail
         };
         problem.Extensions["code"] = code;
-        return new ObjectResult(problem) { StatusCode = StatusCodes.Status400BadRequest };
+        return new ObjectResult(problem) { StatusCode = statusCode };
     }
 }
 
