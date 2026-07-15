@@ -47,6 +47,12 @@ public sealed class PostFeedApiContractTests
         Assert.Equal("{postId:guid}/share", methods[nameof(PostsController.Share)].GetCustomAttribute<HttpPostAttribute>()!.Template);
         Assert.Equal("{postId:guid}", methods[nameof(PostsController.Delete)].GetCustomAttribute<HttpDeleteAttribute>()!.Template);
         Assert.Equal("{postId:guid}/report", methods[nameof(PostsController.Report)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal(
+            typeof(DeletePostResponse),
+            methods[nameof(PostsController.Delete)]
+                .GetCustomAttributes<ProducesResponseTypeAttribute>()
+                .Single(attribute => attribute.StatusCode == StatusCodes.Status200OK)
+                .Type);
 
         var replyResponse = methods[nameof(PostsController.Reply)]
             .GetCustomAttributes<ProducesResponseTypeAttribute>()
@@ -127,6 +133,9 @@ public sealed class PostFeedApiContractTests
     {
         AssertProperties<PostReactionResponse>("ReactionType", "ReactionCount");
         AssertProperties<SharePostResponse>("IsShared", "ShareCount");
+        AssertProperties<DeletePostResponse>("Message");
+        AssertProperties<ReportPostResponse>("Id", "Message");
+        AssertProperties<MessageResponse>("Message");
     }
 
     private static void AssertProperties<T>(params string[] names)

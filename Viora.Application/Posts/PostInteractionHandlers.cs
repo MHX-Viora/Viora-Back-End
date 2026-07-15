@@ -310,7 +310,7 @@ public sealed class ReportPostHandler(
         };
         await repository.AddReportAsync(report, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
-        return Result<ReportPostResponse>.Success(new ReportPostResponse(report.Id));
+        return Result<ReportPostResponse>.Success(new ReportPostResponse(report.Id, "Báo cáo bài viết thành công."));
     }
 }
 

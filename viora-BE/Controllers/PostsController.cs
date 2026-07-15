@@ -102,16 +102,25 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
     }
 
     [HttpDelete("{postId:guid}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<DeletePostResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid postId, CancellationToken cancellationToken)
     {
         if (!TryGetViewerUserId(out var userId)) return Unauthorized();
         var result = await mediator.Send(new DeletePostCommand(userId, postId), cancellationToken);
-        return result.IsSuccess ? NoContent() : ToActionResult(result);
+        return result.IsSuccess
+            ? Ok(new DeletePostResponse("Xóa bài viết thành công."))
+            : ToMessageActionResult(result);
     }
 
     [HttpPost("{postId:guid}/report")]
     [ProducesResponseType<ReportPostResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Report(
         Guid postId,
         ReportPostRequest request,
@@ -119,7 +128,7 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
     {
         if (!TryGetViewerUserId(out var userId)) return Unauthorized();
         var result = await mediator.Send(new ReportPostCommand(userId, postId, request.Reason, request.Description), cancellationToken);
-        return ToActionResult(result, StatusCodes.Status201Created);
+        return ToMessageActionResult(result, StatusCodes.Status201Created);
     }
 
     private bool TryGetViewerUserId(out Guid userId)
@@ -154,12 +163,31 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
         problem.Extensions["code"] = result.Error?.ToString();
         return new ObjectResult(problem) { StatusCode = status };
     }
+
+    private IActionResult ToMessageActionResult<T>(Result<T> result, int successStatus = StatusCodes.Status200OK)
+    {
+        if (result.IsSuccess)
+        {
+            return StatusCode(successStatus, result.Value);
+        }
+
+        var status = result.Error switch
+        {
+            PostInteractionError.NotFound => StatusCodes.Status404NotFound,
+            PostInteractionError.Forbidden => StatusCodes.Status403Forbidden,
+            PostInteractionError.Conflict => StatusCodes.Status409Conflict,
+            _ => StatusCodes.Status400BadRequest
+        };
+
+        return StatusCode(status, new MessageResponse(result.Message ?? "Thao tác thất bại."));
+    }
 }
 
 public sealed record ReactionPostRequest(ReactionType ReactionType);
 public sealed record CommentPostRequest([param: Required, MaxLength(5000)] string Content);
 public sealed record ReplyCommentRequest([param: Required, MaxLength(5000)] string Content);
 public sealed record ReportPostRequest(ReportReason Reason, [param: MaxLength(1000)] string? Description);
+public sealed record MessageResponse(string Message);
 
 public sealed class CreatePostFormRequest
 {

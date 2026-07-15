@@ -49,7 +49,8 @@ public sealed record GetCommentRepliesQuery(Guid UserId, Guid CommentId, int Pag
 
 public sealed record PostReactionResponse(ReactionType? ReactionType, int ReactionCount);
 public sealed record SavePostResponse(bool IsSaved, int SaveCount);
-public sealed record ReportPostResponse(Guid Id);
+public sealed record DeletePostResponse(string Message);
+public sealed record ReportPostResponse(Guid Id, string Message);
 
 public sealed record CommentResponse(
     Guid Id,
