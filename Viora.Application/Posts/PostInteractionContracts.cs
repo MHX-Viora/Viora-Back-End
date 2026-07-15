@@ -27,7 +27,7 @@ public sealed record CreateCommentCommand(Guid UserId, Guid PostId, string Conte
     : IRequest<Result<CommentResponse>>;
 
 public sealed record ReplyCommentCommand(Guid UserId, Guid CommentId, string Content)
-    : IRequest<Result<CommentResponse>>;
+    : IRequest<Result<CommentReplyListItemResponse>>;
 
 public sealed record ToggleSavePostCommand(Guid UserId, Guid PostId)
     : IRequest<Result<SavePostResponse>>;

@@ -145,24 +145,24 @@ public sealed class CreateCommentHandler(
 public sealed class ReplyCommentHandler(
     IPostInteractionRepository repository,
     IValidator<ReplyCommentCommand> validator)
-    : IRequestHandler<ReplyCommentCommand, Result<CommentResponse>>
+    : IRequestHandler<ReplyCommentCommand, Result<CommentReplyListItemResponse>>
 {
-    public async Task<Result<CommentResponse>> Handle(ReplyCommentCommand request, CancellationToken cancellationToken)
+    public async Task<Result<CommentReplyListItemResponse>> Handle(ReplyCommentCommand request, CancellationToken cancellationToken)
     {
         var validation = await validator.ValidateAsync(request, cancellationToken);
-        if (!validation.IsValid) return Result<CommentResponse>.Failure(PostInteractionError.Invalid, ReactPostHandler.FirstError(validation));
+        if (!validation.IsValid) return Result<CommentReplyListItemResponse>.Failure(PostInteractionError.Invalid, ReactPostHandler.FirstError(validation));
         var user = await repository.GetActiveUserAsync(request.UserId, cancellationToken);
         var parent = await repository.GetCommentForReplyAsync(request.CommentId, cancellationToken);
-        if (user is null) return Result<CommentResponse>.Failure(PostInteractionError.NotFound, "Không tìm thấy người dùng.");
-        if (parent is null) return Result<CommentResponse>.Failure(PostInteractionError.NotFound, "Không tìm thấy bình luận.");
-        if (parent.ParentCommentId is not null) return Result<CommentResponse>.Failure(PostInteractionError.Invalid, "Chỉ hỗ trợ reply tối đa 1 tầng.");
+        if (user is null) return Result<CommentReplyListItemResponse>.Failure(PostInteractionError.NotFound, "Không tìm thấy người dùng.");
+        if (parent is null) return Result<CommentReplyListItemResponse>.Failure(PostInteractionError.NotFound, "Không tìm thấy bình luận.");
+        if (parent.ParentCommentId is not null) return Result<CommentReplyListItemResponse>.Failure(PostInteractionError.Invalid, "Chỉ hỗ trợ reply tối đa 1 tầng.");
         if (parent.Post.Status is PostStatus.Deleted or PostStatus.Hidden || parent.Post.DeletedAt is not null)
         {
-            return Result<CommentResponse>.Failure(PostInteractionError.Invalid, "Bài viết không khả dụng.");
+            return Result<CommentReplyListItemResponse>.Failure(PostInteractionError.Invalid, "Bài viết không khả dụng.");
         }
         if (!await repository.CanViewPostAsync(parent.Post, request.UserId, cancellationToken))
         {
-            return Result<CommentResponse>.Failure(PostInteractionError.Forbidden, "Bạn không có quyền xem bài viết.");
+            return Result<CommentReplyListItemResponse>.Failure(PostInteractionError.Forbidden, "Bạn không có quyền xem bài viết.");
         }
 
         var reply = new Comment
@@ -172,6 +172,7 @@ public sealed class ReplyCommentHandler(
             User = user,
             ParentCommentId = parent.Id,
             ReplyToUserId = parent.UserId,
+            ReplyToUser = parent.User,
             Content = request.Content.Trim(),
             Status = CommentStatus.Published
         };
@@ -194,7 +195,15 @@ public sealed class ReplyCommentHandler(
             }
         }, cancellationToken);
 
-        return Result<CommentResponse>.Success(ReactPostHandler.MapComment(reply));
+        return Result<CommentReplyListItemResponse>.Success(new CommentReplyListItemResponse(
+            reply.Id,
+            reply.Content,
+            reply.CreatedAt,
+            reply.UpdatedAt,
+            reply.LikeCount,
+            false,
+            new CommentReplyToUserResponse(parent.User.Id, parent.User.DisplayName),
+            new PostInteractionUserResponse(user.Id, user.DisplayName, user.AvatarUrl, user.IsVerified)));
     }
 }
 

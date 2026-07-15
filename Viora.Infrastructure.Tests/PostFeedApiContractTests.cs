@@ -1,5 +1,6 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Viora.Application.Posts;
 using viora_BE.Controllers;
@@ -42,6 +43,11 @@ public sealed class PostFeedApiContractTests
         Assert.Equal("{postId:guid}/share", methods[nameof(PostsController.Share)].GetCustomAttribute<HttpPostAttribute>()!.Template);
         Assert.Equal("{postId:guid}", methods[nameof(PostsController.Delete)].GetCustomAttribute<HttpDeleteAttribute>()!.Template);
         Assert.Equal("{postId:guid}/report", methods[nameof(PostsController.Report)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+
+        var replyResponse = methods[nameof(PostsController.Reply)]
+            .GetCustomAttributes<ProducesResponseTypeAttribute>()
+            .Single(attribute => attribute.StatusCode == StatusCodes.Status201Created);
+        Assert.Equal(typeof(CommentReplyListItemResponse), replyResponse.Type);
     }
 
     [Fact]

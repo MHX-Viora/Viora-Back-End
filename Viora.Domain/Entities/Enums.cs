@@ -22,7 +22,7 @@ public enum NotificationType : short
     PostComment = 5, CommentReply = 6, Mention = 8, Message = 9, GroupInvite = 10,
     GroupRoleChanged = 11, GroupRemoved = 12, LiveStarted = 13, LiveEnded = 14,
     IdentityApproved = 15, IdentityRejected = 16, AdminAnnouncement = 17, ShopNotification = 18,
-    PostShare = 19
+    PostShare = 19, FriendRejected = 20
 }
 public enum NotificationReferenceType : short { User = 0, Post = 1, Comment = 2, Conversation = 3, Message = 4, Identity = 5 }
 public enum ReportTargetType : short { User = 0, Post = 1, Comment = 2, Message = 3 }

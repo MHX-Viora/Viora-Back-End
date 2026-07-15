@@ -54,7 +54,7 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
     }
 
     [HttpPost("/api/comments/{commentId:guid}/replies")]
-    [ProducesResponseType<CommentResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<CommentReplyListItemResponse>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Reply(
         Guid commentId,
         ReplyCommentRequest request,

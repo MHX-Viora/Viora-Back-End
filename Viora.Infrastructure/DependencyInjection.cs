@@ -11,6 +11,7 @@ using Viora.Application.Users;
 using Viora.Infrastructure.Media;
 using Viora.Application.Posts;
 using Viora.Application.Hashtags;
+using Viora.Application.Social;
 using FluentValidation;
 
 namespace Viora.Infrastructure;
@@ -79,6 +80,15 @@ public static class DependencyInjection
         services.AddScoped<IValidator<GetCommentRepliesQuery>, GetCommentRepliesValidator>();
         services.AddScoped<IValidator<CreateHashtagCommand>, CreateHashtagValidator>();
         services.AddScoped<IValidator<SearchHashtagsQuery>, SearchHashtagsValidator>();
+        services.AddScoped<IValidator<ToggleFollowCommand>, ToggleFollowValidator>();
+        services.AddScoped<IValidator<SendFriendRequestCommand>, SendFriendRequestValidator>();
+        services.AddScoped<IValidator<GetFriendRequestsQuery>, GetFriendRequestsValidator>();
+        services.AddScoped<IValidator<AcceptFriendRequestCommand>, AcceptFriendRequestValidator>();
+        services.AddScoped<IValidator<RejectFriendRequestCommand>, RejectFriendRequestValidator>();
+        services.AddScoped<IValidator<DeleteFriendCommand>, DeleteFriendValidator>();
+        services.AddScoped<IValidator<GetRelationshipQuery>, GetRelationshipValidator>();
+        services.AddScoped<IValidator<GetMyStatisticsQuery>, GetMyStatisticsValidator>();
+        services.AddScoped<IValidator<GetUserProfileQuery>, GetUserProfileValidator>();
         services.AddScoped<IValidator<GetShortVideosQuery>, GetShortVideosValidator>();
         services.AddScoped<IValidator<ToggleVideoReactionCommand>, ToggleVideoReactionValidator>();
         services.AddScoped<IValidator<ToggleVideoSaveCommand>, ToggleVideoSaveValidator>();
@@ -97,6 +107,7 @@ public static class DependencyInjection
         services.AddScoped<IVideoFeedRepository, VideoFeedRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
         services.AddScoped<IHashtagRepository, HashtagRepository>();
+        services.AddScoped<ISocialRepository, SocialRepository>();
         services.AddScoped<IPostInteractionRepository, PostInteractionRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         return services;
