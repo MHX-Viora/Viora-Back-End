@@ -158,6 +158,29 @@ public sealed class SocialApiContractTests
     }
 
     [Fact]
+    public async Task Delete_friend_cancels_pending_request_by_target_user_id()
+    {
+        var currentUserId = Guid.NewGuid();
+        var targetUserId = Guid.NewGuid();
+        var friendship = new Friendship
+        {
+            Id = Guid.NewGuid(),
+            RequesterUserId = currentUserId,
+            AddresseeUserId = targetUserId,
+            Status = FriendshipStatus.Pending
+        };
+        var repository = new FakeSocialRepository(currentUserId, targetUserId, friendship);
+        var handler = new DeleteFriendHandler(repository, new DeleteFriendValidator());
+
+        var result = await handler.Handle(new DeleteFriendCommand(currentUserId, targetUserId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FriendshipStatus.Cancelled, friendship.Status);
+        Assert.Equal(FriendshipStatus.Cancelled, result.Value!.Status);
+        Assert.True(repository.SavedChanges);
+    }
+
+    [Fact]
     public async Task Send_friend_request_reuses_unfriended_friendship_as_pending()
     {
         var currentUserId = Guid.NewGuid();

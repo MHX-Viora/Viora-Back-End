@@ -287,12 +287,25 @@ public sealed class DeleteFriendHandler(
         }
 
         friendship = await repository.GetFriendshipBetweenAsync(request.CurrentUserId, request.Id, cancellationToken);
-        if (friendship is null || friendship.Status != FriendshipStatus.Accepted)
+        if (friendship is null)
         {
             return SocialResult<DeleteFriendResponse>.Failure(SocialError.NotFound, "Khong tim thay quan he ban be.");
         }
 
-        friendship.Status = FriendshipStatus.Unfriended;
+        if (friendship.Status == FriendshipStatus.Pending)
+        {
+            if (friendship.RequesterUserId != request.CurrentUserId) return SocialResult<DeleteFriendResponse>.Failure(SocialError.Forbidden, "Chi nguoi gui moi duoc huy loi moi.");
+            friendship.Status = FriendshipStatus.Cancelled;
+        }
+        else if (friendship.Status == FriendshipStatus.Accepted)
+        {
+            friendship.Status = FriendshipStatus.Unfriended;
+        }
+        else
+        {
+            return SocialResult<DeleteFriendResponse>.Failure(SocialError.Invalid, "Quan he ban be khong con hieu luc.");
+        }
+
         friendship.RespondedAt = DateTime.UtcNow;
         await repository.SaveChangesAsync(cancellationToken);
         return SocialResult<DeleteFriendResponse>.Success(new DeleteFriendResponse(friendship.Status));
