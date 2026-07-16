@@ -14,6 +14,9 @@ using Viora.Application.Hashtags;
 using Viora.Application.Social;
 using FluentValidation;
 using Viora.Application.Notifications;
+using Viora.Application.Realtime;
+using Viora.Infrastructure.Realtime;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Viora.Infrastructure;
 
@@ -91,6 +94,8 @@ public static class DependencyInjection
         services.AddScoped<IValidator<GetRelationshipQuery>, GetRelationshipValidator>();
         services.AddScoped<IValidator<GetMyStatisticsQuery>, GetMyStatisticsValidator>();
         services.AddScoped<IValidator<GetUserProfileQuery>, GetUserProfileValidator>();
+        services.AddScoped<IValidator<RegisterDeviceTokenCommand>, RegisterDeviceTokenValidator>();
+        services.AddScoped<IValidator<UnregisterDeviceTokenCommand>, UnregisterDeviceTokenValidator>();
         services.AddScoped<IValidator<GetShortVideosQuery>, GetShortVideosValidator>();
         services.AddScoped<IValidator<ToggleVideoReactionCommand>, ToggleVideoReactionValidator>();
         services.AddScoped<IValidator<ToggleVideoSaveCommand>, ToggleVideoSaveValidator>();
@@ -112,6 +117,13 @@ public static class DependencyInjection
         services.AddScoped<ISocialRepository, SocialRepository>();
         services.AddScoped<IPostInteractionRepository, PostInteractionRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<INotificationDeliveryRepository, NotificationDeliveryRepository>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
+        services.AddSingleton<IConnectionRegistry, ConnectionRegistry>();
+        services.AddSingleton<IUserIdProvider, UserIdProvider>();
+        services.AddScoped<IRealtimeService, SignalRRealtimeService>();
+        services.AddScoped<IPushNotificationSender, NoOpPushNotificationSender>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         return services;
     }

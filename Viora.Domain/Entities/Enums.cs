@@ -25,6 +25,7 @@ public enum NotificationType : short
     PostShare = 19, FriendRejected = 20
 }
 public enum NotificationReferenceType : short { User = 0, Post = 1, Comment = 2, Conversation = 3, Message = 4, Identity = 5 }
+public enum DevicePlatform : short { Android = 0, Ios = 1, Web = 2, Other = 3 }
 public enum ReportTargetType : short { User = 0, Post = 1, Comment = 2, Message = 3 }
 public enum ReportReason : short { Spam = 0, Violence = 1, AdultContent = 2, HateSpeech = 3, FakeNews = 4, Scam = 5, Other = 6 }
 public enum ReportStatus : short { Pending = 0, Approved = 1, Rejected = 2 }

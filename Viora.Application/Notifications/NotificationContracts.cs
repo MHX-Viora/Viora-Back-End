@@ -1,4 +1,5 @@
 using MediatR;
+using Viora.Application.Realtime;
 using Viora.Domain.Entities;
 
 namespace Viora.Application.Notifications;
@@ -59,6 +60,20 @@ public sealed record NotificationReferenceResponse(
 public sealed record MarkNotificationReadResponse(bool IsRead);
 public sealed record MarkAllNotificationsReadResponse(int UpdatedCount);
 
+public sealed record SendNotificationCommand(
+    Guid RecipientUserId,
+    NotificationType NotificationType,
+    User? Sender,
+    Guid? ReferenceId,
+    NotificationReferenceType? ReferenceType,
+    PostType? PostType = null,
+    string? ImageUrl = null);
+
+public interface INotificationService
+{
+    Task<Notification> SendAsync(SendNotificationCommand command, CancellationToken cancellationToken);
+}
+
 public interface INotificationRepository
 {
     Task<NotificationListResponse> GetNotificationsAsync(
@@ -78,4 +93,10 @@ public interface INotificationRepository
     Task<int> MarkAllReadAsync(
         Guid userId,
         CancellationToken cancellationToken);
+}
+
+public interface INotificationDeliveryRepository
+{
+    Task AddAsync(Notification notification, CancellationToken cancellationToken);
+    Task SaveChangesAsync(CancellationToken cancellationToken);
 }

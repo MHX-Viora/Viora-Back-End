@@ -8,6 +8,7 @@ using System.Text.Json;
 using viora_BE.OpenApi;
 using System.Threading.RateLimiting;
 using Viora.Application.Posts;
+using Viora.Infrastructure.Realtime;
 
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
 
@@ -60,6 +61,18 @@ builder.Services
                 }
                 return Task.CompletedTask;
             },
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrWhiteSpace(accessToken) &&
+                    path.StartsWithSegments("/hubs/realtime"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
             OnChallenge = async context =>
             {
                 context.HandleResponse();
@@ -82,6 +95,7 @@ builder.Services.AddRateLimiter(options => options.AddPolicy("auth", context =>
             QueueLimit = 0,
             AutoReplenishment = true
         })));
+builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -126,5 +140,6 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 app.MapControllers();
+app.MapHub<RealtimeHub>("/hubs/realtime");
 
 app.Run();
