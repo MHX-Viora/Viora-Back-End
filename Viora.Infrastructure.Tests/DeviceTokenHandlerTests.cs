@@ -64,6 +64,39 @@ public sealed class DeviceTokenHandlerTests
     }
 
     [Fact]
+    public async Task Register_updates_existing_device_id_with_new_token_and_user()
+    {
+        var previousUserId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
+        var existing = new DeviceToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = previousUserId,
+            Token = "old-token",
+            DeviceId = "device-1",
+            IsActive = false,
+            Platform = DevicePlatform.Android
+        };
+        var repository = new FakeDeviceTokenRepository(existing);
+        var handler = new RegisterDeviceTokenHandler(repository, new RegisterDeviceTokenValidator());
+
+        var response = await handler.Handle(new RegisterDeviceTokenCommand(
+            currentUserId,
+            "new-token",
+            "device-1",
+            "Samsung S24",
+            DevicePlatform.Android,
+            "1.0.0"), CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.Single(repository.DeviceTokens);
+        Assert.Equal(currentUserId, existing.UserId);
+        Assert.Equal("new-token", existing.Token);
+        Assert.Equal("device-1", existing.DeviceId);
+        Assert.True(existing.IsActive);
+    }
+
+    [Fact]
     public async Task Unregister_marks_existing_token_inactive()
     {
         var userId = Guid.NewGuid();
@@ -93,6 +126,11 @@ public sealed class DeviceTokenHandlerTests
 
         public Task<DeviceToken?> GetByTokenAsync(string token, CancellationToken cancellationToken) =>
             Task.FromResult(DeviceTokens.SingleOrDefault(deviceToken => deviceToken.Token == token));
+
+        public Task<DeviceToken?> GetByTokenOrDeviceIdAsync(string token, string? deviceId, CancellationToken cancellationToken) =>
+            Task.FromResult(DeviceTokens.SingleOrDefault(deviceToken =>
+                deviceToken.Token == token ||
+                (deviceId != null && deviceToken.DeviceId == deviceId)));
 
         public Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<DeviceToken>>(

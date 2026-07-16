@@ -22,8 +22,19 @@ public sealed class RealtimeApiContractTests
             .Where(method => method.DeclaringType == typeof(DeviceTokensController))
             .ToDictionary(method => method.Name);
 
-        Assert.Equal("register", methods[nameof(DeviceTokensController.Register)].GetCustomAttribute<HttpPostAttribute>()!.Template);
-        Assert.Equal("unregister", methods[nameof(DeviceTokensController.Unregister)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        var registerRoutes = methods[nameof(DeviceTokensController.Register)]
+            .GetCustomAttributes<HttpPostAttribute>()
+            .Select(attribute => attribute.Template)
+            .ToArray();
+        Assert.Contains("register", registerRoutes);
+        Assert.Contains("~/api/device/register", registerRoutes);
+
+        var unregisterRoutes = methods[nameof(DeviceTokensController.Unregister)]
+            .GetCustomAttributes<HttpPostAttribute>()
+            .Select(attribute => attribute.Template)
+            .ToArray();
+        Assert.Contains("unregister", unregisterRoutes);
+        Assert.Contains("~/api/device/unregister", unregisterRoutes);
     }
 
     [Fact]
@@ -37,7 +48,7 @@ public sealed class RealtimeApiContractTests
     {
         AssertProperties<RegisterDeviceTokenRequest>("AppVersion", "DeviceId", "DeviceName", "Platform", "Token");
         AssertProperties<UnregisterDeviceTokenRequest>("Token");
-        AssertProperties<DeviceTokenResponse>("Success", "IsActive");
+        AssertProperties<DeviceTokenResponse>("Success", "IsActive", "Message");
     }
 
     [Fact]

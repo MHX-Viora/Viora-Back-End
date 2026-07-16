@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Viora.Application.Notifications;
 using Viora.Application.Realtime;
 using Viora.Domain.Entities;
@@ -12,7 +13,11 @@ public sealed class NotificationServiceTests
     {
         var realtime = new FakeRealtimeService();
         var push = new FakePushNotificationSender();
-        var service = new NotificationService(new FakeNotificationDeliveryRepository(), realtime, push);
+        var service = new NotificationService(
+            new FakeNotificationDeliveryRepository(),
+            realtime,
+            push,
+            NullLogger<NotificationService>.Instance);
         var notification = new Notification
         {
             Id = Guid.NewGuid(),
@@ -53,7 +58,11 @@ public sealed class NotificationServiceTests
         Assert.NotNull(payload.Reference);
         Assert.Equal(notification.ReferenceId, payload.Reference.Id);
         Assert.Equal(notification.ReferenceType, payload.Reference.Type);
-        Assert.Single(push.Messages);
+        var pushMessage = Assert.Single(push.Messages);
+        Assert.Equal(notification.Id.ToString(), pushMessage.Data["id"]);
+        Assert.Equal(notification.Title, pushMessage.Data["title"]);
+        Assert.Equal(notification.SenderUser.DisplayName, pushMessage.Data["sender.displayName"]);
+        Assert.Equal(notification.ReferenceId.ToString(), pushMessage.Data["reference.id"]);
     }
 
     private sealed class FakeRealtimeService : IRealtimeService

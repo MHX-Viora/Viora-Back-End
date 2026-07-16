@@ -33,7 +33,7 @@ public sealed record RegisterDeviceTokenCommand(
 public sealed record UnregisterDeviceTokenCommand(Guid UserId, string Token)
     : IRequest<DeviceTokenResponse>;
 
-public sealed record DeviceTokenResponse(bool Success, bool IsActive);
+public sealed record DeviceTokenResponse(bool Success, bool IsActive, string? Message = null);
 
 public sealed record PushMessage(
     Guid UserId,
@@ -56,6 +56,7 @@ public interface IPushNotificationSender
 public interface IDeviceTokenRepository
 {
     Task<DeviceToken?> GetByTokenAsync(string token, CancellationToken cancellationToken);
+    Task<DeviceToken?> GetByTokenOrDeviceIdAsync(string token, string? deviceId, CancellationToken cancellationToken);
     Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken);
     Task AddAsync(DeviceToken deviceToken, CancellationToken cancellationToken);
     Task DeactivateAsync(string token, CancellationToken cancellationToken);

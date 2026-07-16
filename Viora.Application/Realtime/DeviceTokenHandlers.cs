@@ -13,11 +13,12 @@ public sealed class RegisterDeviceTokenHandler(
         var validation = await validator.ValidateAsync(request, cancellationToken);
         if (!validation.IsValid)
         {
-            return new DeviceTokenResponse(false, false);
+            return new DeviceTokenResponse(false, false, validation.Errors.First().ErrorMessage);
         }
 
         var now = DateTime.UtcNow;
-        var deviceToken = await repository.GetByTokenAsync(request.Token, cancellationToken);
+        var normalizedDeviceId = string.IsNullOrWhiteSpace(request.DeviceId) ? null : request.DeviceId.Trim();
+        var deviceToken = await repository.GetByTokenOrDeviceIdAsync(request.Token, normalizedDeviceId, cancellationToken);
         if (deviceToken is null)
         {
             deviceToken = new DeviceToken
@@ -29,7 +30,8 @@ public sealed class RegisterDeviceTokenHandler(
         }
 
         deviceToken.UserId = request.UserId;
-        deviceToken.DeviceId = string.IsNullOrWhiteSpace(request.DeviceId) ? null : request.DeviceId.Trim();
+        deviceToken.Token = request.Token;
+        deviceToken.DeviceId = normalizedDeviceId;
         deviceToken.DeviceName = string.IsNullOrWhiteSpace(request.DeviceName) ? null : request.DeviceName.Trim();
         deviceToken.Platform = request.Platform;
         deviceToken.AppVersion = string.IsNullOrWhiteSpace(request.AppVersion) ? null : request.AppVersion.Trim();
@@ -37,7 +39,7 @@ public sealed class RegisterDeviceTokenHandler(
         deviceToken.LastSeenAt = now;
 
         await repository.SaveChangesAsync(cancellationToken);
-        return new DeviceTokenResponse(true, true);
+        return new DeviceTokenResponse(true, true, "Device token registered.");
     }
 }
 
@@ -51,13 +53,13 @@ public sealed class UnregisterDeviceTokenHandler(
         var validation = await validator.ValidateAsync(request, cancellationToken);
         if (!validation.IsValid)
         {
-            return new DeviceTokenResponse(false, false);
+            return new DeviceTokenResponse(false, false, validation.Errors.First().ErrorMessage);
         }
 
         var deviceToken = await repository.GetByTokenAsync(request.Token, cancellationToken);
         if (deviceToken is null)
         {
-            return new DeviceTokenResponse(true, false);
+            return new DeviceTokenResponse(true, false, "Device token is not registered.");
         }
 
         if (deviceToken.UserId == request.UserId)
@@ -67,6 +69,6 @@ public sealed class UnregisterDeviceTokenHandler(
             await repository.SaveChangesAsync(cancellationToken);
         }
 
-        return new DeviceTokenResponse(true, false);
+        return new DeviceTokenResponse(true, false, "Device token unregistered.");
     }
 }

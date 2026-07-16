@@ -102,7 +102,7 @@ await startRealtime();
 Register after login, after FCM permission is granted, and whenever FCM rotates the token.
 
 ```http
-POST /api/device-token/register
+POST /api/device/register
 Authorization: Bearer <access_token>
 Content-Type: application/json
 ```
@@ -130,18 +130,18 @@ Response:
 
 Platform values:
 
-| Value | Platform |
-|---:|---|
-| `0` | Android |
-| `1` | iOS |
-| `2` | Web |
-| `3` | Other |
+| Value | String values | Platform |
+|---:|---|---|
+| `0` | `"android"`, `"Android"` | Android |
+| `1` | `"ios"`, `"Ios"` | iOS |
+| `2` | `"web"`, `"Web"` | Web |
+| `3` | `"other"`, `"Other"` | Other |
 
 Example:
 
 ```ts
 export async function registerDeviceToken(apiUrl: string, accessToken: string, fcmToken: string) {
-  const response = await fetch(`${apiUrl}/api/device-token/register`, {
+  const response = await fetch(`${apiUrl}/api/device/register`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -163,18 +163,21 @@ export async function registerDeviceToken(apiUrl: string, accessToken: string, f
 
 Backend behavior:
 
-- `token` is unique.
-- If the token already exists, backend moves it to the current user.
+- Tokens are stored in `UserDevices.FcmToken`.
+- `FcmToken` is unique.
+- `deviceId` is unique when provided, so one physical device belongs to one user at a time.
+- If the token or device id already exists, backend moves it to the current user and updates the token.
 - `isActive = true`.
 - `lastSeenAt` is updated.
 - No duplicate token rows are created.
+- Backward-compatible route: `POST /api/device-token/register`.
 
 ## Unregister FCM Device Token
 
 Call this on logout, or when the app decides this device should no longer receive push for the current account.
 
 ```http
-POST /api/device-token/unregister
+POST /api/device/unregister
 Authorization: Bearer <access_token>
 Content-Type: application/json
 ```
@@ -197,6 +200,7 @@ Response:
 ```
 
 Backend only marks the token inactive. It does not delete the row.
+Backward-compatible route: `POST /api/device-token/unregister`.
 
 ## Event Names
 
@@ -402,13 +406,26 @@ Notification push data:
 ```json
 {
   "notificationId": "uuid",
+  "id": "uuid",
+  "type": "1",
   "notificationType": "1",
+  "title": "Cam xuc",
+  "content": "Sender da bay to cam xuc voi bai viet cua ban.",
+  "imageUrl": "",
+  "isRead": "false",
+  "createdAt": "2026-07-16T08:04:45.7480000Z",
+  "sender.id": "uuid",
+  "sender.displayName": "Sender",
+  "sender.avatarUrl": "https://...",
+  "sender.isVerified": "true",
+  "reference.id": "uuid",
+  "reference.type": "1",
   "referenceId": "uuid",
-  "referenceType": "0"
+  "referenceType": "1"
 }
 ```
 
-Use this data for deep-link navigation when the user taps the push.
+Use this data to render/update notification state and for deep-link navigation when the user taps the push. FCM data values are strings, so parse booleans/numbers on the client.
 
 Example:
 
@@ -462,7 +479,7 @@ On logout:
 
 ## Error Handling
 
-For REST device-token APIs:
+For REST device APIs:
 
 - `401`: access token is missing/expired.
 - `400`: invalid request body, usually missing token or invalid platform.
@@ -493,7 +510,7 @@ No notification event received:
 Push not received:
 
 - Confirm device permission is granted.
-- Confirm FCM token is registered with `POST /api/device-token/register`.
+- Confirm FCM token is registered with `POST /api/device/register`.
 - Confirm token is active for the current user.
 - Confirm backend has one of these configs:
   - `Firebase__ServiceAccountJson`

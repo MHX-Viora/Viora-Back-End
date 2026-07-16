@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Viora.Application.Realtime;
 using Viora.Domain.Entities;
 
@@ -6,7 +7,8 @@ namespace Viora.Application.Notifications;
 public sealed class NotificationService(
     INotificationDeliveryRepository repository,
     IRealtimeService realtimeService,
-    IPushNotificationSender pushNotificationSender) : INotificationService
+    IPushNotificationSender pushNotificationSender,
+    ILogger<NotificationService> logger) : INotificationService
 {
     public async Task<Notification> SendAsync(SendNotificationCommand command, CancellationToken cancellationToken)
     {
@@ -33,26 +35,7 @@ public sealed class NotificationService(
 
     public async Task PublishAsync(Notification notification, CancellationToken cancellationToken)
     {
-        var payload = new NotificationItemResponse(
-            notification.Id,
-            notification.NotificationType,
-            notification.Title,
-            notification.Content,
-            notification.ImageUrl,
-            notification.IsRead,
-            notification.CreatedAt,
-            notification.SenderUser is null
-                ? null
-                : new NotificationSenderResponse(
-                    notification.SenderUser.Id,
-                    notification.SenderUser.DisplayName,
-                    notification.SenderUser.AvatarUrl,
-                    notification.SenderUser.IsVerified),
-            notification.ReferenceId.HasValue && notification.ReferenceType.HasValue
-                ? new NotificationReferenceResponse(
-                    notification.ReferenceId.Value,
-                    notification.ReferenceType.Value)
-                : null);
+        var payload = MapNotificationResponse(notification);
 
         await realtimeService.SendToUserAsync(
             notification.UserId,
@@ -66,30 +49,68 @@ public sealed class NotificationService(
                 notification.UserId,
                 notification.Title,
                 notification.Content,
-            BuildPushData(notification)), cancellationToken);
+                BuildPushData(payload)), cancellationToken);
         }
         catch (Exception exception)
         {
-            _ = exception;
+            logger.LogError(
+                exception,
+                "Failed to publish push notification {NotificationId} for user {UserId}.",
+                notification.Id,
+                notification.UserId);
         }
     }
 
-    private static IReadOnlyDictionary<string, string> BuildPushData(Notification notification)
+    private static NotificationItemResponse MapNotificationResponse(Notification notification) => new(
+        notification.Id,
+        notification.NotificationType,
+        notification.Title,
+        notification.Content,
+        notification.ImageUrl,
+        notification.IsRead,
+        notification.CreatedAt,
+        notification.SenderUser is null
+            ? null
+            : new NotificationSenderResponse(
+                notification.SenderUser.Id,
+                notification.SenderUser.DisplayName,
+                notification.SenderUser.AvatarUrl,
+                notification.SenderUser.IsVerified),
+        notification.ReferenceId.HasValue && notification.ReferenceType.HasValue
+            ? new NotificationReferenceResponse(
+                notification.ReferenceId.Value,
+                notification.ReferenceType.Value)
+            : null);
+
+    private static IReadOnlyDictionary<string, string> BuildPushData(NotificationItemResponse notification)
     {
         var data = new Dictionary<string, string>
         {
             ["notificationId"] = notification.Id.ToString(),
-            ["notificationType"] = ((short)notification.NotificationType).ToString()
+            ["id"] = notification.Id.ToString(),
+            ["type"] = ((short)notification.Type).ToString(),
+            ["notificationType"] = ((short)notification.Type).ToString(),
+            ["title"] = notification.Title,
+            ["content"] = notification.Content ?? string.Empty,
+            ["imageUrl"] = notification.ImageUrl ?? string.Empty,
+            ["isRead"] = notification.IsRead.ToString().ToLowerInvariant(),
+            ["createdAt"] = notification.CreatedAt.ToString("O")
         };
 
-        if (notification.ReferenceId.HasValue)
+        if (notification.Sender is not null)
         {
-            data["referenceId"] = notification.ReferenceId.Value.ToString();
+            data["sender.id"] = notification.Sender.Id.ToString();
+            data["sender.displayName"] = notification.Sender.DisplayName;
+            data["sender.avatarUrl"] = notification.Sender.AvatarUrl ?? string.Empty;
+            data["sender.isVerified"] = notification.Sender.IsVerified.ToString().ToLowerInvariant();
         }
 
-        if (notification.ReferenceType.HasValue)
+        if (notification.Reference is not null)
         {
-            data["referenceType"] = ((short)notification.ReferenceType.Value).ToString();
+            data["reference.id"] = notification.Reference.Id.ToString();
+            data["reference.type"] = ((short)notification.Reference.Type).ToString();
+            data["referenceId"] = notification.Reference.Id.ToString();
+            data["referenceType"] = ((short)notification.Reference.Type).ToString();
         }
 
         return data;
