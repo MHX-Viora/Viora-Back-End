@@ -172,7 +172,7 @@ public sealed class GetFriendshipsValidator : AbstractValidator<GetFriendshipsQu
         RuleFor(query => query.Page).GreaterThanOrEqualTo(1);
         RuleFor(query => query.PageSize).GreaterThan(0);
         RuleFor(query => query.Status).Must(status =>
-            status is FriendshipStatus.Pending or FriendshipStatus.Accepted or FriendshipStatus.Rejected);
+            status is FriendshipStatus.Pending or FriendshipStatus.Accepted or FriendshipStatus.Rejected or FriendshipStatus.Unfriended);
         RuleFor(query => query.Keyword).MaximumLength(255);
     }
 }

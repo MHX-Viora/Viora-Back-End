@@ -124,7 +124,7 @@ public sealed class SendFriendRequestHandler(
             FriendshipStatus.Pending => "Người này đã gửi lời mời cho bạn.",
             FriendshipStatus.Accepted => "Hai người đã là bạn.",
             FriendshipStatus.Blocked => "Không thể gửi lời mời.",
-            FriendshipStatus.Cancelled or FriendshipStatus.Rejected => null,
+            FriendshipStatus.Cancelled or FriendshipStatus.Rejected or FriendshipStatus.Unfriended => null,
             _ => "Không thể gửi lời mời."
         };
 }
@@ -266,9 +266,21 @@ public sealed class DeleteFriendHandler(
         var friendship = await repository.GetFriendshipAsync(request.Id, cancellationToken);
         if (friendship is not null)
         {
-            if (friendship.RequesterUserId != request.CurrentUserId) return SocialResult<DeleteFriendResponse>.Failure(SocialError.Forbidden, "Chi nguoi gui moi duoc huy loi moi.");
-            if (friendship.Status != FriendshipStatus.Pending) return SocialResult<DeleteFriendResponse>.Failure(SocialError.Invalid, "Chi duoc huy loi moi dang cho xu ly.");
-            friendship.Status = FriendshipStatus.Cancelled;
+            if (friendship.Status == FriendshipStatus.Pending)
+            {
+                if (friendship.RequesterUserId != request.CurrentUserId) return SocialResult<DeleteFriendResponse>.Failure(SocialError.Forbidden, "Chi nguoi gui moi duoc huy loi moi.");
+                friendship.Status = FriendshipStatus.Cancelled;
+            }
+            else if (friendship.Status == FriendshipStatus.Accepted)
+            {
+                if (friendship.RequesterUserId != request.CurrentUserId && friendship.AddresseeUserId != request.CurrentUserId) return SocialResult<DeleteFriendResponse>.Failure(SocialError.Forbidden, "Ban khong co quyen huy ket ban.");
+                friendship.Status = FriendshipStatus.Unfriended;
+            }
+            else
+            {
+                return SocialResult<DeleteFriendResponse>.Failure(SocialError.Invalid, "Quan he ban be khong con hieu luc.");
+            }
+
             friendship.RespondedAt = DateTime.UtcNow;
             await repository.SaveChangesAsync(cancellationToken);
             return SocialResult<DeleteFriendResponse>.Success(new DeleteFriendResponse(friendship.Status));
@@ -280,7 +292,7 @@ public sealed class DeleteFriendHandler(
             return SocialResult<DeleteFriendResponse>.Failure(SocialError.NotFound, "Khong tim thay quan he ban be.");
         }
 
-        friendship.Status = FriendshipStatus.Cancelled;
+        friendship.Status = FriendshipStatus.Unfriended;
         friendship.RespondedAt = DateTime.UtcNow;
         await repository.SaveChangesAsync(cancellationToken);
         return SocialResult<DeleteFriendResponse>.Success(new DeleteFriendResponse(friendship.Status));

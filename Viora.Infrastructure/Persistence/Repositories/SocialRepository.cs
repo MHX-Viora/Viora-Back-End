@@ -267,6 +267,7 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
                         item.Friendship.Status == FriendshipStatus.Accepted ? "Accepted" :
                         item.Friendship.Status == FriendshipStatus.Rejected ? "Rejected" :
                         item.Friendship.Status == FriendshipStatus.Cancelled ? "Cancelled" :
+                        item.Friendship.Status == FriendshipStatus.Unfriended ? "Unfriended" :
                         item.Friendship.Status == FriendshipStatus.Blocked ? "Blocked" : "None",
                         item.Friendship.IsRequester),
                 (item.User.Settings == null || item.User.Settings.AllowMessageEveryone) ||

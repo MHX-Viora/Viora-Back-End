@@ -10,7 +10,7 @@ public enum PostVisibility : short { Public = 0, Followers = 1, Private = 2 }
 public enum PostStatus : short { Draft = 0, Published = 1, Hidden = 2, Deleted = 3 }
 public enum ReactionType : short { Like = 0, Love = 1, Haha = 2, Wow = 3, Sad = 4, Angry = 5 }
 public enum CommentStatus : short { Hidden = 0, Published = 1, Deleted = 2 }
-public enum FriendshipStatus : short { Pending = 0, Accepted = 1, Rejected = 2, Cancelled = 3, Blocked = 4 }
+public enum FriendshipStatus : short { Pending = 0, Accepted = 1, Rejected = 2, Cancelled = 3, Blocked = 4, Unfriended = 5 }
 public enum ConversationType : short { Private = 0, Group = 1 }
 public enum ConversationSendPermission : short { Everyone = 0, AdminsAndOwner = 1, OwnerOnly = 2 }
 public enum ConversationMemberRole : short { Member = 0, Admin = 1, Owner = 2 }

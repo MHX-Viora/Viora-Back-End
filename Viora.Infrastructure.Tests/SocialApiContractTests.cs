@@ -104,6 +104,106 @@ public sealed class SocialApiContractTests
     }
 
     [Fact]
+    public void Friendship_status_includes_unfriended()
+    {
+        Assert.True(Enum.IsDefined(FriendshipStatus.Unfriended));
+        Assert.Equal((short)5, (short)FriendshipStatus.Unfriended);
+    }
+
+    [Fact]
+    public async Task Delete_friend_marks_accepted_friendship_as_unfriended()
+    {
+        var currentUserId = Guid.NewGuid();
+        var friendId = Guid.NewGuid();
+        var friendship = new Friendship
+        {
+            Id = Guid.NewGuid(),
+            RequesterUserId = currentUserId,
+            AddresseeUserId = friendId,
+            Status = FriendshipStatus.Accepted
+        };
+        var repository = new FakeSocialRepository(currentUserId, friendId, friendship);
+        var handler = new DeleteFriendHandler(repository, new DeleteFriendValidator());
+
+        var result = await handler.Handle(new DeleteFriendCommand(currentUserId, friendId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FriendshipStatus.Unfriended, friendship.Status);
+        Assert.Equal(FriendshipStatus.Unfriended, result.Value!.Status);
+        Assert.NotNull(friendship.RespondedAt);
+        Assert.True(repository.SavedChanges);
+    }
+
+    [Fact]
+    public async Task Delete_friend_accepts_accepted_friendship_id()
+    {
+        var currentUserId = Guid.NewGuid();
+        var friendId = Guid.NewGuid();
+        var friendship = new Friendship
+        {
+            Id = Guid.NewGuid(),
+            RequesterUserId = friendId,
+            AddresseeUserId = currentUserId,
+            Status = FriendshipStatus.Accepted
+        };
+        var repository = new FakeSocialRepository(currentUserId, friendId, friendship);
+        var handler = new DeleteFriendHandler(repository, new DeleteFriendValidator());
+
+        var result = await handler.Handle(new DeleteFriendCommand(currentUserId, friendship.Id), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FriendshipStatus.Unfriended, friendship.Status);
+        Assert.Equal(FriendshipStatus.Unfriended, result.Value!.Status);
+        Assert.True(repository.SavedChanges);
+    }
+
+    [Fact]
+    public async Task Send_friend_request_reuses_unfriended_friendship_as_pending()
+    {
+        var currentUserId = Guid.NewGuid();
+        var targetUserId = Guid.NewGuid();
+        var friendship = new Friendship
+        {
+            Id = Guid.NewGuid(),
+            RequesterUserId = targetUserId,
+            AddresseeUserId = currentUserId,
+            Status = FriendshipStatus.Unfriended,
+            RespondedAt = DateTime.UtcNow
+        };
+        var repository = new FakeSocialRepository(currentUserId, targetUserId, friendship);
+        var handler = new SendFriendRequestHandler(repository, new SendFriendRequestValidator());
+
+        var result = await handler.Handle(new SendFriendRequestCommand(currentUserId, targetUserId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FriendshipStatus.Pending, friendship.Status);
+        Assert.Equal(currentUserId, friendship.RequesterUserId);
+        Assert.Equal(targetUserId, friendship.AddresseeUserId);
+        Assert.Null(friendship.RespondedAt);
+        Assert.Equal("Pending", result.Value!.Data.Status);
+        Assert.Single(repository.Notifications);
+    }
+
+    [Fact]
+    public async Task Send_friend_request_creates_pending_friendship_when_none_exists()
+    {
+        var currentUserId = Guid.NewGuid();
+        var targetUserId = Guid.NewGuid();
+        var repository = new FakeSocialRepository(currentUserId, targetUserId, null);
+        var handler = new SendFriendRequestHandler(repository, new SendFriendRequestValidator());
+
+        var result = await handler.Handle(new SendFriendRequestCommand(currentUserId, targetUserId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(repository.Friendship);
+        Assert.Equal(FriendshipStatus.Pending, repository.Friendship.Status);
+        Assert.Equal(currentUserId, repository.Friendship.RequesterUserId);
+        Assert.Equal(targetUserId, repository.Friendship.AddresseeUserId);
+        Assert.Equal(repository.Friendship.Id, result.Value!.Data.FriendshipId);
+        Assert.Single(repository.Notifications);
+    }
+
+    [Fact]
     public async Task User_profile_validator_rejects_missing_target_user()
     {
         var validator = new GetUserProfileValidator();
@@ -122,5 +222,81 @@ public sealed class SocialApiContractTests
     {
         var properties = typeof(T).GetProperties().Select(property => property.Name).Order().ToArray();
         Assert.Equal(names.Order().ToArray(), properties);
+    }
+
+    private sealed class FakeSocialRepository(Guid currentUserId, Guid targetUserId, Friendship? friendship) : ISocialRepository
+    {
+        public bool SavedChanges { get; private set; }
+        public List<Notification> Notifications { get; } = [];
+        public Friendship? Friendship => friendship;
+
+        public Task<User?> GetActiveUserAsync(Guid userId, CancellationToken cancellationToken) =>
+            Task.FromResult<User?>(userId == currentUserId || userId == targetUserId
+                ? new User
+                {
+                    Id = userId,
+                    DisplayName = userId == currentUserId ? "Current" : "Target",
+                    Account = new Account { Status = AccountStatus.Active }
+                }
+                : null);
+
+        public Task<Follow?> GetFollowAsync(Guid followerId, Guid followingId, CancellationToken cancellationToken) =>
+            Task.FromResult<Follow?>(null);
+
+        public Task<int> CountFollowersAsync(Guid userId, CancellationToken cancellationToken) =>
+            Task.FromResult(0);
+
+        public Task<Friendship?> GetFriendshipBetweenAsync(Guid firstUserId, Guid secondUserId, CancellationToken cancellationToken) =>
+            Task.FromResult(friendship);
+
+        public Task<Friendship?> GetFriendshipAsync(Guid friendshipId, CancellationToken cancellationToken) =>
+            Task.FromResult(friendship?.Id == friendshipId ? friendship : null);
+
+        public Task<Guid?> GetPrivateConversationIdAsync(Guid firstUserId, Guid secondUserId, CancellationToken cancellationToken) =>
+            Task.FromResult<Guid?>(null);
+
+        public Task<FriendRequestListResponse> GetPendingRequestsAsync(Guid userId, CancellationToken cancellationToken) =>
+            Task.FromResult(new FriendRequestListResponse([]));
+
+        public Task<FriendshipListResponse> GetFriendshipsAsync(GetFriendshipsQuery query, CancellationToken cancellationToken) =>
+            Task.FromResult(new FriendshipListResponse(query.Page, query.PageSize, 0, 0, []));
+
+        public Task<UserStatisticsResponse?> GetStatisticsAsync(Guid userId, CancellationToken cancellationToken) =>
+            Task.FromResult<UserStatisticsResponse?>(null);
+
+        public Task<UserProfileSummaryResponse?> GetUserProfileSummaryAsync(Guid currentUserId, Guid targetUserId, CancellationToken cancellationToken) =>
+            Task.FromResult<UserProfileSummaryResponse?>(null);
+
+        public Task AddFollowAsync(Follow follow, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public void RemoveFollow(Follow follow)
+        {
+        }
+
+        public Task AddFriendshipAsync(Friendship newFriendship, CancellationToken cancellationToken)
+        {
+            friendship = newFriendship;
+            return Task.CompletedTask;
+        }
+
+        public Task AddConversationAsync(Conversation conversation, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task AddNotificationAsync(Notification notification, CancellationToken cancellationToken)
+        {
+            Notifications.Add(notification);
+            return Task.CompletedTask;
+        }
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken)
+        {
+            SavedChanges = true;
+            return Task.CompletedTask;
+        }
+
+        public async Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken)
+        {
+            await operation(cancellationToken);
+            SavedChanges = true;
+        }
     }
 }
