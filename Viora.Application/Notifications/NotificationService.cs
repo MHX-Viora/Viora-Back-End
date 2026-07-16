@@ -33,15 +33,26 @@ public sealed class NotificationService(
 
     public async Task PublishAsync(Notification notification, CancellationToken cancellationToken)
     {
-        var payload = new RealtimeNotificationPayload(
+        var payload = new NotificationItemResponse(
             notification.Id,
             notification.NotificationType,
-            notification.ReferenceId,
-            notification.ReferenceType,
             notification.Title,
             notification.Content,
             notification.ImageUrl,
-            notification.CreatedAt);
+            notification.IsRead,
+            notification.CreatedAt,
+            notification.SenderUser is null
+                ? null
+                : new NotificationSenderResponse(
+                    notification.SenderUser.Id,
+                    notification.SenderUser.DisplayName,
+                    notification.SenderUser.AvatarUrl,
+                    notification.SenderUser.IsVerified),
+            notification.ReferenceId.HasValue && notification.ReferenceType.HasValue
+                ? new NotificationReferenceResponse(
+                    notification.ReferenceId.Value,
+                    notification.ReferenceType.Value)
+                : null);
 
         await realtimeService.SendToUserAsync(
             notification.UserId,

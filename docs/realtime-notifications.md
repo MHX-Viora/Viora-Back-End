@@ -233,14 +233,23 @@ export type NotificationReferenceType =
   | 5; // Identity
 
 export type NotificationPayload = {
-  notificationId: string;
-  notificationType: number;
-  referenceId: string | null;
-  referenceType: NotificationReferenceType | null;
+  id: string;
+  type: number;
   title: string;
   content: string | null;
   imageUrl: string | null;
+  isRead: boolean;
   createdAt: string;
+  sender: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+    isVerified: boolean;
+  } | null;
+  reference: {
+    id: string;
+    type: NotificationReferenceType;
+  } | null;
 };
 
 export type RealtimeMessagePayload = Record<string, unknown>;
@@ -249,7 +258,30 @@ export type TypingPayload = Record<string, unknown>;
 export type PresencePayload = Record<string, unknown>;
 ```
 
-Only `ReceiveNotification` has a finalized payload in the current backend foundation. Other event names are reserved and should be handled defensively until their feature-specific payloads are finalized.
+`ReceiveNotification` uses the same item shape as `GET /api/notifications`.
+Other event names are reserved and should be handled defensively until their feature-specific payloads are finalized.
+
+```json
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "type": 4,
+  "title": "Cam xuc",
+  "content": "Sender da bay to cam xuc voi bai viet cua ban.",
+  "imageUrl": null,
+  "isRead": false,
+  "createdAt": "2026-07-16T08:04:45.748Z",
+  "sender": {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "displayName": "Sender",
+    "avatarUrl": "https://...",
+    "isVerified": true
+  },
+  "reference": {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "type": 1
+  }
+}
+```
 
 ## Listen To Notifications
 
@@ -269,18 +301,15 @@ Example reducer update:
 ```ts
 function onReceiveNotification(payload: NotificationPayload) {
   notificationsStore.add({
-    id: payload.notificationId,
-    type: payload.notificationType,
+    id: payload.id,
+    type: payload.type,
     title: payload.title,
     content: payload.content,
     imageUrl: payload.imageUrl,
+    isRead: payload.isRead,
     createdAt: payload.createdAt,
-    reference: payload.referenceId
-      ? {
-          id: payload.referenceId,
-          type: payload.referenceType,
-        }
-      : null,
+    sender: payload.sender,
+    reference: payload.reference,
   });
 }
 ```
@@ -466,7 +495,10 @@ Push not received:
 - Confirm device permission is granted.
 - Confirm FCM token is registered with `POST /api/device-token/register`.
 - Confirm token is active for the current user.
-- Current backend has push sender interface ready; Firebase adapter must be enabled server-side before real FCM delivery.
+- Confirm backend has one of these configs:
+  - `Firebase__ServiceAccountJson`
+  - `Firebase__ServiceAccountPath`
+- Invalid/unregistered FCM tokens are automatically marked inactive by backend.
 
 Duplicate events:
 
@@ -487,10 +519,9 @@ Implemented now:
 - User/group sends through backend `IRealtimeService`
 - Device token register/unregister APIs
 - `ReceiveNotification` payload contract
-- Push abstraction
+- Firebase Admin push sender
 
 Not fully enabled yet:
 
-- Real Firebase Admin SDK sender
 - Final payloads for message, typing, presence, conversation events
 - Server methods for client-originated typing/presence events

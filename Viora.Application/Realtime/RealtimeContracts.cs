@@ -35,16 +35,6 @@ public sealed record UnregisterDeviceTokenCommand(Guid UserId, string Token)
 
 public sealed record DeviceTokenResponse(bool Success, bool IsActive);
 
-public sealed record RealtimeNotificationPayload(
-    Guid NotificationId,
-    NotificationType NotificationType,
-    Guid? ReferenceId,
-    NotificationReferenceType? ReferenceType,
-    string Title,
-    string? Content,
-    string? ImageUrl,
-    DateTime CreatedAt);
-
 public sealed record PushMessage(
     Guid UserId,
     string Title,
@@ -66,7 +56,9 @@ public interface IPushNotificationSender
 public interface IDeviceTokenRepository
 {
     Task<DeviceToken?> GetByTokenAsync(string token, CancellationToken cancellationToken);
+    Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken);
     Task AddAsync(DeviceToken deviceToken, CancellationToken cancellationToken);
+    Task DeactivateAsync(string token, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
 

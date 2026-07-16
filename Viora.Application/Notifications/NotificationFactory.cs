@@ -18,6 +18,7 @@ public static class NotificationFactory
         {
             UserId = recipientUserId,
             SenderUserId = sender?.Id,
+            SenderUser = sender,
             NotificationType = notificationType,
             ReferenceId = referenceId,
             ReferenceType = referenceType,

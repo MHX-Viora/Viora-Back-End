@@ -119,11 +119,13 @@ public static class DependencyInjection
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationDeliveryRepository, NotificationDeliveryRepository>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.Configure<FirebaseOptions>(configuration.GetSection("Firebase"));
         services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
         services.AddSingleton<IConnectionRegistry, ConnectionRegistry>();
         services.AddSingleton<IUserIdProvider, UserIdProvider>();
+        services.AddSingleton<IFirebaseInitializer, FirebaseInitializer>();
         services.AddScoped<IRealtimeService, SignalRRealtimeService>();
-        services.AddScoped<IPushNotificationSender, NoOpPushNotificationSender>();
+        services.AddScoped<IPushNotificationSender, FirebasePushNotificationSender>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         return services;
     }

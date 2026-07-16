@@ -17,11 +17,21 @@ public sealed class NotificationServiceTests
         {
             Id = Guid.NewGuid(),
             UserId = Guid.NewGuid(),
+            SenderUserId = Guid.NewGuid(),
+            SenderUser = new User
+            {
+                Id = Guid.NewGuid(),
+                DisplayName = "Sender",
+                AvatarUrl = "https://example.test/avatar.png",
+                IsVerified = true
+            },
             NotificationType = NotificationType.PostLike,
             ReferenceId = Guid.NewGuid(),
             ReferenceType = NotificationReferenceType.Post,
             Title = "Cam xuc",
             Content = "Someone liked your post.",
+            ImageUrl = "https://example.test/image.png",
+            IsRead = false,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -30,8 +40,19 @@ public sealed class NotificationServiceTests
         var sent = Assert.Single(realtime.SentEvents);
         Assert.Equal(notification.UserId, sent.UserId);
         Assert.Equal(RealtimeEvents.ReceiveNotification, sent.EventName);
-        var payload = Assert.IsType<RealtimeNotificationPayload>(sent.Payload);
-        Assert.Equal(notification.Id, payload.NotificationId);
+        var payload = Assert.IsType<NotificationItemResponse>(sent.Payload);
+        Assert.Equal(notification.Id, payload.Id);
+        Assert.Equal(notification.NotificationType, payload.Type);
+        Assert.Equal(notification.Title, payload.Title);
+        Assert.Equal(notification.Content, payload.Content);
+        Assert.Equal(notification.ImageUrl, payload.ImageUrl);
+        Assert.False(payload.IsRead);
+        Assert.Equal(notification.CreatedAt, payload.CreatedAt);
+        Assert.NotNull(payload.Sender);
+        Assert.Equal(notification.SenderUser.Id, payload.Sender.Id);
+        Assert.NotNull(payload.Reference);
+        Assert.Equal(notification.ReferenceId, payload.Reference.Id);
+        Assert.Equal(notification.ReferenceType, payload.Reference.Type);
         Assert.Single(push.Messages);
     }
 

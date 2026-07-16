@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Viora.Application.Notifications;
 using Viora.Application.Realtime;
 using Viora.Domain.Entities;
 using Viora.Infrastructure.Realtime;
@@ -40,17 +41,18 @@ public sealed class RealtimeApiContractTests
     }
 
     [Fact]
-    public void Realtime_notification_payload_matches_frontend_contract()
+    public void Realtime_notification_payload_matches_notification_item_contract()
     {
-        AssertProperties<RealtimeNotificationPayload>(
-            "NotificationId",
-            "NotificationType",
-            "ReferenceId",
-            "ReferenceType",
+        AssertProperties<NotificationItemResponse>(
+            "Id",
+            "Type",
             "Title",
             "Content",
             "ImageUrl",
-            "CreatedAt");
+            "IsRead",
+            "CreatedAt",
+            "Sender",
+            "Reference");
     }
 
     [Fact]

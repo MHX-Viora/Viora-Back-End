@@ -94,9 +94,25 @@ public sealed class DeviceTokenHandlerTests
         public Task<DeviceToken?> GetByTokenAsync(string token, CancellationToken cancellationToken) =>
             Task.FromResult(DeviceTokens.SingleOrDefault(deviceToken => deviceToken.Token == token));
 
+        public Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DeviceToken>>(
+                DeviceTokens.Where(deviceToken => deviceToken.UserId == userId && deviceToken.IsActive).ToList());
+
         public Task AddAsync(DeviceToken deviceToken, CancellationToken cancellationToken)
         {
             DeviceTokens.Add(deviceToken);
+            return Task.CompletedTask;
+        }
+
+        public Task DeactivateAsync(string token, CancellationToken cancellationToken)
+        {
+            var deviceToken = DeviceTokens.SingleOrDefault(value => value.Token == token);
+            if (deviceToken is not null)
+            {
+                deviceToken.IsActive = false;
+                deviceToken.LastSeenAt = DateTime.UtcNow;
+            }
+
             return Task.CompletedTask;
         }
 

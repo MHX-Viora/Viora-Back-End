@@ -10,7 +10,9 @@ Implemented backend foundation:
 - `POST /api/device-token/register` upserts token and moves it to the current user.
 - `POST /api/device-token/unregister` marks the token inactive.
 - `INotificationService` creates a notification, saves it, sends `ReceiveNotification`, then calls push sender.
-- `IPushNotificationSender` is wired to `NoOpPushNotificationSender` until Firebase Admin SDK and credentials are added.
+- `IPushNotificationSender` is wired to `FirebasePushNotificationSender`.
+- Firebase config supports `Firebase:ServiceAccountJson` or `Firebase:ServiceAccountPath`.
+- Invalid/unregistered FCM tokens are marked inactive.
 - Frontend integration docs live in `docs/realtime-notifications.md`.
 
 Verification:
@@ -21,6 +23,5 @@ Verification:
 
 Next work:
 
-- Add Firebase Admin SDK package and a real FCM sender.
 - Decide whether to migrate existing notification creation paths to `INotificationService`.
 - Add message send/edit/read handlers to publish through `IRealtimeService`.
