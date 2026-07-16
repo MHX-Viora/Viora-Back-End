@@ -52,7 +52,8 @@ internal static class VideoInteractionGuard
 
 public sealed class ToggleVideoReactionHandler(
     IPostInteractionRepository repository,
-    IValidator<ToggleVideoReactionCommand> validator)
+    IValidator<ToggleVideoReactionCommand> validator,
+    INotificationService notificationService)
     : IRequestHandler<ToggleVideoReactionCommand, Result<VideoReactionResponse>>
 {
     public async Task<Result<VideoReactionResponse>> Handle(ToggleVideoReactionCommand request, CancellationToken cancellationToken)
@@ -66,6 +67,7 @@ public sealed class ToggleVideoReactionHandler(
         if (!valid.IsSuccess) return Result<VideoReactionResponse>.Failure(valid.Error!.Value, valid.Message!);
 
         VideoReactionResponse response = null!;
+        Notification? notification = null;
         await repository.ExecuteInTransactionAsync(async token =>
         {
             var reaction = await repository.GetReactionAsync(request.VideoId, request.UserId, token);
@@ -79,7 +81,7 @@ public sealed class ToggleVideoReactionHandler(
                     CreatedAt = DateTime.UtcNow
                 }, token);
                 video!.ReactionCount++;
-                await ReactPostHandler.AddPostNotificationAsync(repository, video, user!, NotificationType.PostLike, video.Id, token);
+                notification = await ReactPostHandler.AddPostNotificationAsync(repository, video, user!, NotificationType.PostLike, video.Id, token);
                 response = new VideoReactionResponse(true, video.ReactionCount);
                 return;
             }
@@ -88,6 +90,11 @@ public sealed class ToggleVideoReactionHandler(
             video!.ReactionCount = Math.Max(0, video.ReactionCount - 1);
             response = new VideoReactionResponse(false, video.ReactionCount);
         }, cancellationToken);
+
+        if (notification is not null)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
 
         return Result<VideoReactionResponse>.Success(response);
     }
@@ -131,7 +138,8 @@ public sealed class ToggleVideoSaveHandler(
 
 public sealed class ShareVideoHandler(
     IPostInteractionRepository repository,
-    IValidator<ShareVideoCommand> validator)
+    IValidator<ShareVideoCommand> validator,
+    INotificationService notificationService)
     : IRequestHandler<ShareVideoCommand, Result<VideoShareResponse>>
 {
     public async Task<Result<VideoShareResponse>> Handle(ShareVideoCommand request, CancellationToken cancellationToken)
@@ -144,11 +152,17 @@ public sealed class ShareVideoHandler(
         var valid = await VideoInteractionGuard.ValidateVideoAsync(repository, user, video, request.UserId, cancellationToken);
         if (!valid.IsSuccess) return Result<VideoShareResponse>.Failure(valid.Error!.Value, valid.Message!);
 
+        Notification? notification = null;
         await repository.ExecuteInTransactionAsync(async token =>
         {
             video!.ShareCount++;
-            await ReactPostHandler.AddPostNotificationAsync(repository, video, user!, NotificationType.PostShare, video.Id, token);
+            notification = await ReactPostHandler.AddPostNotificationAsync(repository, video, user!, NotificationType.PostShare, video.Id, token);
         }, cancellationToken);
+
+        if (notification is not null)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
 
         return Result<VideoShareResponse>.Success(new VideoShareResponse(video!.ShareCount));
     }
@@ -156,7 +170,8 @@ public sealed class ShareVideoHandler(
 
 public sealed class CreateVideoCommentHandler(
     IPostInteractionRepository repository,
-    IValidator<CreateVideoCommentCommand> validator)
+    IValidator<CreateVideoCommentCommand> validator,
+    INotificationService notificationService)
     : IRequestHandler<CreateVideoCommentCommand, Result<VideoCommentResponse>>
 {
     public async Task<Result<VideoCommentResponse>> Handle(CreateVideoCommentCommand request, CancellationToken cancellationToken)
@@ -178,12 +193,18 @@ public sealed class CreateVideoCommentHandler(
             Status = CommentStatus.Published
         };
 
+        Notification? notification = null;
         await repository.ExecuteInTransactionAsync(async token =>
         {
             await repository.AddCommentAsync(comment, token);
             video!.CommentCount++;
-            await ReactPostHandler.AddPostNotificationAsync(repository, video, user!, NotificationType.PostComment, video.Id, token);
+            notification = await ReactPostHandler.AddPostNotificationAsync(repository, video, user!, NotificationType.PostComment, video.Id, token);
         }, cancellationToken);
+
+        if (notification is not null)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
 
         return Result<VideoCommentResponse>.Success(VideoInteractionGuard.MapComment(comment));
     }
@@ -191,7 +212,8 @@ public sealed class CreateVideoCommentHandler(
 
 public sealed class ReplyVideoCommentHandler(
     IPostInteractionRepository repository,
-    IValidator<ReplyVideoCommentCommand> validator)
+    IValidator<ReplyVideoCommentCommand> validator,
+    INotificationService notificationService)
     : IRequestHandler<ReplyVideoCommentCommand, Result<VideoReplyResponse>>
 {
     public async Task<Result<VideoReplyResponse>> Handle(ReplyVideoCommentCommand request, CancellationToken cancellationToken)
@@ -220,23 +242,28 @@ public sealed class ReplyVideoCommentHandler(
             Status = CommentStatus.Published
         };
 
+        Notification? notification = null;
         await repository.ExecuteInTransactionAsync(async token =>
         {
             await repository.AddCommentAsync(reply, token);
             parent.ReplyCount++;
             if (parent.UserId != request.UserId)
             {
-                await repository.AddNotificationAsync(
-                    NotificationFactory.Create(
-                        parent.UserId,
-                        NotificationType.CommentReply,
-                        user,
-                        parent.Id,
-                        NotificationReferenceType.Comment,
-                        parent.Post.PostType),
-                    token);
+                notification = NotificationFactory.Create(
+                    parent.UserId,
+                    NotificationType.CommentReply,
+                    user,
+                    parent.Id,
+                    NotificationReferenceType.Comment,
+                    parent.Post.PostType);
+                await repository.AddNotificationAsync(notification, token);
             }
         }, cancellationToken);
+
+        if (notification is not null)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
 
         return Result<VideoReplyResponse>.Success(VideoInteractionGuard.MapReply(reply));
     }

@@ -27,6 +27,12 @@ public sealed class NotificationService(
         await repository.AddAsync(notification, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
 
+        await PublishAsync(notification, cancellationToken);
+        return notification;
+    }
+
+    public async Task PublishAsync(Notification notification, CancellationToken cancellationToken)
+    {
         var payload = new RealtimeNotificationPayload(
             notification.Id,
             notification.NotificationType,
@@ -49,14 +55,12 @@ public sealed class NotificationService(
                 notification.UserId,
                 notification.Title,
                 notification.Content,
-                BuildPushData(notification)), cancellationToken);
+            BuildPushData(notification)), cancellationToken);
         }
         catch (Exception exception)
         {
             _ = exception;
         }
-
-        return notification;
     }
 
     private static IReadOnlyDictionary<string, string> BuildPushData(Notification notification)

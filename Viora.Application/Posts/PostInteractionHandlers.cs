@@ -7,7 +7,8 @@ namespace Viora.Application.Posts;
 
 public sealed class ReactPostHandler(
     IPostInteractionRepository repository,
-    IValidator<ReactPostCommand> validator)
+    IValidator<ReactPostCommand> validator,
+    INotificationService notificationService)
     : IRequestHandler<ReactPostCommand, Result<PostReactionResponse>>
 {
     public async Task<Result<PostReactionResponse>> Handle(ReactPostCommand request, CancellationToken cancellationToken)
@@ -20,6 +21,7 @@ public sealed class ReactPostHandler(
         if (!valid.IsSuccess) return Result<PostReactionResponse>.Failure(valid.Error!.Value, valid.Message!);
 
         PostReactionResponse response = null!;
+        Notification? notification = null;
         await repository.ExecuteInTransactionAsync(async token =>
         {
             var reaction = await repository.GetReactionAsync(request.PostId, request.UserId, token);
@@ -33,7 +35,7 @@ public sealed class ReactPostHandler(
                     CreatedAt = DateTime.UtcNow
                 }, token);
                 post!.ReactionCount++;
-                await AddPostNotificationAsync(repository, post, user!, NotificationType.PostLike, post.Id, token);
+                notification = await AddPostNotificationAsync(repository, post, user!, NotificationType.PostLike, post.Id, token);
                 response = new PostReactionResponse(request.ReactionType, post.ReactionCount);
                 return;
             }
@@ -49,6 +51,11 @@ public sealed class ReactPostHandler(
             reaction.ReactionType = request.ReactionType;
             response = new PostReactionResponse(request.ReactionType, post!.ReactionCount);
         }, cancellationToken);
+
+        if (notification is not null)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
 
         return Result<PostReactionResponse>.Success(response);
     }
@@ -73,7 +80,7 @@ public sealed class ReactPostHandler(
         return Result<EmptyResponse>.Success(new EmptyResponse());
     }
 
-    internal static async Task AddPostNotificationAsync(
+    internal static async Task<Notification?> AddPostNotificationAsync(
         IPostInteractionRepository repository,
         Post post,
         User sender,
@@ -81,18 +88,18 @@ public sealed class ReactPostHandler(
         Guid referenceId,
         CancellationToken cancellationToken)
     {
-        if (post.UserId == sender.Id) return;
-        await repository.AddNotificationAsync(
-            NotificationFactory.Create(
-                post.UserId,
-                type,
-                sender,
-                referenceId,
-                type == NotificationType.CommentReply
-                    ? NotificationReferenceType.Comment
-                    : NotificationReferenceType.Post,
-                post.PostType),
-            cancellationToken);
+        if (post.UserId == sender.Id) return null;
+        var notification = NotificationFactory.Create(
+            post.UserId,
+            type,
+            sender,
+            referenceId,
+            type == NotificationType.CommentReply
+                ? NotificationReferenceType.Comment
+                : NotificationReferenceType.Post,
+            post.PostType);
+        await repository.AddNotificationAsync(notification, cancellationToken);
+        return notification;
     }
 
     internal static CommentResponse MapComment(Comment comment) => new(
@@ -113,7 +120,8 @@ public sealed class ReactPostHandler(
 
 public sealed class CreateCommentHandler(
     IPostInteractionRepository repository,
-    IValidator<CreateCommentCommand> validator)
+    IValidator<CreateCommentCommand> validator,
+    INotificationService notificationService)
     : IRequestHandler<CreateCommentCommand, Result<CommentResponse>>
 {
     public async Task<Result<CommentResponse>> Handle(CreateCommentCommand request, CancellationToken cancellationToken)
@@ -134,12 +142,18 @@ public sealed class CreateCommentHandler(
             Status = CommentStatus.Published
         };
 
+        Notification? notification = null;
         await repository.ExecuteInTransactionAsync(async token =>
         {
             await repository.AddCommentAsync(comment, token);
             post!.CommentCount++;
-            await ReactPostHandler.AddPostNotificationAsync(repository, post, user!, NotificationType.PostComment, post.Id, token);
+            notification = await ReactPostHandler.AddPostNotificationAsync(repository, post, user!, NotificationType.PostComment, post.Id, token);
         }, cancellationToken);
+
+        if (notification is not null)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
 
         return Result<CommentResponse>.Success(ReactPostHandler.MapComment(comment));
     }
@@ -147,7 +161,8 @@ public sealed class CreateCommentHandler(
 
 public sealed class ReplyCommentHandler(
     IPostInteractionRepository repository,
-    IValidator<ReplyCommentCommand> validator)
+    IValidator<ReplyCommentCommand> validator,
+    INotificationService notificationService)
     : IRequestHandler<ReplyCommentCommand, Result<CommentReplyListItemResponse>>
 {
     public async Task<Result<CommentReplyListItemResponse>> Handle(ReplyCommentCommand request, CancellationToken cancellationToken)
@@ -180,23 +195,28 @@ public sealed class ReplyCommentHandler(
             Status = CommentStatus.Published
         };
 
+        Notification? notification = null;
         await repository.ExecuteInTransactionAsync(async token =>
         {
             await repository.AddCommentAsync(reply, token);
             parent.ReplyCount++;
             if (parent.UserId != request.UserId)
             {
-                await repository.AddNotificationAsync(
-                    NotificationFactory.Create(
-                        parent.UserId,
-                        NotificationType.CommentReply,
-                        user,
-                        parent.Id,
-                        NotificationReferenceType.Comment,
-                        parent.Post.PostType),
-                    token);
+                notification = NotificationFactory.Create(
+                    parent.UserId,
+                    NotificationType.CommentReply,
+                    user,
+                    parent.Id,
+                    NotificationReferenceType.Comment,
+                    parent.Post.PostType);
+                await repository.AddNotificationAsync(notification, token);
             }
         }, cancellationToken);
+
+        if (notification is not null)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
 
         return Result<CommentReplyListItemResponse>.Success(new CommentReplyListItemResponse(
             reply.Id,
@@ -240,7 +260,9 @@ public sealed class ToggleSavePostHandler(IPostInteractionRepository repository)
     }
 }
 
-public sealed class SharePostHandler(IPostInteractionRepository repository)
+public sealed class SharePostHandler(
+    IPostInteractionRepository repository,
+    INotificationService notificationService)
     : IRequestHandler<SharePostCommand, Result<SharePostResponse>>
 {
     public async Task<Result<SharePostResponse>> Handle(SharePostCommand request, CancellationToken cancellationToken)
@@ -256,11 +278,17 @@ public sealed class SharePostHandler(IPostInteractionRepository repository)
         if (!valid.IsSuccess) return Result<SharePostResponse>.Failure(valid.Error!.Value, valid.Message!);
         var post = original!;
 
+        Notification? notification = null;
         await repository.ExecuteInTransactionAsync(async token =>
         {
             post.ShareCount++;
-            await ReactPostHandler.AddPostNotificationAsync(repository, post, user!, NotificationType.PostShare, post.Id, token);
+            notification = await ReactPostHandler.AddPostNotificationAsync(repository, post, user!, NotificationType.PostShare, post.Id, token);
         }, cancellationToken);
+
+        if (notification is not null)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
 
         return Result<SharePostResponse>.Success(new SharePostResponse(true, post.ShareCount));
     }

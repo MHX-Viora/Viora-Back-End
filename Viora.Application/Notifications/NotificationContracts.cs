@@ -72,6 +72,7 @@ public sealed record SendNotificationCommand(
 public interface INotificationService
 {
     Task<Notification> SendAsync(SendNotificationCommand command, CancellationToken cancellationToken);
+    Task PublishAsync(Notification notification, CancellationToken cancellationToken);
 }
 
 public interface INotificationRepository
