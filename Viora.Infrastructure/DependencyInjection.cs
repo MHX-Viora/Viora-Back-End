@@ -124,6 +124,7 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionRegistry, ConnectionRegistry>();
         services.AddSingleton<IUserIdProvider, UserIdProvider>();
         services.AddSingleton<IFirebaseInitializer, FirebaseInitializer>();
+        services.AddSingleton<IFirebaseMessagingClientFactory, FirebaseMessagingClientFactory>();
         services.AddScoped<IRealtimeService, SignalRRealtimeService>();
         services.AddScoped<IPushNotificationSender, FirebasePushNotificationSender>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();

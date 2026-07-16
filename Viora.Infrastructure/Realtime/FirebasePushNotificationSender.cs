@@ -1,3 +1,4 @@
+using FirebaseAdmin;
 using FirebaseAdmin.Messaging;
 using Microsoft.Extensions.Logging;
 using Viora.Application.Realtime;
@@ -6,13 +7,13 @@ namespace Viora.Infrastructure.Realtime;
 
 public sealed class FirebasePushNotificationSender(
     IDeviceTokenRepository deviceTokenRepository,
-    IFirebaseInitializer firebaseInitializer,
+    IFirebaseMessagingClientFactory firebaseMessagingClientFactory,
     ILogger<FirebasePushNotificationSender> logger) : IPushNotificationSender
 {
     public async Task SendAsync(PushMessage message, CancellationToken cancellationToken)
     {
-        var app = firebaseInitializer.GetApp();
-        if (app is null)
+        var client = firebaseMessagingClientFactory.CreateClient();
+        if (client is null)
         {
             logger.LogWarning("Firebase app is not configured. Push skipped for user {UserId}.", message.UserId);
             return;
@@ -25,22 +26,62 @@ public sealed class FirebasePushNotificationSender(
             return;
         }
 
-        var messaging = FirebaseMessaging.GetMessaging(app);
         foreach (var deviceToken in tokens)
         {
-            await SendToTokenAsync(messaging, message, deviceToken.Token, cancellationToken);
+            await SendToTokenAsync(client, message, deviceToken.Token, cancellationToken);
         }
     }
 
     private async Task SendToTokenAsync(
-        FirebaseMessaging messaging,
+        IFirebaseMessagingClient client,
         PushMessage message,
         string token,
         CancellationToken cancellationToken)
     {
         try
         {
-            await messaging.SendAsync(new Message
+            await client.SendAsync(message, token, cancellationToken);
+        }
+        catch (FirebasePushTokenInvalidException exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Firebase token is invalid and will be deactivated.");
+            await deviceTokenRepository.DeactivateAsync(token, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to send Firebase push notification.");
+        }
+    }
+}
+
+public interface IFirebaseMessagingClientFactory
+{
+    IFirebaseMessagingClient? CreateClient();
+}
+
+public interface IFirebaseMessagingClient
+{
+    Task SendAsync(PushMessage message, string token, CancellationToken cancellationToken);
+}
+
+public sealed class FirebaseMessagingClientFactory(IFirebaseInitializer firebaseInitializer) : IFirebaseMessagingClientFactory
+{
+    public IFirebaseMessagingClient? CreateClient()
+    {
+        var app = firebaseInitializer.GetApp();
+        return app is null ? null : new FirebaseMessagingClient(app);
+    }
+}
+
+public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagingClient
+{
+    public async Task SendAsync(PushMessage message, string token, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await FirebaseMessaging.GetMessaging(app).SendAsync(new Message
             {
                 Token = token,
                 Notification = new Notification
@@ -53,15 +94,7 @@ public sealed class FirebasePushNotificationSender(
         }
         catch (FirebaseMessagingException exception) when (IsInvalidToken(exception))
         {
-            logger.LogWarning(
-                exception,
-                "Firebase token is invalid and will be deactivated. Messaging error: {ErrorCode}.",
-                exception.MessagingErrorCode);
-            await deviceTokenRepository.DeactivateAsync(token, cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "Failed to send Firebase push notification.");
+            throw new FirebasePushTokenInvalidException(exception);
         }
     }
 
@@ -70,3 +103,6 @@ public sealed class FirebasePushNotificationSender(
             or MessagingErrorCode.Unregistered
             or MessagingErrorCode.SenderIdMismatch;
 }
+
+public sealed class FirebasePushTokenInvalidException(Exception innerException)
+    : Exception("Firebase push token is invalid.", innerException);
