@@ -9,6 +9,9 @@ public sealed class DeviceTokenRepository(AppDbContext dbContext) : IDeviceToken
     public Task<DeviceToken?> GetByTokenAsync(string token, CancellationToken cancellationToken) =>
         dbContext.DeviceTokens.SingleOrDefaultAsync(deviceToken => deviceToken.Token == token, cancellationToken);
 
+    public Task<DeviceToken?> GetByDeviceIdAsync(string deviceId, CancellationToken cancellationToken) =>
+        dbContext.DeviceTokens.SingleOrDefaultAsync(deviceToken => deviceToken.DeviceId == deviceId, cancellationToken);
+
     public async Task<DeviceToken?> GetByTokenOrDeviceIdAsync(
         string token,
         string? deviceId,
@@ -20,9 +23,7 @@ public sealed class DeviceTokenRepository(AppDbContext dbContext) : IDeviceToken
             return byToken;
         }
 
-        return await dbContext.DeviceTokens.SingleOrDefaultAsync(
-            deviceToken => deviceToken.DeviceId == deviceId,
-            cancellationToken);
+        return await GetByDeviceIdAsync(deviceId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken) =>

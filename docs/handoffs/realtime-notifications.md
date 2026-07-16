@@ -6,10 +6,10 @@ Implemented backend foundation:
 - JWT auth for SignalR via `access_token` query on `/hubs/realtime`.
 - `IRealtimeService` wraps SignalR user/group sends.
 - `IConnectionRegistry` tracks many connections per user.
-- `UserDevices` table stores device rows with unique `FcmToken`, unique nullable `DeviceId`, and active flag.
-- `POST /api/device/register` upserts token/device id and moves the device to the current user.
-- `POST /api/device/unregister` marks the token inactive.
-- Old `/api/device-token/register` and `/api/device-token/unregister` routes remain backward compatible.
+- `DeviceTokens` table stores device rows with unique `Token`, unique nullable `DeviceId`, and active flag.
+- `POST /api/device-token/register` upserts token/device id and moves the device to the current user.
+- `POST /api/device-token/unregister` marks the token inactive.
+- `/api/device/register` and `/api/device/unregister` remain compatible aliases.
 - `INotificationService` creates a notification, saves it, sends `ReceiveNotification`, then calls push sender.
 - `IPushNotificationSender` is wired to `FirebasePushNotificationSender`.
 - Firebase config supports `Firebase:ServiceAccountJson` or `Firebase:ServiceAccountPath`.

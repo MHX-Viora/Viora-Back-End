@@ -56,6 +56,7 @@ public interface IPushNotificationSender
 public interface IDeviceTokenRepository
 {
     Task<DeviceToken?> GetByTokenAsync(string token, CancellationToken cancellationToken);
+    Task<DeviceToken?> GetByDeviceIdAsync(string deviceId, CancellationToken cancellationToken);
     Task<DeviceToken?> GetByTokenOrDeviceIdAsync(string token, string? deviceId, CancellationToken cancellationToken);
     Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken);
     Task AddAsync(DeviceToken deviceToken, CancellationToken cancellationToken);

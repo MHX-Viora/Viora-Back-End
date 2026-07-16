@@ -28,6 +28,16 @@ public sealed class RegisterDeviceTokenHandler(
             };
             await repository.AddAsync(deviceToken, cancellationToken);
         }
+        else if (normalizedDeviceId is not null)
+        {
+            var existingDevice = await repository.GetByDeviceIdAsync(normalizedDeviceId, cancellationToken);
+            if (existingDevice is not null && existingDevice.Id != deviceToken.Id)
+            {
+                existingDevice.DeviceId = null;
+                existingDevice.IsActive = false;
+                existingDevice.LastSeenAt = now;
+            }
+        }
 
         deviceToken.UserId = request.UserId;
         deviceToken.Token = request.Token;

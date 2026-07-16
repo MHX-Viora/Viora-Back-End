@@ -102,7 +102,7 @@ await startRealtime();
 Register after login, after FCM permission is granted, and whenever FCM rotates the token.
 
 ```http
-POST /api/device/register
+POST /api/device-token/register
 Authorization: Bearer <access_token>
 Content-Type: application/json
 ```
@@ -141,7 +141,7 @@ Example:
 
 ```ts
 export async function registerDeviceToken(apiUrl: string, accessToken: string, fcmToken: string) {
-  const response = await fetch(`${apiUrl}/api/device/register`, {
+  const response = await fetch(`${apiUrl}/api/device-token/register`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -163,14 +163,14 @@ export async function registerDeviceToken(apiUrl: string, accessToken: string, f
 
 Backend behavior:
 
-- Tokens are stored in `UserDevices.FcmToken`.
-- `FcmToken` is unique.
+- Tokens are stored in `DeviceTokens.Token`.
+- `Token` is unique.
 - `deviceId` is unique when provided, so one physical device belongs to one user at a time.
 - If the token or device id already exists, backend moves it to the current user and updates the token.
 - `isActive = true`.
 - `lastSeenAt` is updated.
 - No duplicate token rows are created.
-- Backward-compatible route: `POST /api/device-token/register`.
+- Compatible route: `POST /api/device/register`.
 
 ## Unregister FCM Device Token
 
@@ -510,7 +510,7 @@ No notification event received:
 Push not received:
 
 - Confirm device permission is granted.
-- Confirm FCM token is registered with `POST /api/device/register`.
+- Confirm FCM token is registered with `POST /api/device-token/register`.
 - Confirm token is active for the current user.
 - Confirm backend has one of these configs:
   - `Firebase__ServiceAccountJson`

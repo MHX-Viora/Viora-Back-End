@@ -12,7 +12,9 @@ namespace viora_BE.Controllers;
 [ApiController]
 [Route("api/device-token")]
 [Authorize]
-public sealed class DeviceTokensController(IMediator mediator) : ControllerBase
+public sealed class DeviceTokensController(
+    IMediator mediator,
+    ILogger<DeviceTokensController> logger) : ControllerBase
 {
     [HttpPost("register")]
     [HttpPost("~/api/device/register")]
@@ -22,21 +24,40 @@ public sealed class DeviceTokensController(IMediator mediator) : ControllerBase
         [FromBody] RegisterDeviceTokenRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var currentUserId)) return Unauthorized();
+        if (!TryGetCurrentUserId(out var currentUserId))
+        {
+            return Unauthorized(new DeviceTokenResponse(false, false, "Access token is missing user_id claim."));
+        }
+
         if (!TryParsePlatform(request.Platform, out var platform))
         {
             return BadRequest(new DeviceTokenResponse(false, false, "Platform must be 0, 1, 2, 3, Android, Ios, Web, or Other."));
         }
 
-        var response = await mediator.Send(new RegisterDeviceTokenCommand(
-            currentUserId,
-            request.Token,
-            request.DeviceId,
-            request.DeviceName,
-            platform,
-            request.AppVersion), cancellationToken);
+        try
+        {
+            var response = await mediator.Send(new RegisterDeviceTokenCommand(
+                currentUserId,
+                request.Token,
+                request.DeviceId,
+                request.DeviceName,
+                platform,
+                request.AppVersion), cancellationToken);
 
-        return response.Success ? Ok(response) : BadRequest(response);
+            return response.Success ? Ok(response) : BadRequest(response);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Failed to register device token for user {UserId}. DeviceId: {DeviceId}, Platform: {Platform}.",
+                currentUserId,
+                request.DeviceId,
+                platform);
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new DeviceTokenResponse(false, false, "Failed to register device token. Check server logs for details."));
+        }
     }
 
     [HttpPost("unregister")]
@@ -47,13 +68,26 @@ public sealed class DeviceTokensController(IMediator mediator) : ControllerBase
         [FromBody] UnregisterDeviceTokenRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var currentUserId)) return Unauthorized();
+        if (!TryGetCurrentUserId(out var currentUserId))
+        {
+            return Unauthorized(new DeviceTokenResponse(false, false, "Access token is missing user_id claim."));
+        }
 
-        var response = await mediator.Send(
-            new UnregisterDeviceTokenCommand(currentUserId, request.Token),
-            cancellationToken);
+        try
+        {
+            var response = await mediator.Send(
+                new UnregisterDeviceTokenCommand(currentUserId, request.Token),
+                cancellationToken);
 
-        return response.Success ? Ok(response) : BadRequest(response);
+            return response.Success ? Ok(response) : BadRequest(response);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to unregister device token for user {UserId}.", currentUserId);
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new DeviceTokenResponse(false, false, "Failed to unregister device token. Check server logs for details."));
+        }
     }
 
     private bool TryGetCurrentUserId(out Guid userId)

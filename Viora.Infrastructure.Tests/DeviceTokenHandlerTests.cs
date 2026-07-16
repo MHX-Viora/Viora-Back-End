@@ -97,6 +97,46 @@ public sealed class DeviceTokenHandlerTests
     }
 
     [Fact]
+    public async Task Register_clears_old_device_row_when_existing_token_uses_same_device_id()
+    {
+        var currentUserId = Guid.NewGuid();
+        var tokenRow = new DeviceToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            Token = "new-token",
+            IsActive = false,
+            Platform = DevicePlatform.Android
+        };
+        var oldDeviceRow = new DeviceToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            Token = "old-token",
+            DeviceId = "device-1",
+            IsActive = true,
+            Platform = DevicePlatform.Android
+        };
+        var repository = new FakeDeviceTokenRepository(tokenRow, oldDeviceRow);
+        var handler = new RegisterDeviceTokenHandler(repository, new RegisterDeviceTokenValidator());
+
+        var response = await handler.Handle(new RegisterDeviceTokenCommand(
+            currentUserId,
+            "new-token",
+            "device-1",
+            "Samsung S24",
+            DevicePlatform.Android,
+            "1.0.0"), CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.Equal("device-1", tokenRow.DeviceId);
+        Assert.Equal(currentUserId, tokenRow.UserId);
+        Assert.True(tokenRow.IsActive);
+        Assert.Null(oldDeviceRow.DeviceId);
+        Assert.False(oldDeviceRow.IsActive);
+    }
+
+    [Fact]
     public async Task Unregister_marks_existing_token_inactive()
     {
         var userId = Guid.NewGuid();
@@ -127,10 +167,16 @@ public sealed class DeviceTokenHandlerTests
         public Task<DeviceToken?> GetByTokenAsync(string token, CancellationToken cancellationToken) =>
             Task.FromResult(DeviceTokens.SingleOrDefault(deviceToken => deviceToken.Token == token));
 
-        public Task<DeviceToken?> GetByTokenOrDeviceIdAsync(string token, string? deviceId, CancellationToken cancellationToken) =>
-            Task.FromResult(DeviceTokens.SingleOrDefault(deviceToken =>
-                deviceToken.Token == token ||
-                (deviceId != null && deviceToken.DeviceId == deviceId)));
+        public Task<DeviceToken?> GetByDeviceIdAsync(string deviceId, CancellationToken cancellationToken) =>
+            Task.FromResult(DeviceTokens.SingleOrDefault(deviceToken => deviceToken.DeviceId == deviceId));
+
+        public Task<DeviceToken?> GetByTokenOrDeviceIdAsync(string token, string? deviceId, CancellationToken cancellationToken)
+        {
+            var byToken = DeviceTokens.SingleOrDefault(deviceToken => deviceToken.Token == token);
+            return Task.FromResult(byToken ?? (deviceId is null
+                ? null
+                : DeviceTokens.SingleOrDefault(deviceToken => deviceToken.DeviceId == deviceId)));
+        }
 
         public Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<DeviceToken>>(

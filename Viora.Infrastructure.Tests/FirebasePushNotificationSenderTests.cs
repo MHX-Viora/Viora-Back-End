@@ -106,10 +106,16 @@ public sealed class FirebasePushNotificationSenderTests
         public Task<DeviceToken?> GetByTokenAsync(string token, CancellationToken cancellationToken) =>
             Task.FromResult(tokens.SingleOrDefault(deviceToken => deviceToken.Token == token));
 
-        public Task<DeviceToken?> GetByTokenOrDeviceIdAsync(string token, string? deviceId, CancellationToken cancellationToken) =>
-            Task.FromResult(tokens.SingleOrDefault(deviceToken =>
-                deviceToken.Token == token ||
-                (deviceId is not null && deviceToken.DeviceId == deviceId)));
+        public Task<DeviceToken?> GetByDeviceIdAsync(string deviceId, CancellationToken cancellationToken) =>
+            Task.FromResult(tokens.SingleOrDefault(deviceToken => deviceToken.DeviceId == deviceId));
+
+        public Task<DeviceToken?> GetByTokenOrDeviceIdAsync(string token, string? deviceId, CancellationToken cancellationToken)
+        {
+            var byToken = tokens.SingleOrDefault(deviceToken => deviceToken.Token == token);
+            return Task.FromResult(byToken ?? (deviceId is null
+                ? null
+                : tokens.SingleOrDefault(deviceToken => deviceToken.DeviceId == deviceId)));
+        }
 
         public Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<DeviceToken>>(tokens

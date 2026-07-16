@@ -32,7 +32,7 @@ public sealed class PersistenceModelTests
         Assert.Contains("Users", tables);
         Assert.Contains("Posts", tables);
         Assert.Contains("Conversations", tables);
-        Assert.Contains("UserDevices", tables);
+        Assert.Contains("DeviceTokens", tables);
         Assert.Contains("Reports", tables);
     }
 

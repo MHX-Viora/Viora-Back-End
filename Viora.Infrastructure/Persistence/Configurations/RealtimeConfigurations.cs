@@ -8,9 +8,9 @@ internal sealed class DeviceTokenConfiguration : IEntityTypeConfiguration<Device
 {
     public void Configure(EntityTypeBuilder<DeviceToken> builder)
     {
-        builder.ToTable("UserDevices");
+        builder.ToTable("DeviceTokens");
         builder.HasKey(x => x.Id);
-        builder.Property(x => x.Token).HasColumnName("FcmToken").IsRequired();
+        builder.Property(x => x.Token).IsRequired();
         builder.Property(x => x.DeviceId).HasMaxLength(255);
         builder.Property(x => x.DeviceName).HasMaxLength(255);
         builder.Property(x => x.AppVersion).HasMaxLength(50);
