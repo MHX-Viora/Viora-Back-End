@@ -28,7 +28,7 @@ public sealed class FirebasePushNotificationSender(
 
         foreach (var deviceToken in tokens)
         {
-            await SendToTokenAsync(client, message, deviceToken.Token, cancellationToken);
+            await SendToTokenAsync(client, message, deviceToken.Token, message.UserId, cancellationToken);
         }
     }
 
@@ -36,24 +36,39 @@ public sealed class FirebasePushNotificationSender(
         IFirebaseMessagingClient client,
         PushMessage message,
         string token,
+        Guid userId,
         CancellationToken cancellationToken)
     {
         try
         {
-            await client.SendAsync(message, token, cancellationToken);
+            var messageId = await client.SendAsync(message, token, cancellationToken);
+            logger.LogInformation(
+                "Firebase push sent successfully. UserId: {UserId}, MessageId: {MessageId}, TokenSuffix: {TokenSuffix}.",
+                userId,
+                messageId,
+                GetTokenSuffix(token));
         }
         catch (FirebasePushTokenInvalidException exception)
         {
             logger.LogWarning(
                 exception,
-                "Firebase token is invalid and will be deactivated.");
+                "Firebase token is invalid and will be deactivated. UserId: {UserId}, TokenSuffix: {TokenSuffix}.",
+                userId,
+                GetTokenSuffix(token));
             await deviceTokenRepository.DeactivateAsync(token, cancellationToken);
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Failed to send Firebase push notification.");
+            logger.LogError(
+                exception,
+                "Failed to send Firebase push notification. UserId: {UserId}, TokenSuffix: {TokenSuffix}.",
+                userId,
+                GetTokenSuffix(token));
         }
     }
+
+    private static string GetTokenSuffix(string token) =>
+        token.Length <= 8 ? token : token[^8..];
 }
 
 public interface IFirebaseMessagingClientFactory
@@ -63,7 +78,7 @@ public interface IFirebaseMessagingClientFactory
 
 public interface IFirebaseMessagingClient
 {
-    Task SendAsync(PushMessage message, string token, CancellationToken cancellationToken);
+    Task<string> SendAsync(PushMessage message, string token, CancellationToken cancellationToken);
 }
 
 public sealed class FirebaseMessagingClientFactory(IFirebaseInitializer firebaseInitializer) : IFirebaseMessagingClientFactory
@@ -77,26 +92,41 @@ public sealed class FirebaseMessagingClientFactory(IFirebaseInitializer firebase
 
 public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagingClient
 {
-    public async Task SendAsync(PushMessage message, string token, CancellationToken cancellationToken)
+    public async Task<string> SendAsync(PushMessage message, string token, CancellationToken cancellationToken)
     {
         try
         {
-            await FirebaseMessaging.GetMessaging(app).SendAsync(new Message
-            {
-                Token = token,
-                Notification = new Notification
-                {
-                    Title = message.Title,
-                    Body = message.Body
-                },
-                Data = message.Data.ToDictionary(pair => pair.Key, pair => pair.Value)
-            }, dryRun: false, cancellationToken);
+            return await FirebaseMessaging.GetMessaging(app).SendAsync(
+                BuildFirebaseMessage(message, token),
+                dryRun: false,
+                cancellationToken);
         }
         catch (FirebaseMessagingException exception) when (IsInvalidToken(exception))
         {
             throw new FirebasePushTokenInvalidException(exception);
         }
     }
+
+    public static Message BuildFirebaseMessage(PushMessage message, string token) => new()
+    {
+        Token = token,
+        Notification = new Notification
+        {
+            Title = message.Title,
+            Body = message.Body
+        },
+        Data = message.Data.ToDictionary(pair => pair.Key, pair => pair.Value),
+        Android = new AndroidConfig
+        {
+            Priority = Priority.High,
+            Notification = new AndroidNotification
+            {
+                ChannelId = "default",
+                Sound = "default",
+                DefaultSound = true
+            }
+        }
+    };
 
     private static bool IsInvalidToken(FirebaseMessagingException exception) =>
         exception.MessagingErrorCode is MessagingErrorCode.InvalidArgument

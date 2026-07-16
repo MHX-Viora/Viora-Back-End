@@ -2,6 +2,7 @@ using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace Viora.Infrastructure.Realtime;
 
@@ -46,10 +47,12 @@ public sealed class FirebaseInitializer(
         if (!string.IsNullOrWhiteSpace(firebaseOptions.ServiceAccountJson))
         {
             credential = GoogleCredential.FromJson(firebaseOptions.ServiceAccountJson);
+            LogProjectId(firebaseOptions.ServiceAccountJson);
         }
         else if (!string.IsNullOrWhiteSpace(firebaseOptions.ServiceAccountPath))
         {
             credential = GoogleCredential.FromFile(firebaseOptions.ServiceAccountPath);
+            LogProjectId(File.ReadAllText(firebaseOptions.ServiceAccountPath));
         }
 
         if (credential is null)
@@ -59,9 +62,29 @@ public sealed class FirebaseInitializer(
             return null;
         }
 
-        return FirebaseApp.Create(new AppOptions
+        var firebaseApp = FirebaseApp.Create(new AppOptions
         {
             Credential = credential
         });
+        logger.LogInformation("Firebase Admin app initialized.");
+        return firebaseApp;
+    }
+
+    private void LogProjectId(string serviceAccountJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(serviceAccountJson);
+            if (document.RootElement.TryGetProperty("project_id", out var projectId))
+            {
+                logger.LogInformation(
+                    "Firebase service account project_id: {ProjectId}. Confirm it matches android google-services.json.",
+                    projectId.GetString());
+            }
+        }
+        catch (JsonException exception)
+        {
+            logger.LogWarning(exception, "Could not parse Firebase service account project_id for diagnostics.");
+        }
     }
 }

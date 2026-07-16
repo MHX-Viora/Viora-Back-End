@@ -13,6 +13,7 @@ Implemented backend foundation:
 - `INotificationService` creates a notification, saves it, sends `ReceiveNotification`, then calls push sender.
 - `IPushNotificationSender` is wired to `FirebasePushNotificationSender`.
 - Firebase config supports `Firebase:ServiceAccountJson` or `Firebase:ServiceAccountPath`.
+- Android FCM messages include `Notification`, data, high priority, channel id `default`, and default sound.
 - Invalid/unregistered FCM tokens are marked inactive.
 - Realtime and FCM data include the full notification item shape used by `GET /api/notifications`.
 - Frontend integration docs live in `docs/realtime-notifications.md`.

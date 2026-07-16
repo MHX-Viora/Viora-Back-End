@@ -399,7 +399,21 @@ connection.on("UserOffline", payload => {
 
 ## Push Notification Data
 
-FCM data payload values are strings.
+FCM data payload values are strings. Backend sends both a `notification` payload and `data` payload so Android can show the notification in the system tray when the app is killed.
+
+Android config used by backend:
+
+```json
+{
+  "priority": "high",
+  "notification": {
+    "channelId": "default",
+    "sound": "default"
+  }
+}
+```
+
+The Android app must create a notification channel with id `default`. The Firebase service account project id in backend logs must match the Android `google-services.json` project.
 
 Notification push data:
 

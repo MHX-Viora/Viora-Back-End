@@ -54,6 +54,25 @@ public sealed class FirebasePushNotificationSenderTests
         Assert.Contains("dead-token", repository.DeactivatedTokens);
     }
 
+    [Fact]
+    public void BuildFirebaseMessage_includes_android_notification_payload()
+    {
+        var message = CreateMessage();
+
+        var firebaseMessage = FirebaseMessagingClient.BuildFirebaseMessage(message, "fcm-token");
+
+        Assert.Equal("fcm-token", firebaseMessage.Token);
+        Assert.NotNull(firebaseMessage.Notification);
+        Assert.Equal(message.Title, firebaseMessage.Notification.Title);
+        Assert.Equal(message.Body, firebaseMessage.Notification.Body);
+        Assert.Equal(message.Data["id"], firebaseMessage.Data["id"]);
+        Assert.NotNull(firebaseMessage.Android);
+        Assert.Equal(FirebaseAdmin.Messaging.Priority.High, firebaseMessage.Android.Priority);
+        Assert.NotNull(firebaseMessage.Android.Notification);
+        Assert.Equal("default", firebaseMessage.Android.Notification.ChannelId);
+        Assert.Equal("default", firebaseMessage.Android.Notification.Sound);
+    }
+
     private static FirebasePushNotificationSender CreateSender(
         FakeDeviceTokenRepository repository,
         FakeFirebaseMessagingClient? client) =>
@@ -84,7 +103,7 @@ public sealed class FirebasePushNotificationSenderTests
         public List<string> SentTokens { get; } = [];
         public List<PushMessage> SentMessages { get; } = [];
 
-        public Task SendAsync(PushMessage message, string token, CancellationToken cancellationToken)
+        public Task<string> SendAsync(PushMessage message, string token, CancellationToken cancellationToken)
         {
             if (token == InvalidToken)
             {
@@ -93,7 +112,7 @@ public sealed class FirebasePushNotificationSenderTests
 
             SentTokens.Add(token);
             SentMessages.Add(message);
-            return Task.CompletedTask;
+            return Task.FromResult("projects/viora/messages/test-message-id");
         }
     }
 
