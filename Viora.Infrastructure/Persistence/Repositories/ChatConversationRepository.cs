@@ -66,17 +66,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                         member.Conversation.LastMessage.SenderUser.DisplayName,
                         member.Conversation.LastMessage.MessageType,
                         member.Conversation.LastMessage.Content,
-                        member.Conversation.LastMessage.Attachments
-                            .OrderBy(attachment => attachment.Id)
-                            .Select(attachment => new ChatMessageAttachmentResponse(
-                                attachment.Id,
-                                attachment.FileUrl,
-                                attachment.FileName,
-                                attachment.MimeType,
-                                attachment.ThumbnailUrl,
-                                attachment.FileSize,
-                                attachment.Duration))
-                            .ToList(),
+                        Array.Empty<ChatMessageAttachmentResponse>(),
                         member.Conversation.LastMessage.CreatedAt,
                         member.Conversation.LastMessage.SenderUserId == query.UserId),
                 UnreadCount = member.Conversation.Messages.Count(message =>
@@ -131,6 +121,8 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 conversation.IsPinned,
                 conversation.LastMessageAt))
             .ToListAsync(cancellationToken);
+
+        await PopulateLastMessageAttachmentsAsync(items, cancellationToken);
 
         return new ChatConversationListResponse(page, pageSize, totalItems, totalPages, items);
     }
@@ -264,11 +256,12 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             new ChatMessageListResponse(page, pageSize, totalItems, totalPages, items));
     }
 
-    public Task<ChatConversationItemResponse?> GetConversationItemAsync(
+    public async Task<ChatConversationItemResponse?> GetConversationItemAsync(
         Guid userId,
         Guid conversationId,
-        CancellationToken cancellationToken) =>
-        dbContext.ConversationMembers
+        CancellationToken cancellationToken)
+    {
+        var item = await dbContext.ConversationMembers
             .AsNoTracking()
             .Where(member =>
                 member.UserId == userId &&
@@ -305,17 +298,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                         member.Conversation.LastMessage.SenderUser.DisplayName,
                         member.Conversation.LastMessage.MessageType,
                         member.Conversation.LastMessage.Content,
-                        member.Conversation.LastMessage.Attachments
-                            .OrderBy(attachment => attachment.Id)
-                            .Select(attachment => new ChatMessageAttachmentResponse(
-                                attachment.Id,
-                                attachment.FileUrl,
-                                attachment.FileName,
-                                attachment.MimeType,
-                                attachment.ThumbnailUrl,
-                                attachment.FileSize,
-                                attachment.Duration))
-                            .ToList(),
+                        Array.Empty<ChatMessageAttachmentResponse>(),
                         member.Conversation.LastMessage.CreatedAt,
                         member.Conversation.LastMessage.SenderUserId == userId),
                 UnreadCount = member.Conversation.Messages.Count(message =>
@@ -345,6 +328,14 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 conversation.IsPinned,
                 conversation.LastMessageAt))
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (item is not null)
+        {
+            await PopulateLastMessageAttachmentsAsync([item], cancellationToken);
+        }
+
+        return item;
+    }
 
     public async Task<ChatResult<SendChatMessageRepositoryResult>> SendMessageAsync(
         SendChatMessageCommand command,
@@ -559,6 +550,60 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
 
         return ChatResult<MarkConversationReadRepositoryResult>.Success(
             new MarkConversationReadRepositoryResult(response, memberIds, didUpdate));
+    }
+
+    private async Task PopulateLastMessageAttachmentsAsync(
+        List<ChatConversationItemResponse> items,
+        CancellationToken cancellationToken)
+    {
+        var messageIds = items
+            .Select(item => item.LastMessage?.Id)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToArray();
+        if (messageIds.Length == 0)
+        {
+            return;
+        }
+
+        var attachments = await dbContext.MessageAttachments
+            .AsNoTracking()
+            .Where(attachment => messageIds.Contains(attachment.MessageId))
+            .OrderBy(attachment => attachment.Id)
+            .Select(attachment => new
+            {
+                attachment.MessageId,
+                Attachment = new ChatMessageAttachmentResponse(
+                    attachment.Id,
+                    attachment.FileUrl,
+                    attachment.FileName,
+                    attachment.MimeType,
+                    attachment.ThumbnailUrl,
+                    attachment.FileSize,
+                    attachment.Duration)
+            })
+            .ToListAsync(cancellationToken);
+        var attachmentsByMessage = attachments
+            .GroupBy(value => value.MessageId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(value => value.Attachment).ToList());
+
+        for (var index = 0; index < items.Count; index++)
+        {
+            var lastMessage = items[index].LastMessage;
+            if (lastMessage is null ||
+                !attachmentsByMessage.TryGetValue(lastMessage.Id, out var messageAttachments))
+            {
+                continue;
+            }
+
+            items[index] = items[index] with
+            {
+                LastMessage = lastMessage with { Attachments = messageAttachments }
+            };
+        }
     }
 
     private static bool CanSendToGroup(
