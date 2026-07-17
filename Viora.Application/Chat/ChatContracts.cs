@@ -2,6 +2,7 @@ using MediatR;
 using System.Text.Json;
 using FluentValidation;
 using Viora.Application.Realtime;
+using Viora.Application.Posts;
 using Viora.Domain.Entities;
 
 namespace Viora.Application.Chat;
@@ -31,6 +32,10 @@ public sealed record MarkConversationReadCommand(
     Guid UserId,
     Guid ConversationId) : IRequest<ChatResult<MarkConversationReadResponse>>;
 
+public sealed record UploadChatAttachmentsCommand(
+    Guid UserId,
+    IReadOnlyList<CreatePostFile> Files) : IRequest<ChatResult<IReadOnlyList<ChatAttachmentUploadResponse>>>;
+
 public sealed record SendChatMessageAttachmentRequest(
     string FileUrl,
     string? FileName,
@@ -38,6 +43,14 @@ public sealed record SendChatMessageAttachmentRequest(
     string? ThumbnailUrl,
     long? FileSize,
     int? Duration);
+
+public sealed record ChatAttachmentUploadResponse(
+    string FileUrl,
+    string FileName,
+    string? MimeType,
+    string? ThumbnailUrl,
+    int? Duration,
+    long FileSize);
 
 public enum ChatError
 {
@@ -259,7 +272,11 @@ public sealed class SendChatMessageValidator : AbstractValidator<SendChatMessage
             .WithMessage("Toi da 10 tep dinh kem.");
         RuleForEach(command => command.Attachments).ChildRules(attachment =>
         {
-            attachment.RuleFor(value => value.FileUrl).NotEmpty().MaximumLength(2048);
+            attachment.RuleFor(value => value.FileUrl)
+                .NotEmpty()
+                .MaximumLength(2048)
+                .Must(value => Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+                .WithMessage("FileUrl phai la URL public HTTPS.");
             attachment.RuleFor(value => value.FileName).MaximumLength(255);
             attachment.RuleFor(value => value.MimeType).MaximumLength(100);
             attachment.RuleFor(value => value.ThumbnailUrl).MaximumLength(2048);

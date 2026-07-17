@@ -62,6 +62,19 @@ public sealed class ChatApiContractTests
     }
 
     [Fact]
+    public void Chat_attachment_upload_request_contract_has_expected_fields()
+    {
+        AssertProperties<ChatAttachmentUploadRequest>("Files");
+        AssertProperties<ChatAttachmentUploadResponse>(
+            "FileUrl",
+            "FileName",
+            "MimeType",
+            "ThumbnailUrl",
+            "Duration",
+            "FileSize");
+    }
+
+    [Fact]
     public void Mark_conversation_read_has_no_body_and_uses_route_conversation_id()
     {
         var action = typeof(ChatController).GetMethod(nameof(ChatController.MarkRead))!;
@@ -243,6 +256,26 @@ public sealed class ChatApiContractTests
         Assert.Contains(
             action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
             attribute => attribute.StatusCode == StatusCodes.Status404NotFound &&
+                         attribute.Type == typeof(ProblemDetails));
+    }
+
+    [Fact]
+    public void Chat_attachment_upload_documents_expected_route_and_status_codes()
+    {
+        var action = typeof(ChatController).GetMethod(nameof(ChatController.UploadAttachments))!;
+
+        Assert.Equal("attachments/upload", action.GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.NotNull(action.GetCustomAttribute<ConsumesAttribute>());
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status200OK &&
+                         attribute.Type == typeof(IReadOnlyList<ChatAttachmentUploadResponse>));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status401Unauthorized);
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status400BadRequest &&
                          attribute.Type == typeof(ProblemDetails));
     }
 

@@ -3,6 +3,7 @@
 Implemented `GET /api/chat/conversations`.
 Implemented `GET /api/chat/conversations/{conversationId}/messages`.
 Implemented `POST /api/chat/messages`.
+Implemented `POST /api/chat/attachments/upload`.
 Implemented `POST /api/chat/conversations/{conversationId}/read`.
 
 Key files:
@@ -26,6 +27,9 @@ Behavior:
 - Reactions are loaded once for the current page's message ids, then grouped in memory for reaction lists and summaries.
 - Send message reads sender id from JWT only; request has no sender field.
 - Send message validates message type rules and rejects client-created `Recall`.
+- Send message rejects non-HTTPS attachment URLs, including Expo/local `file://` paths.
+- Chat attachment upload uses Cloudinary and returns public `https://` URLs. Image uses image upload, video/audio use video upload, other files use raw upload.
+- FE flow: upload local files with multipart `files`, then pass returned attachment objects into `POST /api/chat/messages`.
 - Send message checks active membership, group send permission, conversation block, and reply message belongs to the same conversation.
 - Message insert, attachments insert, and conversation last-message update run in one transaction.
 - After commit, handler emits SignalR `ReceiveMessage` to active conversation members with the API response payload.
@@ -46,7 +50,7 @@ Behavior:
 
 Verification:
 - `dotnet build viora-BE.sln --no-restore -v:minimal` passed.
-- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|RealtimeApiContractTests|SendChatMessageValidatorTests|PersistenceModelTests"` passed 37 tests.
+- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|SendChatMessageValidatorTests"` passed 22 tests.
 
 Note:
 - Build/test emitted `NU1900` warnings because NuGet vulnerability feed was unavailable; compilation and tests still succeeded.

@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Viora.Application.Chat;
+using Viora.Application.Posts;
 using Viora.Domain.Entities;
 
 namespace viora_BE.Controllers;
@@ -96,6 +97,42 @@ public sealed class ChatController(IMediator mediator) : ControllerBase
         };
     }
 
+    [HttpPost("attachments/upload")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<IReadOnlyList<ChatAttachmentUploadResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IReadOnlyList<ChatAttachmentUploadResponse>>> UploadAttachments(
+        [FromForm] ChatAttachmentUploadRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+
+        var files = request.Files?
+            .Select(file => new CreatePostFile(
+                file.OpenReadStream(),
+                file.FileName,
+                string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+                file.Length))
+            .ToList() ?? [];
+
+        try
+        {
+            var result = await mediator.Send(
+                new UploadChatAttachmentsCommand(userId, files),
+                cancellationToken);
+
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequestProblem(result.Message ?? "Tep dinh kem khong hop le.");
+        }
+        catch (CreatePostException exception)
+        {
+            return BadRequestProblem(exception.Message);
+        }
+    }
+
+
     [HttpPost("conversations/{conversationId:guid}/read")]
     [ProducesResponseType<MarkConversationReadResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -170,3 +207,9 @@ public sealed record SendChatMessageRequest(
     MessageType MessageType,
     string? Content,
     IReadOnlyList<SendChatMessageAttachmentRequest>? Attachments);
+
+public sealed class ChatAttachmentUploadRequest
+{
+    [FromForm(Name = "files")]
+    public List<IFormFile>? Files { get; init; }
+}

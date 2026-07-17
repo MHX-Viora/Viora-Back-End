@@ -1,5 +1,6 @@
 using MediatR;
 using FluentValidation;
+using Viora.Application.Posts;
 using Viora.Application.Realtime;
 
 namespace Viora.Application.Chat;
@@ -220,5 +221,53 @@ public sealed class MarkConversationReadHandler(
         }
 
         return ChatResult<MarkConversationReadResponse>.Success(result.Value.Response);
+    }
+}
+
+public sealed class UploadChatAttachmentsHandler(IMediaStorage mediaStorage)
+    : IRequestHandler<UploadChatAttachmentsCommand, ChatResult<IReadOnlyList<ChatAttachmentUploadResponse>>>
+{
+    public async Task<ChatResult<IReadOnlyList<ChatAttachmentUploadResponse>>> Handle(
+        UploadChatAttachmentsCommand request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Files.Count == 0)
+        {
+            return ChatResult<IReadOnlyList<ChatAttachmentUploadResponse>>.Failure(
+                ChatError.Validation,
+                "Can it nhat mot tep dinh kem.");
+        }
+
+        if (request.Files.Count > 10)
+        {
+            return ChatResult<IReadOnlyList<ChatAttachmentUploadResponse>>.Failure(
+                ChatError.Validation,
+                "Toi da 10 tep dinh kem.");
+        }
+
+        var responses = new List<ChatAttachmentUploadResponse>(request.Files.Count);
+        foreach (var file in request.Files)
+        {
+            if (file.Length <= 0)
+            {
+                return ChatResult<IReadOnlyList<ChatAttachmentUploadResponse>>.Failure(
+                    ChatError.Validation,
+                    "Tep dinh kem khong hop le.");
+            }
+
+            var uploaded = await mediaStorage.UploadChatAttachmentAsync(
+                request.UserId,
+                file,
+                cancellationToken);
+            responses.Add(new ChatAttachmentUploadResponse(
+                uploaded.FileUrl,
+                uploaded.FileName,
+                uploaded.MimeType,
+                uploaded.ThumbnailUrl,
+                uploaded.Duration,
+                uploaded.FileSize));
+        }
+
+        return ChatResult<IReadOnlyList<ChatAttachmentUploadResponse>>.Success(responses);
     }
 }

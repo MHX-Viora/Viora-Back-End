@@ -114,4 +114,102 @@ public sealed class CloudinaryMediaStorage : IMediaStorage
             throw new CreatePostException("MEDIA_UPLOAD_FAILED", "Khong the tai video len dich vu luu tru.", exception);
         }
     }
+
+    public async Task<UploadedChatAttachment> UploadChatAttachmentAsync(
+        Guid userId,
+        CreatePostFile file,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var folder = $"viora/users/{userId:N}/chat";
+            if (file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                var result = await cloudinary.UploadAsync(new ImageUploadParams
+                {
+                    File = new FileDescription(file.FileName, file.Content),
+                    Folder = folder,
+                    UseFilename = false,
+                    UniqueFilename = true,
+                    Overwrite = false
+                }, cancellationToken);
+
+                EnsureUploadSucceeded(result.Error, result.SecureUrl);
+                return new UploadedChatAttachment(
+                    result.SecureUrl.AbsoluteUri,
+                    file.FileName,
+                    file.ContentType,
+                    null,
+                    file.Length,
+                    null);
+            }
+
+            if (file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ||
+                file.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+            {
+                var result = await cloudinary.UploadAsync(new VideoUploadParams
+                {
+                    File = new FileDescription(file.FileName, file.Content),
+                    Folder = folder,
+                    UseFilename = false,
+                    UniqueFilename = true,
+                    Overwrite = false
+                }, cancellationToken);
+
+                EnsureUploadSucceeded(result.Error, result.SecureUrl);
+                var thumbnailUrl = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
+                    ? cloudinary.Api.UrlVideoUp
+                        .Transform(new Transformation().StartOffset("0").Crop("fill").Width(720).Height(720).FetchFormat("jpg"))
+                        .BuildUrl(result.PublicId)
+                    : null;
+
+                return new UploadedChatAttachment(
+                    result.SecureUrl.AbsoluteUri,
+                    file.FileName,
+                    file.ContentType,
+                    thumbnailUrl,
+                    file.Length,
+                    result.Duration > 0 ? (int)Math.Round(result.Duration) : null);
+            }
+
+            var rawResult = await cloudinary.UploadAsync(new RawUploadParams
+            {
+                File = new FileDescription(file.FileName, file.Content),
+                Folder = folder,
+                UseFilename = false,
+                UniqueFilename = true,
+                Overwrite = false
+            }, "raw", cancellationToken);
+
+            EnsureUploadSucceeded(rawResult.Error, rawResult.SecureUrl);
+            return new UploadedChatAttachment(
+                rawResult.SecureUrl.AbsoluteUri,
+                file.FileName,
+                file.ContentType,
+                null,
+                file.Length,
+                null);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (CreatePostException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Unexpected Cloudinary chat attachment upload exception. UserId={UserId}", userId);
+            throw new CreatePostException("MEDIA_UPLOAD_FAILED", "Khong the tai tep chat len dich vu luu tru.", exception);
+        }
+    }
+
+    private static void EnsureUploadSucceeded(Error? error, Uri? secureUrl)
+    {
+        if (error is not null || secureUrl is null)
+        {
+            throw new CreatePostException("MEDIA_UPLOAD_FAILED", "Khong the tai tep len dich vu luu tru.");
+        }
+    }
 }

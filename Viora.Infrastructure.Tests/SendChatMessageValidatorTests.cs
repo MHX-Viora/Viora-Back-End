@@ -40,6 +40,27 @@ public sealed class SendChatMessageValidatorTests
     }
 
     [Fact]
+    public void Attachment_file_url_must_be_public_https_url()
+    {
+        var result = validator.Validate(new SendChatMessageCommand(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            null,
+            MessageType.Image,
+            null,
+            [new SendChatMessageAttachmentRequest(
+                "file:///data/user/0/host.exp.exponent/cache/ImagePicker/a.jpeg",
+                "a.jpeg",
+                "image/jpeg",
+                null,
+                100,
+                null)]));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == "Attachments[0].FileUrl");
+    }
+
+    [Fact]
     public void Recall_message_cannot_be_sent_by_client()
     {
         var result = validator.Validate(new SendChatMessageCommand(

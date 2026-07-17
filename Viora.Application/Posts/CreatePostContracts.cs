@@ -29,6 +29,14 @@ public sealed record UploadedMedia(
     string MediaUrl,
     string? ThumbnailUrl);
 
+public sealed record UploadedChatAttachment(
+    string FileUrl,
+    string FileName,
+    string? MimeType,
+    string? ThumbnailUrl,
+    long FileSize,
+    int? Duration);
+
 public sealed record CreatePostResponse(
     Guid Id,
     string? Content,
@@ -79,6 +87,11 @@ public interface IMediaStorage
         CancellationToken cancellationToken);
 
     Task<UploadedMedia> UploadReelVideoAsync(
+        Guid userId,
+        CreatePostFile file,
+        CancellationToken cancellationToken);
+
+    Task<UploadedChatAttachment> UploadChatAttachmentAsync(
         Guid userId,
         CreatePostFile file,
         CancellationToken cancellationToken);
