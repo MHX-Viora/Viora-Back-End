@@ -132,6 +132,31 @@ public sealed class ChatController(IMediator mediator) : ControllerBase
         }
     }
 
+    [HttpPost("messages/{messageId:guid}/recall")]
+    [ProducesResponseType<RecallChatMessageResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RecallChatMessageResponse>> RecallMessage(
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+
+        var result = await mediator.Send(
+            new RecallChatMessageCommand(userId, messageId),
+            cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            return Ok(result.Value);
+        }
+
+        return result.Error == ChatError.MessageNotFound
+            ? NotFoundProblem(ChatError.MessageNotFound, result.Message ?? "Khong tim thay tin nhan.")
+            : ForbiddenProblem(result.Message ?? "Ban khong co quyen thu hoi tin nhan nay.");
+    }
+
 
     [HttpPost("conversations/{conversationId:guid}/read")]
     [ProducesResponseType<MarkConversationReadResponse>(StatusCodes.Status200OK)]

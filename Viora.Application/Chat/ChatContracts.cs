@@ -36,6 +36,10 @@ public sealed record UploadChatAttachmentsCommand(
     Guid UserId,
     IReadOnlyList<CreatePostFile> Files) : IRequest<ChatResult<IReadOnlyList<ChatAttachmentUploadResponse>>>;
 
+public sealed record RecallChatMessageCommand(
+    Guid UserId,
+    Guid MessageId) : IRequest<ChatResult<RecallChatMessageResponse>>;
+
 public sealed record SendChatMessageAttachmentRequest(
     string FileUrl,
     string? FileName,
@@ -168,6 +172,18 @@ public sealed record MessageDeliveredPayload(
     Guid UserId,
     DateTime DeliveredAt);
 
+public sealed record MessageDeletedPayload(
+    Guid ConversationId,
+    Guid MessageId,
+    Guid DeletedBy,
+    DateTime DeletedAt);
+
+public sealed record RecallChatMessageResponse(
+    Guid ConversationId,
+    Guid MessageId,
+    Guid DeletedBy,
+    DateTime DeletedAt);
+
 public sealed record MarkConversationReadResponse(
     Guid ConversationId,
     Guid? LastReadMessageId,
@@ -242,6 +258,10 @@ public interface IChatConversationRepository
         Guid userId,
         Guid conversationId,
         CancellationToken cancellationToken);
+
+    Task<ChatResult<RecallChatMessageRepositoryResult>> RecallMessageAsync(
+        RecallChatMessageCommand command,
+        CancellationToken cancellationToken);
 }
 
 public sealed record SendChatMessageRepositoryResult(
@@ -257,6 +277,10 @@ public sealed record ChatConversationRecipientState(
     Guid UserId,
     bool IsMuted,
     int UnreadCount);
+
+public sealed record RecallChatMessageRepositoryResult(
+    RecallChatMessageResponse Response,
+    IReadOnlyList<Guid> ConversationMemberIds);
 
 public sealed class SendChatMessageValidator : AbstractValidator<SendChatMessageCommand>
 {

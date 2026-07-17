@@ -4,6 +4,7 @@ Implemented `GET /api/chat/conversations`.
 Implemented `GET /api/chat/conversations/{conversationId}/messages`.
 Implemented `POST /api/chat/messages`.
 Implemented `POST /api/chat/attachments/upload`.
+Implemented `POST /api/chat/messages/{messageId}/recall`.
 Implemented `POST /api/chat/conversations/{conversationId}/read`.
 
 Key files:
@@ -47,10 +48,13 @@ Behavior:
   - `MessageDelivered` is sent to the sender after commit.
 - Mark-read emits `ConversationRead` and legacy `MessagesRead`, plus `ConversationUpdated` for the reader.
 - `MessageAttachments.ThumbnailUrl` was added by migration `AddMessageAttachmentThumbnailUrl` and is included in attachment payloads.
+- Recall message only allows the original sender while still an active conversation member.
+- Recall updates message to `MessageType.Recall`, `IsDeleted = true`, and hides attachments in message history/list lastMessage.
+- Recall emits `MessageDeleted` to active members and then per-user `ConversationUpdated`.
 
 Verification:
 - `dotnet build viora-BE.sln --no-restore -v:minimal` passed.
-- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|SendChatMessageValidatorTests"` passed 22 tests.
+- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|RealtimeApiContractTests"` passed 24 tests.
 
 Note:
 - Build/test emitted `NU1900` warnings because NuGet vulnerability feed was unavailable; compilation and tests still succeeded.

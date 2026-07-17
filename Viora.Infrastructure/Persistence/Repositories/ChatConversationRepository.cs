@@ -245,6 +245,10 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             {
                 attachmentsByMessage.TryGetValue(message.Id, out var attachments);
                 attachments ??= [];
+                if (message.MessageType == MessageType.Recall)
+                {
+                    attachments = [];
+                }
                 reactionsByMessage.TryGetValue(message.Id, out var reactions);
                 reactions ??= [];
 
@@ -567,6 +571,63 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             new MarkConversationReadRepositoryResult(response, memberIds, didUpdate));
     }
 
+    public async Task<ChatResult<RecallChatMessageRepositoryResult>> RecallMessageAsync(
+        RecallChatMessageCommand command,
+        CancellationToken cancellationToken)
+    {
+        var message = await dbContext.Messages
+            .FirstOrDefaultAsync(value => value.Id == command.MessageId, cancellationToken);
+        if (message is null)
+        {
+            return ChatResult<RecallChatMessageRepositoryResult>.Failure(
+                ChatError.MessageNotFound,
+                "Khong tim thay tin nhan.");
+        }
+
+        var isActiveMember = await dbContext.ConversationMembers
+            .AsNoTracking()
+            .AnyAsync(member =>
+                member.ConversationId == message.ConversationId &&
+                member.UserId == command.UserId &&
+                member.Status == ConversationMemberStatus.Active,
+                cancellationToken);
+        if (!isActiveMember || message.SenderUserId != command.UserId)
+        {
+            return ChatResult<RecallChatMessageRepositoryResult>.Failure(
+                ChatError.Forbidden,
+                "Ban khong co quyen thu hoi tin nhan nay.");
+        }
+
+        var memberIds = await dbContext.ConversationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.ConversationId == message.ConversationId &&
+                member.Status == ConversationMemberStatus.Active)
+            .Select(member => member.UserId)
+            .ToListAsync(cancellationToken);
+
+        var deletedAt = DateTime.UtcNow;
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        message.MessageType = MessageType.Recall;
+        message.Content = "Tin nhan da duoc thu hoi.";
+        message.IsDeleted = true;
+        message.IsEdited = false;
+        message.UpdatedAt = deletedAt;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var response = new RecallChatMessageResponse(
+            message.ConversationId,
+            message.Id,
+            command.UserId,
+            deletedAt);
+
+        return ChatResult<RecallChatMessageRepositoryResult>.Success(
+            new RecallChatMessageRepositoryResult(response, memberIds));
+    }
+
     private async Task PopulateLastMessageAttachmentsAsync(
         List<ChatConversationItemResponse> items,
         CancellationToken cancellationToken)
@@ -609,6 +670,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         {
             var lastMessage = items[index].LastMessage;
             if (lastMessage is null ||
+                lastMessage.MessageType == MessageType.Recall ||
                 !attachmentsByMessage.TryGetValue(lastMessage.Id, out var messageAttachments))
             {
                 continue;

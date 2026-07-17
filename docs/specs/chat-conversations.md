@@ -6,6 +6,7 @@ Add chat read APIs for the authenticated user:
 - `GET /api/chat/conversations/{conversationId}/messages` lists paged message history.
 - `POST /api/chat/messages` sends a message as the authenticated user.
 - `POST /api/chat/attachments/upload` uploads chat files to public storage before sending a message.
+- `POST /api/chat/messages/{messageId}/recall` recalls a sent message.
 - `POST /api/chat/conversations/{conversationId}/read` marks the authenticated user's active conversation membership as read.
 
 ## Tech Stack
@@ -54,6 +55,7 @@ Contract tests verify route, authorization, query defaults, response fields, and
 - Message history includes sender, reply preview, attachments, reactions, reaction summary, edit/delete flags, and ownership flag.
 - Sending creates `Messages` and `MessageAttachments`, updates `Conversations.LastMessageId` and `LastMessageAt`, and emits `ReceiveMessage` with the API response payload.
 - Attachment upload accepts multipart `files` and returns public URLs plus metadata for `POST /api/chat/messages`.
+- Recall marks the message as deleted, changes `MessageType` to `Recall`, hides old attachments in read APIs, emits `MessageDeleted`, and sends `ConversationUpdated`.
 - Mark-read stores `ConversationMembers.LastReadMessageId` and nullable `LastReadAt`; it does not create `MessageReads`.
 
 ## Realtime Events

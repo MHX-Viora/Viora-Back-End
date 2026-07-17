@@ -167,6 +167,16 @@ public sealed class ChatApiContractTests
             "LastReadMessageId",
             "ReadAt",
             "UnreadCount");
+        AssertProperties<RecallChatMessageResponse>(
+            "ConversationId",
+            "MessageId",
+            "DeletedBy",
+            "DeletedAt");
+        AssertProperties<MessageDeletedPayload>(
+            "ConversationId",
+            "MessageId",
+            "DeletedBy",
+            "DeletedAt");
     }
 
     [Fact]
@@ -276,6 +286,29 @@ public sealed class ChatApiContractTests
         Assert.Contains(
             action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
             attribute => attribute.StatusCode == StatusCodes.Status400BadRequest &&
+                         attribute.Type == typeof(ProblemDetails));
+    }
+
+    [Fact]
+    public void Recall_chat_message_documents_expected_route_and_status_codes()
+    {
+        var action = typeof(ChatController).GetMethod(nameof(ChatController.RecallMessage))!;
+
+        Assert.Equal("messages/{messageId:guid}/recall", action.GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status200OK &&
+                         attribute.Type == typeof(RecallChatMessageResponse));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status401Unauthorized);
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status403Forbidden &&
+                         attribute.Type == typeof(ProblemDetails));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status404NotFound &&
                          attribute.Type == typeof(ProblemDetails));
     }
 

@@ -271,3 +271,52 @@ public sealed class UploadChatAttachmentsHandler(IMediaStorage mediaStorage)
         return ChatResult<IReadOnlyList<ChatAttachmentUploadResponse>>.Success(responses);
     }
 }
+
+public sealed class RecallChatMessageHandler(
+    IChatConversationRepository repository,
+    IRealtimeService realtimeService)
+    : IRequestHandler<RecallChatMessageCommand, ChatResult<RecallChatMessageResponse>>
+{
+    public async Task<ChatResult<RecallChatMessageResponse>> Handle(
+        RecallChatMessageCommand request,
+        CancellationToken cancellationToken)
+    {
+        var result = await repository.RecallMessageAsync(request, cancellationToken);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            return ChatResult<RecallChatMessageResponse>.Failure(
+                result.Error ?? ChatError.Validation,
+                result.Message ?? "Khong the thu hoi tin nhan.");
+        }
+
+        var payload = new MessageDeletedPayload(
+            result.Value.Response.ConversationId,
+            result.Value.Response.MessageId,
+            result.Value.Response.DeletedBy,
+            result.Value.Response.DeletedAt);
+
+        await realtimeService.SendToUsersAsync(
+            result.Value.ConversationMemberIds,
+            RealtimeEvents.MessageDeleted,
+            payload,
+            cancellationToken);
+
+        foreach (var userId in result.Value.ConversationMemberIds)
+        {
+            var conversationItem = await repository.GetConversationItemAsync(
+                userId,
+                result.Value.Response.ConversationId,
+                cancellationToken);
+            if (conversationItem is not null)
+            {
+                await realtimeService.SendToUserAsync(
+                    userId,
+                    RealtimeEvents.ConversationUpdated,
+                    conversationItem,
+                    cancellationToken);
+            }
+        }
+
+        return ChatResult<RecallChatMessageResponse>.Success(result.Value.Response);
+    }
+}
