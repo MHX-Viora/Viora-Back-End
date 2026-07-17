@@ -48,6 +48,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                     .OrderBy(other => other.JoinedAt)
                     .Select(other => new
                     {
+                        other.User.Id,
                         other.User.DisplayName,
                         other.User.AvatarUrl
                     })
@@ -65,6 +66,17 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                         member.Conversation.LastMessage.SenderUser.DisplayName,
                         member.Conversation.LastMessage.MessageType,
                         member.Conversation.LastMessage.Content,
+                        member.Conversation.LastMessage.Attachments
+                            .OrderBy(attachment => attachment.Id)
+                            .Select(attachment => new ChatMessageAttachmentResponse(
+                                attachment.Id,
+                                attachment.FileUrl,
+                                attachment.FileName,
+                                attachment.MimeType,
+                                attachment.ThumbnailUrl,
+                                attachment.FileSize,
+                                attachment.Duration))
+                            .ToList(),
                         member.Conversation.LastMessage.CreatedAt,
                         member.Conversation.LastMessage.SenderUserId == query.UserId),
                 UnreadCount = member.Conversation.Messages.Count(message =>
@@ -106,6 +118,12 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 conversation.ConversationType == ConversationType.Private
                     ? conversation.OtherMember == null ? null : conversation.OtherMember.AvatarUrl
                     : conversation.GroupAvatarUrl,
+                conversation.ConversationType == ConversationType.Private && conversation.OtherMember != null
+                    ? new ChatParticipantResponse(
+                        conversation.OtherMember.Id,
+                        conversation.OtherMember.DisplayName,
+                        conversation.OtherMember.AvatarUrl)
+                    : null,
                 conversation.MemberCount,
                 conversation.LastMessage,
                 conversation.UnreadCount,
@@ -185,6 +203,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                         attachment.FileUrl,
                         attachment.FileName,
                         attachment.MimeType,
+                        attachment.ThumbnailUrl,
                         attachment.FileSize,
                         attachment.Duration))
                     .ToList(),
@@ -244,6 +263,88 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         return ChatResult<ChatMessageListResponse>.Success(
             new ChatMessageListResponse(page, pageSize, totalItems, totalPages, items));
     }
+
+    public Task<ChatConversationItemResponse?> GetConversationItemAsync(
+        Guid userId,
+        Guid conversationId,
+        CancellationToken cancellationToken) =>
+        dbContext.ConversationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.UserId == userId &&
+                member.ConversationId == conversationId &&
+                member.Status == ConversationMemberStatus.Active)
+            .Select(member => new
+            {
+                member.ConversationId,
+                member.IsMuted,
+                member.IsPinned,
+                ConversationType = member.Conversation.ConversationType,
+                GroupName = member.Conversation.Name,
+                GroupAvatarUrl = member.Conversation.AvatarUrl,
+                LastMessageAt = member.Conversation.LastMessageAt,
+                OtherMember = member.Conversation.Members
+                    .Where(other =>
+                        other.UserId != userId &&
+                        other.Status == ConversationMemberStatus.Active)
+                    .OrderBy(other => other.JoinedAt)
+                    .Select(other => new
+                    {
+                        other.User.Id,
+                        other.User.DisplayName,
+                        other.User.AvatarUrl
+                    })
+                    .FirstOrDefault(),
+                MemberCount = member.Conversation.Members
+                    .Count(other => other.Status == ConversationMemberStatus.Active),
+                LastMessage = member.Conversation.LastMessage == null
+                    ? null
+                    : new ChatLastMessageResponse(
+                        member.Conversation.LastMessage.Id,
+                        member.Conversation.LastMessage.SenderUserId,
+                        member.Conversation.LastMessage.SenderUser.DisplayName,
+                        member.Conversation.LastMessage.MessageType,
+                        member.Conversation.LastMessage.Content,
+                        member.Conversation.LastMessage.Attachments
+                            .OrderBy(attachment => attachment.Id)
+                            .Select(attachment => new ChatMessageAttachmentResponse(
+                                attachment.Id,
+                                attachment.FileUrl,
+                                attachment.FileName,
+                                attachment.MimeType,
+                                attachment.ThumbnailUrl,
+                                attachment.FileSize,
+                                attachment.Duration))
+                            .ToList(),
+                        member.Conversation.LastMessage.CreatedAt,
+                        member.Conversation.LastMessage.SenderUserId == userId),
+                UnreadCount = member.Conversation.Messages.Count(message =>
+                    message.SenderUserId != userId &&
+                    (member.LastReadMessageId == null ||
+                     message.CreatedAt > member.LastReadMessage!.CreatedAt))
+            })
+            .Select(conversation => new ChatConversationItemResponse(
+                conversation.ConversationId,
+                conversation.ConversationType,
+                conversation.ConversationType == ConversationType.Private
+                    ? conversation.OtherMember == null ? null : conversation.OtherMember.DisplayName
+                    : conversation.GroupName,
+                conversation.ConversationType == ConversationType.Private
+                    ? conversation.OtherMember == null ? null : conversation.OtherMember.AvatarUrl
+                    : conversation.GroupAvatarUrl,
+                conversation.ConversationType == ConversationType.Private && conversation.OtherMember != null
+                    ? new ChatParticipantResponse(
+                        conversation.OtherMember.Id,
+                        conversation.OtherMember.DisplayName,
+                        conversation.OtherMember.AvatarUrl)
+                    : null,
+                conversation.MemberCount,
+                conversation.LastMessage,
+                conversation.UnreadCount,
+                conversation.IsMuted,
+                conversation.IsPinned,
+                conversation.LastMessageAt))
+            .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<ChatResult<SendChatMessageRepositoryResult>> SendMessageAsync(
         SendChatMessageCommand command,
@@ -320,14 +421,6 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             }
         }
 
-        var memberIds = await dbContext.ConversationMembers
-            .AsNoTracking()
-            .Where(member =>
-                member.ConversationId == command.ConversationId &&
-                member.Status == ConversationMemberStatus.Active)
-            .Select(member => member.UserId)
-            .ToListAsync(cancellationToken);
-
         var now = DateTime.UtcNow;
         var message = new Message
         {
@@ -351,6 +444,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 FileUrl = attachment.FileUrl,
                 FileName = string.IsNullOrWhiteSpace(attachment.FileName) ? null : attachment.FileName.Trim(),
                 MimeType = string.IsNullOrWhiteSpace(attachment.MimeType) ? null : attachment.MimeType.Trim(),
+                ThumbnailUrl = string.IsNullOrWhiteSpace(attachment.ThumbnailUrl) ? null : attachment.ThumbnailUrl.Trim(),
                 FileSize = attachment.FileSize,
                 Duration = attachment.Duration
             })
@@ -387,6 +481,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                     attachment.FileUrl,
                     attachment.FileName,
                     attachment.MimeType,
+                    attachment.ThumbnailUrl,
                     attachment.FileSize,
                     attachment.Duration))
                 .ToList(),
@@ -395,8 +490,10 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             false,
             message.CreatedAt);
 
+        var recipients = await BuildRecipientStatesAsync(command.ConversationId, cancellationToken);
+
         return ChatResult<SendChatMessageRepositoryResult>.Success(
-            new SendChatMessageRepositoryResult(response, memberIds));
+            new SendChatMessageRepositoryResult(response, recipients));
     }
 
     public async Task<ChatResult<MarkConversationReadRepositoryResult>> MarkReadAsync(
@@ -474,6 +571,23 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             ConversationSendPermission.OwnerOnly => role == ConversationMemberRole.Owner,
             _ => false
         };
+
+    private Task<List<ChatConversationRecipientState>> BuildRecipientStatesAsync(
+        Guid conversationId,
+        CancellationToken cancellationToken) =>
+        dbContext.ConversationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.ConversationId == conversationId &&
+                member.Status == ConversationMemberStatus.Active)
+            .Select(member => new ChatConversationRecipientState(
+                member.UserId,
+                member.IsMuted,
+                member.Conversation.Messages.Count(message =>
+                    message.SenderUserId != member.UserId &&
+                    (member.LastReadMessageId == null ||
+                     message.CreatedAt > member.LastReadMessage!.CreatedAt))))
+            .ToListAsync(cancellationToken);
 
     private static ChatReactionSummaryResponse BuildReactionSummary(
         IReadOnlyCollection<ChatMessageReactionResponse> reactions) =>

@@ -52,3 +52,33 @@ Contract tests verify route, authorization, query defaults, response fields, and
 - Message history includes sender, reply preview, attachments, reactions, reaction summary, edit/delete flags, and ownership flag.
 - Sending creates `Messages` and `MessageAttachments`, updates `Conversations.LastMessageId` and `LastMessageAt`, and emits `ReceiveMessage` with the API response payload.
 - Mark-read stores `ConversationMembers.LastReadMessageId` and nullable `LastReadAt`; it does not create `MessageReads`.
+
+## Realtime Events
+Canonical event names are defined in `RealtimeEvents`.
+
+Implemented by current chat APIs:
+- `ReceiveMessage`: emitted per active member after `POST /api/chat/messages`; `isMine` is calculated per recipient.
+- `ConversationUpdated`: emitted per active member after a new message and to the reader after mark-read.
+- `NewMessageNotification`: emitted to recipients other than the sender when the conversation is not muted.
+- `MessageDelivered`: emitted to the sender after the message is committed.
+- `ConversationRead`: emitted after read pointer changes.
+- `MessagesRead`: emitted as a backward-compatible alias for `ConversationRead`.
+
+Reserved event names for related future APIs:
+- `ConversationCreated`
+- `MessageRead`
+- `MessageDeleted`
+- `MessageUpdated`
+- `ReactionAdded`
+- `ReactionRemoved`
+- `TypingStarted`
+- `TypingStopped`
+- `UserOnline`
+- `UserOffline`
+- `ConversationPinned`
+- `ConversationMuted`
+- `ConversationRenamed`
+- `ConversationAvatarChanged`
+- `MemberAdded`
+- `MemberRemoved`
+- `MemberLeft`

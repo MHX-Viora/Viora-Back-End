@@ -8,11 +8,18 @@ public static class RealtimeEvents
 {
     public const string ReceiveNotification = nameof(ReceiveNotification);
     public const string ReceiveMessage = nameof(ReceiveMessage);
+    public const string NewMessageNotification = nameof(NewMessageNotification);
+    public const string MessageDelivered = nameof(MessageDelivered);
+    public const string MessageUpdated = nameof(MessageUpdated);
     public const string MessageEdited = nameof(MessageEdited);
     public const string MessageDeleted = nameof(MessageDeleted);
+    public const string ConversationRead = nameof(ConversationRead);
+    public const string MessageRead = nameof(MessageRead);
     public const string MessagesRead = nameof(MessagesRead);
     public const string ConversationUpdated = nameof(ConversationUpdated);
     public const string ConversationCreated = nameof(ConversationCreated);
+    public const string ReactionAdded = nameof(ReactionAdded);
+    public const string ReactionRemoved = nameof(ReactionRemoved);
     public const string FriendRequestReceived = nameof(FriendRequestReceived);
     public const string FriendRequestAccepted = nameof(FriendRequestAccepted);
     public const string UserFollowed = nameof(UserFollowed);
@@ -20,6 +27,13 @@ public static class RealtimeEvents
     public const string TypingStopped = nameof(TypingStopped);
     public const string UserOnline = nameof(UserOnline);
     public const string UserOffline = nameof(UserOffline);
+    public const string ConversationPinned = nameof(ConversationPinned);
+    public const string ConversationMuted = nameof(ConversationMuted);
+    public const string ConversationRenamed = nameof(ConversationRenamed);
+    public const string ConversationAvatarChanged = nameof(ConversationAvatarChanged);
+    public const string MemberAdded = nameof(MemberAdded);
+    public const string MemberRemoved = nameof(MemberRemoved);
+    public const string MemberLeft = nameof(MemberLeft);
 }
 
 public sealed record RegisterDeviceTokenCommand(

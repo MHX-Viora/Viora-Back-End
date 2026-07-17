@@ -69,10 +69,40 @@ public sealed class RealtimeApiContractTests
     [Fact]
     public void Realtime_events_include_core_events()
     {
-        Assert.Equal("ReceiveNotification", RealtimeEvents.ReceiveNotification);
-        Assert.Equal("ReceiveMessage", RealtimeEvents.ReceiveMessage);
-        Assert.Equal("TypingStarted", RealtimeEvents.TypingStarted);
-        Assert.Equal("UserOffline", RealtimeEvents.UserOffline);
+        var events = typeof(RealtimeEvents)
+            .GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(field => field.IsLiteral)
+            .ToDictionary(field => field.Name, field => (string)field.GetRawConstantValue()!);
+
+        foreach (var eventName in new[]
+        {
+            "ReceiveNotification",
+            "ReceiveMessage",
+            "ConversationCreated",
+            "ConversationUpdated",
+            "NewMessageNotification",
+            "ConversationRead",
+            "MessageRead",
+            "MessageDelivered",
+            "MessageDeleted",
+            "MessageUpdated",
+            "ReactionAdded",
+            "ReactionRemoved",
+            "TypingStarted",
+            "TypingStopped",
+            "UserOnline",
+            "UserOffline",
+            "ConversationPinned",
+            "ConversationMuted",
+            "ConversationRenamed",
+            "ConversationAvatarChanged",
+            "MemberAdded",
+            "MemberRemoved",
+            "MemberLeft"
+        })
+        {
+            Assert.Equal(eventName, events[eventName]);
+        }
     }
 
     [Fact]

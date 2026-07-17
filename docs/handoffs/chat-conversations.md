@@ -35,10 +35,18 @@ Behavior:
 - Mark-read updates only when the current member's `LastReadMessageId` differs from the conversation last message.
 - Mark-read returns success with `lastReadMessageId = null` for empty conversations and does not update data in that case.
 - Mark-read emits `MessagesRead` to active members only when the read pointer was updated.
+- Chat realtime event names are centralized in `RealtimeEvents` and include the FE contract names.
+- Send-message realtime is now per recipient:
+  - `ReceiveMessage` has recipient-specific `isMine`.
+  - `ConversationUpdated` has recipient-specific `unreadCount` and last-message `isMine`.
+  - `NewMessageNotification` is not sent to the sender and is skipped for muted conversations.
+  - `MessageDelivered` is sent to the sender after commit.
+- Mark-read emits `ConversationRead` and legacy `MessagesRead`, plus `ConversationUpdated` for the reader.
+- `MessageAttachments.ThumbnailUrl` was added by migration `AddMessageAttachmentThumbnailUrl` and is included in attachment payloads.
 
 Verification:
 - `dotnet build viora-BE.sln --no-restore -v:minimal` passed.
-- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|PersistenceModelTests"` passed 26 tests.
+- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|RealtimeApiContractTests|SendChatMessageValidatorTests|PersistenceModelTests"` passed 37 tests.
 
 Note:
 - Build/test emitted `NU1900` warnings because NuGet vulnerability feed was unavailable; compilation and tests still succeeded.

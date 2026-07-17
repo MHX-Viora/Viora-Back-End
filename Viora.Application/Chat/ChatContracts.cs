@@ -35,6 +35,7 @@ public sealed record SendChatMessageAttachmentRequest(
     string FileUrl,
     string? FileName,
     string? MimeType,
+    string? ThumbnailUrl,
     long? FileSize,
     int? Duration);
 
@@ -64,6 +65,7 @@ public sealed record ChatConversationItemResponse(
     ConversationType ConversationType,
     string? Name,
     string? AvatarUrl,
+    ChatParticipantResponse? OtherParticipant,
     int MemberCount,
     ChatLastMessageResponse? LastMessage,
     int UnreadCount,
@@ -77,6 +79,7 @@ public sealed record ChatLastMessageResponse(
     string SenderName,
     MessageType MessageType,
     string? Content,
+    IReadOnlyList<ChatMessageAttachmentResponse> Attachments,
     DateTime CreatedAt,
     bool IsMine);
 
@@ -115,6 +118,43 @@ public sealed record SendChatMessageResponse(
     bool IsDeleted,
     DateTime CreatedAt);
 
+public sealed record ChatRealtimeMessageResponse(
+    Guid Id,
+    Guid ConversationId,
+    ChatMessageSenderResponse Sender,
+    MessageType MessageType,
+    string? Content,
+    ChatReplyMessageResponse? Reply,
+    IReadOnlyList<ChatMessageAttachmentResponse> Attachments,
+    IReadOnlyList<ChatMessageReactionResponse> Reactions,
+    bool IsMine,
+    bool IsEdited,
+    bool IsDeleted,
+    DateTime CreatedAt);
+
+public sealed record NewMessageNotificationPayload(
+    Guid ConversationId,
+    ConversationType ConversationType,
+    string? ConversationName,
+    string? ConversationAvatarUrl,
+    ChatMessageSenderResponse Sender,
+    NewMessageNotificationMessagePayload Message,
+    int UnreadCount,
+    bool IsMuted);
+
+public sealed record NewMessageNotificationMessagePayload(
+    Guid Id,
+    string? Content,
+    MessageType MessageType,
+    IReadOnlyList<ChatMessageAttachmentResponse> Attachments,
+    DateTime CreatedAt);
+
+public sealed record MessageDeliveredPayload(
+    Guid ConversationId,
+    Guid MessageId,
+    Guid UserId,
+    DateTime DeliveredAt);
+
 public sealed record MarkConversationReadResponse(
     Guid ConversationId,
     Guid? LastReadMessageId,
@@ -124,13 +164,19 @@ public sealed record MessagesReadRealtimePayload(
     Guid ConversationId,
     Guid UserId,
     Guid? LastReadMessageId,
-    DateTime ReadAt);
+    DateTime ReadAt,
+    int UnreadCount);
 
 public sealed record ChatMessageSenderResponse(
     Guid Id,
     string DisplayName,
     string? AvatarUrl,
     bool IsVerified);
+
+public sealed record ChatParticipantResponse(
+    Guid Id,
+    string DisplayName,
+    string? AvatarUrl);
 
 public sealed record ChatReplyMessageResponse(
     Guid Id,
@@ -143,6 +189,7 @@ public sealed record ChatMessageAttachmentResponse(
     string FileUrl,
     string? FileName,
     string? MimeType,
+    string? ThumbnailUrl,
     long? FileSize,
     int? Duration);
 
@@ -177,16 +224,26 @@ public interface IChatConversationRepository
     Task<ChatResult<MarkConversationReadRepositoryResult>> MarkReadAsync(
         MarkConversationReadCommand command,
         CancellationToken cancellationToken);
+
+    Task<ChatConversationItemResponse?> GetConversationItemAsync(
+        Guid userId,
+        Guid conversationId,
+        CancellationToken cancellationToken);
 }
 
 public sealed record SendChatMessageRepositoryResult(
     SendChatMessageResponse Message,
-    IReadOnlyList<Guid> ConversationMemberIds);
+    IReadOnlyList<ChatConversationRecipientState> Recipients);
 
 public sealed record MarkConversationReadRepositoryResult(
     MarkConversationReadResponse Response,
     IReadOnlyList<Guid> ConversationMemberIds,
     bool DidUpdate);
+
+public sealed record ChatConversationRecipientState(
+    Guid UserId,
+    bool IsMuted,
+    int UnreadCount);
 
 public sealed class SendChatMessageValidator : AbstractValidator<SendChatMessageCommand>
 {
@@ -205,6 +262,7 @@ public sealed class SendChatMessageValidator : AbstractValidator<SendChatMessage
             attachment.RuleFor(value => value.FileUrl).NotEmpty().MaximumLength(2048);
             attachment.RuleFor(value => value.FileName).MaximumLength(255);
             attachment.RuleFor(value => value.MimeType).MaximumLength(100);
+            attachment.RuleFor(value => value.ThumbnailUrl).MaximumLength(2048);
             attachment.RuleFor(value => value.FileSize).GreaterThanOrEqualTo(0).When(value => value.FileSize.HasValue);
             attachment.RuleFor(value => value.Duration).GreaterThanOrEqualTo(0).When(value => value.Duration.HasValue);
         });

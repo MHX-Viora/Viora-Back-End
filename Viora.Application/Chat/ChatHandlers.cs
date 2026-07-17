@@ -69,31 +69,102 @@ public sealed class SendChatMessageHandler(
                 result.Message ?? "Khong the gui tin nhan.");
         }
 
-        await realtimeService.SendToUsersAsync(
-            result.Value.ConversationMemberIds,
-            RealtimeEvents.ReceiveMessage,
-            result.Value.Message,
-            cancellationToken);
-
-        foreach (var recipientId in result.Value.ConversationMemberIds
-                     .Where(id => id != request.SenderUserId && !onlineUserRegistry.IsOnline(id)))
+        foreach (var recipient in result.Value.Recipients)
         {
-            await pushNotificationSender.SendAsync(
-                new PushMessage(
-                    recipientId,
-                    result.Value.Message.Sender.DisplayName,
-                    result.Value.Message.Content,
-                    new Dictionary<string, string>
-                    {
-                        ["type"] = "message",
-                        ["conversationId"] = request.ConversationId.ToString(),
-                        ["messageId"] = result.Value.Message.Id.ToString()
-                    }),
+            var isMine = recipient.UserId == request.SenderUserId;
+            var realtimeMessage = ToRealtimeMessage(result.Value.Message, isMine);
+
+            await realtimeService.SendToUserAsync(
+                recipient.UserId,
+                RealtimeEvents.ReceiveMessage,
+                realtimeMessage,
                 cancellationToken);
+
+            var conversationItem = await repository.GetConversationItemAsync(
+                recipient.UserId,
+                request.ConversationId,
+                cancellationToken);
+            if (conversationItem is not null)
+            {
+                await realtimeService.SendToUserAsync(
+                    recipient.UserId,
+                    RealtimeEvents.ConversationUpdated,
+                    conversationItem,
+                    cancellationToken);
+            }
+
+            if (isMine)
+            {
+                await realtimeService.SendToUserAsync(
+                    recipient.UserId,
+                    RealtimeEvents.MessageDelivered,
+                    new MessageDeliveredPayload(
+                        request.ConversationId,
+                        result.Value.Message.Id,
+                        recipient.UserId,
+                        result.Value.Message.CreatedAt),
+                    cancellationToken);
+                continue;
+            }
+
+            if (!recipient.IsMuted)
+            {
+                await realtimeService.SendToUserAsync(
+                    recipient.UserId,
+                    RealtimeEvents.NewMessageNotification,
+                    new NewMessageNotificationPayload(
+                        request.ConversationId,
+                        conversationItem?.ConversationType ?? default,
+                        conversationItem?.Name,
+                        conversationItem?.AvatarUrl,
+                        result.Value.Message.Sender,
+                        new NewMessageNotificationMessagePayload(
+                            result.Value.Message.Id,
+                            result.Value.Message.Content,
+                            result.Value.Message.MessageType,
+                            result.Value.Message.Attachments,
+                            result.Value.Message.CreatedAt),
+                        recipient.UnreadCount,
+                        recipient.IsMuted),
+                    cancellationToken);
+            }
+
+            if (!recipient.IsMuted && !onlineUserRegistry.IsOnline(recipient.UserId))
+            {
+                await pushNotificationSender.SendAsync(
+                    new PushMessage(
+                        recipient.UserId,
+                        result.Value.Message.Sender.DisplayName,
+                        result.Value.Message.Content,
+                        new Dictionary<string, string>
+                        {
+                            ["type"] = "message",
+                            ["conversationId"] = request.ConversationId.ToString(),
+                            ["messageId"] = result.Value.Message.Id.ToString()
+                        }),
+                    cancellationToken);
+            }
         }
 
         return ChatResult<SendChatMessageResponse>.Success(result.Value.Message);
     }
+
+    private static ChatRealtimeMessageResponse ToRealtimeMessage(
+        SendChatMessageResponse message,
+        bool isMine) =>
+        new(
+            message.Id,
+            message.ConversationId,
+            message.Sender,
+            message.MessageType,
+            message.Content,
+            message.ReplyMessage,
+            message.Attachments,
+            [],
+            isMine,
+            message.IsEdited,
+            message.IsDeleted,
+            message.CreatedAt);
 }
 
 public sealed class MarkConversationReadHandler(
@@ -115,15 +186,37 @@ public sealed class MarkConversationReadHandler(
 
         if (result.Value.DidUpdate)
         {
+            var payload = new MessagesReadRealtimePayload(
+                result.Value.Response.ConversationId,
+                request.UserId,
+                result.Value.Response.LastReadMessageId,
+                result.Value.Response.ReadAt,
+                0);
+
+            await realtimeService.SendToUsersAsync(
+                result.Value.ConversationMemberIds,
+                RealtimeEvents.ConversationRead,
+                payload,
+                cancellationToken);
+
             await realtimeService.SendToUsersAsync(
                 result.Value.ConversationMemberIds,
                 RealtimeEvents.MessagesRead,
-                new MessagesReadRealtimePayload(
-                    result.Value.Response.ConversationId,
-                    request.UserId,
-                    result.Value.Response.LastReadMessageId,
-                    result.Value.Response.ReadAt),
+                payload,
                 cancellationToken);
+
+            var conversationItem = await repository.GetConversationItemAsync(
+                request.UserId,
+                request.ConversationId,
+                cancellationToken);
+            if (conversationItem is not null)
+            {
+                await realtimeService.SendToUserAsync(
+                    request.UserId,
+                    RealtimeEvents.ConversationUpdated,
+                    conversationItem,
+                    cancellationToken);
+            }
         }
 
         return ChatResult<MarkConversationReadResponse>.Success(result.Value.Response);

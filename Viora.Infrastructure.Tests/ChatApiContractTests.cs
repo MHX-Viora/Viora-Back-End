@@ -80,6 +80,7 @@ public sealed class ChatApiContractTests
             "ConversationType",
             "Name",
             "AvatarUrl",
+            "OtherParticipant",
             "MemberCount",
             "LastMessage",
             "UnreadCount",
@@ -92,6 +93,7 @@ public sealed class ChatApiContractTests
             "SenderName",
             "MessageType",
             "Content",
+            "Attachments",
             "CreatedAt",
             "IsMine");
     }
@@ -116,9 +118,10 @@ public sealed class ChatApiContractTests
             "UpdatedAt");
         AssertProperties<ChatMessageSenderResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified");
         AssertProperties<ChatReplyMessageResponse>("Id", "Content", "MessageType", "SenderName");
-        AssertProperties<ChatMessageAttachmentResponse>("Id", "FileUrl", "FileName", "MimeType", "FileSize", "Duration");
+        AssertProperties<ChatMessageAttachmentResponse>("Id", "FileUrl", "FileName", "MimeType", "ThumbnailUrl", "FileSize", "Duration");
         AssertProperties<ChatMessageReactionResponse>("UserId", "DisplayName", "ReactionType");
         AssertProperties<ChatReactionSummaryResponse>("Like", "Love", "Haha", "Wow", "Sad", "Angry", "Total");
+        AssertProperties<ChatParticipantResponse>("Id", "DisplayName", "AvatarUrl");
     }
 
     [Fact]
@@ -149,7 +152,46 @@ public sealed class ChatApiContractTests
             "ConversationId",
             "UserId",
             "LastReadMessageId",
-            "ReadAt");
+            "ReadAt",
+            "UnreadCount");
+    }
+
+    [Fact]
+    public void Chat_realtime_payload_contracts_have_expected_fields()
+    {
+        AssertProperties<ChatRealtimeMessageResponse>(
+            "Id",
+            "ConversationId",
+            "Sender",
+            "MessageType",
+            "Content",
+            "Reply",
+            "Attachments",
+            "Reactions",
+            "IsMine",
+            "IsEdited",
+            "IsDeleted",
+            "CreatedAt");
+        AssertProperties<NewMessageNotificationPayload>(
+            "ConversationId",
+            "ConversationType",
+            "ConversationName",
+            "ConversationAvatarUrl",
+            "Sender",
+            "Message",
+            "UnreadCount",
+            "IsMuted");
+        AssertProperties<NewMessageNotificationMessagePayload>(
+            "Id",
+            "Content",
+            "MessageType",
+            "Attachments",
+            "CreatedAt");
+        AssertProperties<MessageDeliveredPayload>(
+            "ConversationId",
+            "MessageId",
+            "UserId",
+            "DeliveredAt");
     }
 
     [Fact]

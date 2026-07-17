@@ -17,7 +17,7 @@ public sealed class SendChatMessageValidatorTests
             null,
             MessageType.Text,
             null,
-            [new SendChatMessageAttachmentRequest("https://cdn.example/a.jpg", null, null, null, null)]));
+            [new SendChatMessageAttachmentRequest("https://cdn.example/a.jpg", null, null, null, null, null)]));
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, error => error.PropertyName == "Content");
@@ -33,7 +33,7 @@ public sealed class SendChatMessageValidatorTests
             null,
             MessageType.Audio,
             null,
-            [new SendChatMessageAttachmentRequest("https://cdn.example/a.mp3", null, "audio/mpeg", 100, null)]));
+            [new SendChatMessageAttachmentRequest("https://cdn.example/a.mp3", null, "audio/mpeg", null, 100, null)]));
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, error => error.PropertyName == "Attachments");

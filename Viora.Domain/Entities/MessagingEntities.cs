@@ -54,6 +54,7 @@ public sealed class MessageAttachment : Entity
     public string FileUrl { get; set; } = null!;
     public string? FileName { get; set; }
     public string? MimeType { get; set; }
+    public string? ThumbnailUrl { get; set; }
     public long? FileSize { get; set; }
     public int? Duration { get; set; }
     public Message Message { get; set; } = null!;

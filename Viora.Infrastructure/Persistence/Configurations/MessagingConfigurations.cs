@@ -60,6 +60,7 @@ internal sealed class MessageAttachmentConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.FileUrl).IsRequired();
         builder.Property(x => x.FileName).HasMaxLength(255);
         builder.Property(x => x.MimeType).HasMaxLength(100);
+        builder.Property(x => x.ThumbnailUrl).HasMaxLength(2048);
         builder.HasOne(x => x.Message).WithMany(x => x.Attachments).HasForeignKey(x => x.MessageId).OnDelete(DeleteBehavior.Cascade);
     }
 }
