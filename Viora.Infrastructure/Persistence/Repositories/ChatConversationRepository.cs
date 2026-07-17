@@ -188,17 +188,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                         message.ReplyMessage.Content,
                         message.ReplyMessage.MessageType,
                         message.ReplyMessage.SenderUser.DisplayName),
-                Attachments = message.Attachments
-                    .OrderBy(attachment => attachment.Id)
-                    .Select(attachment => new ChatMessageAttachmentResponse(
-                        attachment.Id,
-                        attachment.FileUrl,
-                        attachment.FileName,
-                        attachment.MimeType,
-                        attachment.ThumbnailUrl,
-                        attachment.FileSize,
-                        attachment.Duration))
-                    .ToList(),
+                Attachments = Array.Empty<ChatMessageAttachmentResponse>(),
                 IsMine = message.SenderUserId == query.UserId,
                 message.IsEdited,
                 message.IsDeleted,
@@ -208,6 +198,29 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             .ToListAsync(cancellationToken);
 
         var messageIds = pageMessages.Select(message => message.Id).ToArray();
+        var pageAttachments = await dbContext.MessageAttachments
+            .AsNoTracking()
+            .Where(attachment => messageIds.Contains(attachment.MessageId))
+            .OrderBy(attachment => attachment.Id)
+            .Select(attachment => new
+            {
+                attachment.MessageId,
+                Attachment = new ChatMessageAttachmentResponse(
+                    attachment.Id,
+                    attachment.FileUrl,
+                    attachment.FileName,
+                    attachment.MimeType,
+                    attachment.ThumbnailUrl,
+                    attachment.FileSize,
+                    attachment.Duration)
+            })
+            .ToListAsync(cancellationToken);
+        var attachmentsByMessage = pageAttachments
+            .GroupBy(attachment => attachment.MessageId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(attachment => attachment.Attachment).ToList());
+
         var pageReactions = await dbContext.MessageReactions
             .AsNoTracking()
             .Where(reaction => messageIds.Contains(reaction.MessageId))
@@ -230,6 +243,8 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         var items = pageMessages
             .Select(message =>
             {
+                attachmentsByMessage.TryGetValue(message.Id, out var attachments);
+                attachments ??= [];
                 reactionsByMessage.TryGetValue(message.Id, out var reactions);
                 reactions ??= [];
 
@@ -239,7 +254,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                     message.MessageType,
                     message.Content,
                     message.ReplyMessage,
-                    message.Attachments,
+                    attachments,
                     reactions,
                     BuildReactionSummary(reactions),
                     message.IsMine,
