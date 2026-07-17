@@ -53,6 +53,11 @@ public interface IPushNotificationSender
     Task SendAsync(PushMessage message, CancellationToken cancellationToken);
 }
 
+public interface IOnlineUserRegistry
+{
+    bool IsOnline(Guid userId);
+}
+
 public interface IDeviceTokenRepository
 {
     Task<DeviceToken?> GetByTokenAsync(string token, CancellationToken cancellationToken);

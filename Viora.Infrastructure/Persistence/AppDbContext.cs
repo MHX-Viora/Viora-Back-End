@@ -32,6 +32,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
     public DbSet<Report> Reports => Set<Report>();
 
+    [DbFunction("translate", IsBuiltIn = true)]
+    public static string Translate(string value, string matching, string replacement) =>
+        throw new NotSupportedException();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

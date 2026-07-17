@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Viora.Application.Realtime;
 
 namespace Viora.Infrastructure.Realtime;
 
@@ -10,7 +11,7 @@ public interface IConnectionRegistry
     IReadOnlyCollection<string> GetConnections(Guid userId);
 }
 
-public sealed class ConnectionRegistry : IConnectionRegistry
+public sealed class ConnectionRegistry : IConnectionRegistry, IOnlineUserRegistry
 {
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, byte>> connections = new();
 

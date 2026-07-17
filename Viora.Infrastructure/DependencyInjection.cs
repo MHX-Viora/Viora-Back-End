@@ -15,6 +15,7 @@ using Viora.Application.Social;
 using FluentValidation;
 using Viora.Application.Notifications;
 using Viora.Application.Realtime;
+using Viora.Application.Chat;
 using Viora.Infrastructure.Realtime;
 using Microsoft.AspNetCore.SignalR;
 
@@ -96,6 +97,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<GetUserProfileQuery>, GetUserProfileValidator>();
         services.AddScoped<IValidator<RegisterDeviceTokenCommand>, RegisterDeviceTokenValidator>();
         services.AddScoped<IValidator<UnregisterDeviceTokenCommand>, UnregisterDeviceTokenValidator>();
+        services.AddScoped<IValidator<SendChatMessageCommand>, SendChatMessageValidator>();
         services.AddScoped<IValidator<GetShortVideosQuery>, GetShortVideosValidator>();
         services.AddScoped<IValidator<ToggleVideoReactionCommand>, ToggleVideoReactionValidator>();
         services.AddScoped<IValidator<ToggleVideoSaveCommand>, ToggleVideoSaveValidator>();
@@ -119,9 +121,12 @@ public static class DependencyInjection
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationDeliveryRepository, NotificationDeliveryRepository>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IChatConversationRepository, ChatConversationRepository>();
         services.Configure<FirebaseOptions>(configuration.GetSection("Firebase"));
         services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
-        services.AddSingleton<IConnectionRegistry, ConnectionRegistry>();
+        services.AddSingleton<ConnectionRegistry>();
+        services.AddSingleton<IConnectionRegistry>(provider => provider.GetRequiredService<ConnectionRegistry>());
+        services.AddSingleton<IOnlineUserRegistry>(provider => provider.GetRequiredService<ConnectionRegistry>());
         services.AddSingleton<IUserIdProvider, UserIdProvider>();
         services.AddSingleton<IFirebaseInitializer, FirebaseInitializer>();
         services.AddSingleton<IFirebaseMessagingClientFactory, FirebaseMessagingClientFactory>();
