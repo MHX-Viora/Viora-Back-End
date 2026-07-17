@@ -349,3 +349,88 @@ public sealed class SetConversationPinHandler(
         return ChatResult<SetConversationPinResponse>.Success(result.Value);
     }
 }
+
+public sealed class SetConversationMuteHandler(
+    IChatConversationRepository repository,
+    IRealtimeService realtimeService)
+    : IRequestHandler<SetConversationMuteCommand, ChatResult<SetConversationMuteResponse>>
+{
+    public async Task<ChatResult<SetConversationMuteResponse>> Handle(SetConversationMuteCommand request, CancellationToken cancellationToken)
+    {
+        var result = await repository.SetMuteAsync(request, cancellationToken);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            return ChatResult<SetConversationMuteResponse>.Failure(result.Error ?? ChatError.Validation, result.Message ?? "Khong the cap nhat tat thong bao.");
+        }
+
+        await realtimeService.SendToUserAsync(
+            request.UserId,
+            RealtimeEvents.ConversationMutedChanged,
+            new ConversationMutedChangedPayload(result.Value.ConversationId, result.Value.IsMuted),
+            cancellationToken);
+        return ChatResult<SetConversationMuteResponse>.Success(result.Value);
+    }
+}
+
+public sealed class SetConversationBlockHandler(
+    IChatConversationRepository repository,
+    IRealtimeService realtimeService)
+    : IRequestHandler<SetConversationBlockCommand, ChatResult<SetConversationBlockResponse>>
+{
+    public async Task<ChatResult<SetConversationBlockResponse>> Handle(SetConversationBlockCommand request, CancellationToken cancellationToken)
+    {
+        var result = await repository.SetBlockAsync(request, cancellationToken);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            return ChatResult<SetConversationBlockResponse>.Failure(result.Error ?? ChatError.Validation, result.Message ?? "Khong the cap nhat chan cuoc tro chuyen.");
+        }
+
+        await realtimeService.SendToUserAsync(
+            request.UserId,
+            RealtimeEvents.ConversationBlockedChanged,
+            new ConversationBlockedChangedPayload(result.Value.ConversationId, result.Value.IsBlocked),
+            cancellationToken);
+        return ChatResult<SetConversationBlockResponse>.Success(result.Value);
+    }
+}
+
+public sealed class GetConversationInfoHandler(IChatConversationRepository repository)
+    : IRequestHandler<GetConversationInfoQuery, ChatResult<ChatConversationInfoResponse>>
+{
+    public Task<ChatResult<ChatConversationInfoResponse>> Handle(GetConversationInfoQuery request, CancellationToken cancellationToken) =>
+        repository.GetInfoAsync(request, cancellationToken);
+}
+
+public sealed class GetConversationAttachmentsHandler(IChatConversationRepository repository)
+    : IRequestHandler<GetConversationAttachmentsQuery, ChatResult<ChatAttachmentListResponse>>
+{
+    public Task<ChatResult<ChatAttachmentListResponse>> Handle(GetConversationAttachmentsQuery request, CancellationToken cancellationToken) =>
+        repository.GetAttachmentsAsync(request with
+        {
+            Page = Math.Max(request.Page, 1),
+            PageSize = Math.Clamp(request.PageSize, 1, 100)
+        }, cancellationToken);
+}
+
+public sealed class GetConversationLinksHandler(IChatConversationRepository repository)
+    : IRequestHandler<GetConversationLinksQuery, ChatResult<ChatLinkListResponse>>
+{
+    public Task<ChatResult<ChatLinkListResponse>> Handle(GetConversationLinksQuery request, CancellationToken cancellationToken) =>
+        repository.GetLinksAsync(request with
+        {
+            Page = Math.Max(request.Page, 1),
+            PageSize = Math.Clamp(request.PageSize, 1, 100)
+        }, cancellationToken);
+}
+
+public sealed class SearchConversationMessagesHandler(IChatConversationRepository repository)
+    : IRequestHandler<SearchConversationMessagesQuery, ChatResult<ChatMessageSearchResponse>>
+{
+    public Task<ChatResult<ChatMessageSearchResponse>> Handle(SearchConversationMessagesQuery request, CancellationToken cancellationToken) =>
+        repository.SearchMessagesAsync(request with
+        {
+            Keyword = string.IsNullOrWhiteSpace(request.Keyword) ? null : request.Keyword.Trim(),
+            Page = Math.Max(request.Page, 1),
+            PageSize = Math.Clamp(request.PageSize, 1, 100)
+        }, cancellationToken);
+}

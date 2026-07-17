@@ -2,6 +2,7 @@ using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Viora.Application.Chat;
 using Viora.Domain.Entities;
 using viora_BE.Controllers;
@@ -90,6 +91,43 @@ public sealed class ChatApiContractTests
         AssertProperties<SetConversationPinRequest>("IsPinned");
         AssertProperties<SetConversationPinResponse>("ConversationId", "IsPinned");
         AssertProperties<ConversationPinnedChangedPayload>("ConversationId", "IsPinned");
+    }
+
+    [Fact]
+    public void Chat_settings_contracts_have_expected_fields()
+    {
+        AssertProperties<SetConversationMuteRequest>("IsMuted");
+        AssertProperties<SetConversationMuteResponse>("ConversationId", "IsMuted");
+        AssertProperties<ConversationMutedChangedPayload>("ConversationId", "IsMuted");
+        AssertProperties<SetConversationBlockRequest>("IsBlocked");
+        AssertProperties<SetConversationBlockResponse>("ConversationId", "IsBlocked");
+        AssertProperties<ConversationBlockedChangedPayload>("ConversationId", "IsBlocked");
+        AssertProperties<ChatConversationInfoResponse>(
+            "Id",
+            "ConversationType",
+            "Name",
+            "AvatarUrl",
+            "MemberCount",
+            "IsPinned",
+            "IsMuted",
+            "IsBlocked",
+            "CanSendMessage",
+            "CreatedBy");
+        AssertProperties<ChatAttachmentListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
+        AssertProperties<ChatAttachmentListItemResponse>(
+            "MessageId",
+            "AttachmentId",
+            "FileUrl",
+            "FileName",
+            "MimeType",
+            "FileSize",
+            "Duration",
+            "CreatedAt");
+        AssertProperties<ChatLinkListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
+        AssertProperties<ChatLinkItemResponse>("MessageId", "Url", "Sender", "CreatedAt");
+        AssertProperties<ChatLinkSenderResponse>("Id", "DisplayName");
+        AssertProperties<ChatMessageSearchResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
+        AssertProperties<ChatMessageSearchItemResponse>("MessageId", "Content", "Sender", "CreatedAt");
     }
 
     [Fact]
@@ -353,6 +391,44 @@ public sealed class ChatApiContractTests
             action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
             attribute => attribute.StatusCode == StatusCodes.Status200OK &&
                          attribute.Type == typeof(SetConversationPinResponse));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status401Unauthorized);
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status403Forbidden &&
+                         attribute.Type == typeof(ProblemDetails));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status404NotFound &&
+                         attribute.Type == typeof(ProblemDetails));
+    }
+
+    [Theory]
+    [InlineData(nameof(ChatController.SetMute), "conversations/{conversationId:guid}/mute", typeof(HttpPatchAttribute), typeof(SetConversationMuteResponse))]
+    [InlineData(nameof(ChatController.SetBlock), "conversations/{conversationId:guid}/block", typeof(HttpPatchAttribute), typeof(SetConversationBlockResponse))]
+    [InlineData(nameof(ChatController.Info), "conversations/{conversationId:guid}", typeof(HttpGetAttribute), typeof(ChatConversationInfoResponse))]
+    [InlineData(nameof(ChatController.Attachments), "conversations/{conversationId:guid}/attachments", typeof(HttpGetAttribute), typeof(ChatAttachmentListResponse))]
+    [InlineData(nameof(ChatController.Links), "conversations/{conversationId:guid}/links", typeof(HttpGetAttribute), typeof(ChatLinkListResponse))]
+    [InlineData(nameof(ChatController.Search), "conversations/{conversationId:guid}/search", typeof(HttpGetAttribute), typeof(ChatMessageSearchResponse))]
+    public void Chat_settings_documents_expected_route_and_status_codes(
+        string actionName,
+        string route,
+        Type httpAttributeType,
+        Type responseType)
+    {
+        var action = typeof(ChatController).GetMethod(actionName)!;
+        var httpAttribute = action.GetCustomAttributes()
+            .Single(attribute => attribute.GetType() == httpAttributeType);
+        var template = (string?)httpAttributeType
+            .GetProperty(nameof(HttpMethodAttribute.Template))!
+            .GetValue(httpAttribute);
+
+        Assert.Equal(route, template);
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status200OK &&
+                         attribute.Type == responseType);
         Assert.Contains(
             action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
             attribute => attribute.StatusCode == StatusCodes.Status401Unauthorized);

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Viora.Application.Chat;
 using Viora.Domain.Entities;
@@ -8,6 +9,10 @@ namespace Viora.Infrastructure.Persistence.Repositories;
 
 public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatConversationRepository
 {
+    private static readonly Regex UrlRegex = new(
+        @"https?://[^\s<>""]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private const string VietnameseDiacritics =
         "àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ";
 
@@ -668,6 +673,264 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             new SetConversationPinResponse(command.ConversationId, command.IsPinned));
     }
 
+    public async Task<ChatResult<SetConversationMuteResponse>> SetMuteAsync(
+        SetConversationMuteCommand command,
+        CancellationToken cancellationToken)
+    {
+        var validation = await ValidateActiveMemberAsync(command.ConversationId, command.UserId, cancellationToken);
+        if (!validation.IsSuccess)
+        {
+            return ChatResult<SetConversationMuteResponse>.Failure(validation.Error!.Value, validation.Message!);
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await dbContext.ConversationMembers
+            .Where(member => member.ConversationId == command.ConversationId && member.UserId == command.UserId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(member => member.IsMuted, command.IsMuted),
+                cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return ChatResult<SetConversationMuteResponse>.Success(
+            new SetConversationMuteResponse(command.ConversationId, command.IsMuted));
+    }
+
+    public async Task<ChatResult<SetConversationBlockResponse>> SetBlockAsync(
+        SetConversationBlockCommand command,
+        CancellationToken cancellationToken)
+    {
+        var conversation = await dbContext.Conversations
+            .AsNoTracking()
+            .Where(value => value.Id == command.ConversationId)
+            .Select(value => new { value.Id, value.ConversationType })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (conversation is null)
+        {
+            return ChatResult<SetConversationBlockResponse>.Failure(ChatError.ConversationNotFound, "Khong tim thay cuoc tro chuyen.");
+        }
+
+        if (conversation.ConversationType != ConversationType.Private)
+        {
+            return ChatResult<SetConversationBlockResponse>.Failure(ChatError.Validation, "Chi co the chan cuoc tro chuyen rieng.");
+        }
+
+        var validation = await ValidateActiveMemberAsync(command.ConversationId, command.UserId, cancellationToken);
+        if (!validation.IsSuccess)
+        {
+            return ChatResult<SetConversationBlockResponse>.Failure(validation.Error!.Value, validation.Message!);
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var existing = await dbContext.ConversationBlocks
+            .FirstOrDefaultAsync(block =>
+                block.ConversationId == command.ConversationId &&
+                block.UserId == command.UserId,
+                cancellationToken);
+
+        if (command.IsBlocked && existing is null)
+        {
+            dbContext.ConversationBlocks.Add(new ConversationBlock
+            {
+                ConversationId = command.ConversationId,
+                UserId = command.UserId,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        else if (!command.IsBlocked && existing is not null)
+        {
+            dbContext.ConversationBlocks.Remove(existing);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return ChatResult<SetConversationBlockResponse>.Success(
+            new SetConversationBlockResponse(command.ConversationId, command.IsBlocked));
+    }
+
+    public async Task<ChatResult<ChatConversationInfoResponse>> GetInfoAsync(
+        GetConversationInfoQuery query,
+        CancellationToken cancellationToken)
+    {
+        var validation = await ValidateActiveMemberAsync(query.ConversationId, query.UserId, cancellationToken);
+        if (!validation.IsSuccess)
+        {
+            return ChatResult<ChatConversationInfoResponse>.Failure(validation.Error!.Value, validation.Message!);
+        }
+
+        var info = await dbContext.ConversationMembers
+            .AsNoTracking()
+            .Where(member => member.ConversationId == query.ConversationId && member.UserId == query.UserId)
+            .Select(member => new
+            {
+                member.ConversationId,
+                member.IsPinned,
+                member.IsMuted,
+                member.Conversation.ConversationType,
+                member.Conversation.Name,
+                member.Conversation.AvatarUrl,
+                member.Conversation.CanSendMessage,
+                member.Conversation.CreatedBy,
+                OtherMember = member.Conversation.Members
+                    .Where(other => other.UserId != query.UserId && other.Status == ConversationMemberStatus.Active)
+                    .Select(other => new { other.User.DisplayName, other.User.AvatarUrl })
+                    .FirstOrDefault(),
+                MemberCount = member.Conversation.Members.Count(other => other.Status == ConversationMemberStatus.Active),
+                IsBlocked = dbContext.ConversationBlocks.Any(block =>
+                    block.ConversationId == query.ConversationId &&
+                    block.UserId == query.UserId)
+            })
+            .FirstAsync(cancellationToken);
+
+        return ChatResult<ChatConversationInfoResponse>.Success(new ChatConversationInfoResponse(
+            info.ConversationId,
+            info.ConversationType,
+            info.ConversationType == ConversationType.Private ? info.OtherMember?.DisplayName : info.Name,
+            info.ConversationType == ConversationType.Private ? info.OtherMember?.AvatarUrl : info.AvatarUrl,
+            info.MemberCount,
+            info.IsPinned,
+            info.IsMuted,
+            info.IsBlocked,
+            info.ConversationType == ConversationType.Group ? info.CanSendMessage : null,
+            info.ConversationType == ConversationType.Group ? info.CreatedBy : null));
+    }
+
+    public async Task<ChatResult<ChatAttachmentListResponse>> GetAttachmentsAsync(
+        GetConversationAttachmentsQuery query,
+        CancellationToken cancellationToken)
+    {
+        var validation = await ValidateActiveMemberAsync(query.ConversationId, query.UserId, cancellationToken);
+        if (!validation.IsSuccess)
+        {
+            return ChatResult<ChatAttachmentListResponse>.Failure(validation.Error!.Value, validation.Message!);
+        }
+
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var attachments = dbContext.MessageAttachments
+            .AsNoTracking()
+            .Where(attachment =>
+                attachment.Message.ConversationId == query.ConversationId &&
+                !attachment.Message.IsDeleted &&
+                attachment.Message.MessageType != MessageType.Recall);
+
+        attachments = query.Type switch
+        {
+            ChatAttachmentFilterType.Image => attachments.Where(attachment => attachment.Message.MessageType == MessageType.Image),
+            ChatAttachmentFilterType.Video => attachments.Where(attachment => attachment.Message.MessageType == MessageType.Video),
+            ChatAttachmentFilterType.Audio => attachments.Where(attachment => attachment.Message.MessageType == MessageType.Audio),
+            ChatAttachmentFilterType.File => attachments.Where(attachment => attachment.Message.MessageType == MessageType.File),
+            _ => attachments
+        };
+
+        var totalItems = await attachments.CountAsync(cancellationToken);
+        var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
+        var items = await attachments
+            .OrderByDescending(attachment => attachment.Message.CreatedAt)
+            .ThenByDescending(attachment => attachment.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(attachment => new ChatAttachmentListItemResponse(
+                attachment.MessageId,
+                attachment.Id,
+                attachment.FileUrl,
+                attachment.FileName,
+                attachment.MimeType,
+                attachment.FileSize,
+                attachment.Duration,
+                attachment.Message.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        return ChatResult<ChatAttachmentListResponse>.Success(new ChatAttachmentListResponse(page, pageSize, totalItems, totalPages, items));
+    }
+
+    public async Task<ChatResult<ChatLinkListResponse>> GetLinksAsync(
+        GetConversationLinksQuery query,
+        CancellationToken cancellationToken)
+    {
+        var validation = await ValidateActiveMemberAsync(query.ConversationId, query.UserId, cancellationToken);
+        if (!validation.IsSuccess)
+        {
+            return ChatResult<ChatLinkListResponse>.Failure(validation.Error!.Value, validation.Message!);
+        }
+
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var messages = await dbContext.Messages
+            .AsNoTracking()
+            .Where(message =>
+                message.ConversationId == query.ConversationId &&
+                !message.IsDeleted &&
+                message.Content != null &&
+                (message.Content.Contains("http://") || message.Content.Contains("https://")))
+            .OrderByDescending(message => message.CreatedAt)
+            .Select(message => new
+            {
+                message.Id,
+                message.Content,
+                Sender = new ChatLinkSenderResponse(message.SenderUser.Id, message.SenderUser.DisplayName),
+                message.CreatedAt
+            })
+            .ToListAsync(cancellationToken);
+
+        var links = messages
+            .SelectMany(message => UrlRegex.Matches(message.Content!)
+                .Select(match => new ChatLinkItemResponse(message.Id, match.Value, message.Sender, message.CreatedAt)))
+            .OrderByDescending(item => item.CreatedAt)
+            .ToList();
+        var totalItems = links.Count;
+        var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
+
+        return ChatResult<ChatLinkListResponse>.Success(new ChatLinkListResponse(
+            page,
+            pageSize,
+            totalItems,
+            totalPages,
+            links.Skip((page - 1) * pageSize).Take(pageSize).ToList()));
+    }
+
+    public async Task<ChatResult<ChatMessageSearchResponse>> SearchMessagesAsync(
+        SearchConversationMessagesQuery query,
+        CancellationToken cancellationToken)
+    {
+        var validation = await ValidateActiveMemberAsync(query.ConversationId, query.UserId, cancellationToken);
+        if (!validation.IsSuccess)
+        {
+            return ChatResult<ChatMessageSearchResponse>.Failure(validation.Error!.Value, validation.Message!);
+        }
+
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        if (string.IsNullOrWhiteSpace(query.Keyword))
+        {
+            return ChatResult<ChatMessageSearchResponse>.Success(new ChatMessageSearchResponse(page, pageSize, 0, 0, []));
+        }
+
+        var keyword = RemoveDiacritics(query.Keyword.Trim()).ToLowerInvariant();
+        var messages = dbContext.Messages
+            .AsNoTracking()
+            .Where(message =>
+                message.ConversationId == query.ConversationId &&
+                !message.IsDeleted &&
+                message.Content != null &&
+                AppDbContext.Translate(message.Content.ToLower(), VietnameseDiacritics, VietnameseAscii).Contains(keyword));
+
+        var totalItems = await messages.CountAsync(cancellationToken);
+        var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
+        var items = await messages
+            .OrderByDescending(message => message.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(message => new ChatMessageSearchItemResponse(
+                message.Id,
+                message.Content,
+                new ChatLinkSenderResponse(message.SenderUser.Id, message.SenderUser.DisplayName),
+                message.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        return ChatResult<ChatMessageSearchResponse>.Success(new ChatMessageSearchResponse(page, pageSize, totalItems, totalPages, items));
+    }
+
     private async Task PopulateLastMessageAttachmentsAsync(
         List<ChatConversationItemResponse> items,
         CancellationToken cancellationToken)
@@ -721,6 +984,34 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 LastMessage = lastMessage with { Attachments = messageAttachments }
             };
         }
+    }
+
+    private async Task<ChatResult<bool>> ValidateActiveMemberAsync(
+        Guid conversationId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var conversationExists = await dbContext.Conversations
+            .AsNoTracking()
+            .AnyAsync(conversation => conversation.Id == conversationId, cancellationToken);
+        if (!conversationExists)
+        {
+            return ChatResult<bool>.Failure(ChatError.ConversationNotFound, "Khong tim thay cuoc tro chuyen.");
+        }
+
+        var isActiveMember = await dbContext.ConversationMembers
+            .AsNoTracking()
+            .AnyAsync(member =>
+                member.ConversationId == conversationId &&
+                member.UserId == userId &&
+                member.Status == ConversationMemberStatus.Active,
+                cancellationToken);
+        if (!isActiveMember)
+        {
+            return ChatResult<bool>.Failure(ChatError.Forbidden, "Ban khong co quyen truy cap cuoc tro chuyen nay.");
+        }
+
+        return ChatResult<bool>.Success(true);
     }
 
     private static bool CanSendToGroup(

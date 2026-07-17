@@ -95,6 +95,8 @@ public sealed class RealtimeApiContractTests
             "ConversationPinned",
             "ConversationPinnedChanged",
             "ConversationMuted",
+            "ConversationMutedChanged",
+            "ConversationBlockedChanged",
             "ConversationRenamed",
             "ConversationAvatarChanged",
             "MemberAdded",

@@ -45,6 +45,32 @@ public sealed record SetConversationPinCommand(
     Guid ConversationId,
     bool IsPinned) : IRequest<ChatResult<SetConversationPinResponse>>;
 
+public sealed record SetConversationMuteCommand(Guid UserId, Guid ConversationId, bool IsMuted)
+    : IRequest<ChatResult<SetConversationMuteResponse>>;
+
+public sealed record SetConversationBlockCommand(Guid UserId, Guid ConversationId, bool IsBlocked)
+    : IRequest<ChatResult<SetConversationBlockResponse>>;
+
+public sealed record GetConversationInfoQuery(Guid UserId, Guid ConversationId)
+    : IRequest<ChatResult<ChatConversationInfoResponse>>;
+
+public sealed record GetConversationAttachmentsQuery(
+    Guid UserId,
+    Guid ConversationId,
+    ChatAttachmentFilterType Type,
+    int Page,
+    int PageSize) : IRequest<ChatResult<ChatAttachmentListResponse>>;
+
+public sealed record GetConversationLinksQuery(Guid UserId, Guid ConversationId, int Page, int PageSize)
+    : IRequest<ChatResult<ChatLinkListResponse>>;
+
+public sealed record SearchConversationMessagesQuery(
+    Guid UserId,
+    Guid ConversationId,
+    string? Keyword,
+    int Page,
+    int PageSize) : IRequest<ChatResult<ChatMessageSearchResponse>>;
+
 public sealed record SendChatMessageAttachmentRequest(
     string FileUrl,
     string? FileName,
@@ -197,6 +223,70 @@ public sealed record ConversationPinnedChangedPayload(
     Guid ConversationId,
     bool IsPinned);
 
+public sealed record SetConversationMuteResponse(Guid ConversationId, bool IsMuted);
+public sealed record ConversationMutedChangedPayload(Guid ConversationId, bool IsMuted);
+public sealed record SetConversationBlockResponse(Guid ConversationId, bool IsBlocked);
+public sealed record ConversationBlockedChangedPayload(Guid ConversationId, bool IsBlocked);
+
+public sealed record ChatConversationInfoResponse(
+    Guid Id,
+    ConversationType ConversationType,
+    string? Name,
+    string? AvatarUrl,
+    int MemberCount,
+    bool IsPinned,
+    bool IsMuted,
+    bool IsBlocked,
+    ConversationSendPermission? CanSendMessage,
+    Guid? CreatedBy);
+
+public enum ChatAttachmentFilterType : short { All = 0, Image = 1, Video = 2, File = 3, Audio = 4 }
+
+public sealed record ChatAttachmentListResponse(
+    int Page,
+    int PageSize,
+    int TotalItems,
+    int TotalPages,
+    IReadOnlyList<ChatAttachmentListItemResponse> Items);
+
+public sealed record ChatAttachmentListItemResponse(
+    Guid MessageId,
+    Guid AttachmentId,
+    string FileUrl,
+    string? FileName,
+    string? MimeType,
+    long? FileSize,
+    int? Duration,
+    DateTime CreatedAt);
+
+public sealed record ChatLinkListResponse(
+    int Page,
+    int PageSize,
+    int TotalItems,
+    int TotalPages,
+    IReadOnlyList<ChatLinkItemResponse> Items);
+
+public sealed record ChatLinkItemResponse(
+    Guid MessageId,
+    string Url,
+    ChatLinkSenderResponse Sender,
+    DateTime CreatedAt);
+
+public sealed record ChatLinkSenderResponse(Guid Id, string DisplayName);
+
+public sealed record ChatMessageSearchResponse(
+    int Page,
+    int PageSize,
+    int TotalItems,
+    int TotalPages,
+    IReadOnlyList<ChatMessageSearchItemResponse> Items);
+
+public sealed record ChatMessageSearchItemResponse(
+    Guid MessageId,
+    string? Content,
+    ChatLinkSenderResponse Sender,
+    DateTime CreatedAt);
+
 public sealed record MarkConversationReadResponse(
     Guid ConversationId,
     Guid? LastReadMessageId,
@@ -279,6 +369,13 @@ public interface IChatConversationRepository
     Task<ChatResult<SetConversationPinResponse>> SetPinAsync(
         SetConversationPinCommand command,
         CancellationToken cancellationToken);
+
+    Task<ChatResult<SetConversationMuteResponse>> SetMuteAsync(SetConversationMuteCommand command, CancellationToken cancellationToken);
+    Task<ChatResult<SetConversationBlockResponse>> SetBlockAsync(SetConversationBlockCommand command, CancellationToken cancellationToken);
+    Task<ChatResult<ChatConversationInfoResponse>> GetInfoAsync(GetConversationInfoQuery query, CancellationToken cancellationToken);
+    Task<ChatResult<ChatAttachmentListResponse>> GetAttachmentsAsync(GetConversationAttachmentsQuery query, CancellationToken cancellationToken);
+    Task<ChatResult<ChatLinkListResponse>> GetLinksAsync(GetConversationLinksQuery query, CancellationToken cancellationToken);
+    Task<ChatResult<ChatMessageSearchResponse>> SearchMessagesAsync(SearchConversationMessagesQuery query, CancellationToken cancellationToken);
 }
 
 public sealed record SendChatMessageRepositoryResult(

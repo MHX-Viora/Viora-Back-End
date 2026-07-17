@@ -30,6 +30,8 @@ public static class RealtimeEvents
     public const string ConversationPinned = nameof(ConversationPinned);
     public const string ConversationPinnedChanged = nameof(ConversationPinnedChanged);
     public const string ConversationMuted = nameof(ConversationMuted);
+    public const string ConversationMutedChanged = nameof(ConversationMutedChanged);
+    public const string ConversationBlockedChanged = nameof(ConversationBlockedChanged);
     public const string ConversationRenamed = nameof(ConversationRenamed);
     public const string ConversationAvatarChanged = nameof(ConversationAvatarChanged);
     public const string MemberAdded = nameof(MemberAdded);

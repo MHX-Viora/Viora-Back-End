@@ -209,6 +209,101 @@ public sealed class ChatController(IMediator mediator) : ControllerBase
             : ForbiddenProblem(result.Message ?? "Ban khong co quyen ghim cuoc tro chuyen nay.");
     }
 
+    [HttpPatch("conversations/{conversationId:guid}/mute")]
+    [ProducesResponseType<SetConversationMuteResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SetConversationMuteResponse>> SetMute(
+        Guid conversationId,
+        [FromBody] SetConversationMuteRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new SetConversationMuteCommand(userId, conversationId, request.IsMuted), cancellationToken);
+        return ToChatActionResult(result, "Ban khong co quyen tat thong bao cuoc tro chuyen nay.");
+    }
+
+    [HttpPatch("conversations/{conversationId:guid}/block")]
+    [ProducesResponseType<SetConversationBlockResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SetConversationBlockResponse>> SetBlock(
+        Guid conversationId,
+        [FromBody] SetConversationBlockRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new SetConversationBlockCommand(userId, conversationId, request.IsBlocked), cancellationToken);
+        return ToChatActionResult(result, "Ban khong co quyen chan cuoc tro chuyen nay.");
+    }
+
+    [HttpGet("conversations/{conversationId:guid}")]
+    [ProducesResponseType<ChatConversationInfoResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ChatConversationInfoResponse>> Info(
+        Guid conversationId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new GetConversationInfoQuery(userId, conversationId), cancellationToken);
+        return ToChatActionResult(result, "Ban khong co quyen xem cuoc tro chuyen nay.");
+    }
+
+    [HttpGet("conversations/{conversationId:guid}/attachments")]
+    [ProducesResponseType<ChatAttachmentListResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ChatAttachmentListResponse>> Attachments(
+        Guid conversationId,
+        [FromQuery] ChatAttachmentFilterType type = ChatAttachmentFilterType.All,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 30,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new GetConversationAttachmentsQuery(userId, conversationId, type, page, pageSize), cancellationToken);
+        return ToChatActionResult(result, "Ban khong co quyen xem tep trong cuoc tro chuyen nay.");
+    }
+
+    [HttpGet("conversations/{conversationId:guid}/links")]
+    [ProducesResponseType<ChatLinkListResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ChatLinkListResponse>> Links(
+        Guid conversationId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 30,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new GetConversationLinksQuery(userId, conversationId, page, pageSize), cancellationToken);
+        return ToChatActionResult(result, "Ban khong co quyen xem lien ket trong cuoc tro chuyen nay.");
+    }
+
+    [HttpGet("conversations/{conversationId:guid}/search")]
+    [ProducesResponseType<ChatMessageSearchResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ChatMessageSearchResponse>> Search(
+        Guid conversationId,
+        [FromQuery] string? keyword = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 30,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new SearchConversationMessagesQuery(userId, conversationId, keyword, page, pageSize), cancellationToken);
+        return ToChatActionResult(result, "Ban khong co quyen tim kiem trong cuoc tro chuyen nay.");
+    }
+
     private bool TryGetViewerUserId(out Guid userId)
     {
         var value = User.FindFirstValue("user_id");
@@ -250,6 +345,21 @@ public sealed class ChatController(IMediator mediator) : ControllerBase
         problem.Extensions["code"] = ChatError.Validation.ToString();
         return new ObjectResult(problem) { StatusCode = StatusCodes.Status400BadRequest };
     }
+
+    private ActionResult<T> ToChatActionResult<T>(ChatResult<T> result, string forbiddenMessage)
+    {
+        if (result.IsSuccess)
+        {
+            return Ok(result.Value);
+        }
+
+        return result.Error switch
+        {
+            ChatError.ConversationNotFound => NotFoundProblem(ChatError.ConversationNotFound, result.Message ?? "Khong tim thay cuoc tro chuyen."),
+            ChatError.Forbidden => ForbiddenProblem(result.Message ?? forbiddenMessage),
+            _ => BadRequestProblem(result.Message ?? "Yeu cau khong hop le.")
+        };
+    }
 }
 
 public sealed record SendChatMessageRequest(
@@ -266,3 +376,5 @@ public sealed class ChatAttachmentUploadRequest
 }
 
 public sealed record SetConversationPinRequest(bool IsPinned);
+public sealed record SetConversationMuteRequest(bool IsMuted);
+public sealed record SetConversationBlockRequest(bool IsBlocked);

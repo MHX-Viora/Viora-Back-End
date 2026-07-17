@@ -9,6 +9,12 @@ Add chat read APIs for the authenticated user:
 - `POST /api/chat/messages/{messageId}/recall` recalls a sent message.
 - `POST /api/chat/conversations/{conversationId}/read` marks the authenticated user's active conversation membership as read.
 - `PATCH /api/chat/conversations/{conversationId}/pin` pins or unpins a conversation for the authenticated user.
+- `PATCH /api/chat/conversations/{conversationId}/mute` mutes or unmutes a conversation for the authenticated user.
+- `GET /api/chat/conversations/{conversationId}` returns chat settings/header metadata.
+- `GET /api/chat/conversations/{conversationId}/attachments` lists shared image/video/file/audio attachments.
+- `GET /api/chat/conversations/{conversationId}/links` lists URLs extracted from message content.
+- `GET /api/chat/conversations/{conversationId}/search` searches message content.
+- `PATCH /api/chat/conversations/{conversationId}/block` blocks or unblocks a private conversation.
 
 ## Tech Stack
 ASP.NET Core controller, MediatR query handler, EF Core/Npgsql projection repository.
@@ -43,6 +49,9 @@ Contract tests verify route, authorization, query defaults, response fields, and
 - Always: for sending, reject client-supplied sender identity, reject `Recall`, validate payload by `MessageType`, and send realtime only after transaction commit.
 - Always: reject attachment `fileUrl` values that are not public HTTPS URLs. FE must upload local files before sending messages.
 - Always: for mark-read, update only the current active membership row and emit `MessagesRead` only when the read pointer changes.
+- Always: for settings APIs, validate conversation existence and active membership before returning or updating data.
+- Always: mute and pin are personal membership state; emit realtime only to the current user's devices.
+- Always: block only applies to private conversations and uses `ConversationBlocks`.
 - Ask first: database schema changes, new dependencies, or endpoint contract changes.
 - Never: accept `UserId` from query/body for this API.
 
@@ -59,6 +68,12 @@ Contract tests verify route, authorization, query defaults, response fields, and
 - Recall marks the message as deleted, changes `MessageType` to `Recall`, hides old attachments in read APIs, emits `MessageDeleted`, and sends `ConversationUpdated`.
 - Mark-read stores `ConversationMembers.LastReadMessageId` and nullable `LastReadAt`; it does not create `MessageReads`.
 - Pin/unpin updates only `ConversationMembers.IsPinned` for the current user and emits `ConversationPinnedChanged` only to that user.
+- Mute/unmute updates only `ConversationMembers.IsMuted` for the current user and emits `ConversationMutedChanged` only to that user.
+- Conversation info returns private display data from the other active member and group metadata from `Conversations`.
+- Shared attachments are paged newest-first and can be filtered by all/image/video/file/audio.
+- Shared links are extracted from `Messages.Content` without a new table.
+- Message search is case-insensitive and Vietnamese accent-insensitive.
+- Block/unblock creates or deletes `ConversationBlocks` for private conversations.
 
 ## Realtime Events
 Canonical event names are defined in `RealtimeEvents`.
@@ -70,11 +85,14 @@ Implemented by current chat APIs:
 - `MessageDelivered`: emitted to the sender after the message is committed.
 - `ConversationRead`: emitted after read pointer changes.
 - `MessagesRead`: emitted as a backward-compatible alias for `ConversationRead`.
+- `MessageDeleted`: emitted after recall.
+- `ConversationPinnedChanged`: emitted to the current user after pin/unpin.
+- `ConversationMutedChanged`: emitted to the current user after mute/unmute.
+- `ConversationBlockedChanged`: emitted to the current user after block/unblock.
 
 Reserved event names for related future APIs:
 - `ConversationCreated`
 - `MessageRead`
-- `MessageDeleted`
 - `MessageUpdated`
 - `ReactionAdded`
 - `ReactionRemoved`

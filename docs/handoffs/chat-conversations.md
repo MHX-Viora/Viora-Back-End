@@ -7,6 +7,12 @@ Implemented `POST /api/chat/attachments/upload`.
 Implemented `POST /api/chat/messages/{messageId}/recall`.
 Implemented `POST /api/chat/conversations/{conversationId}/read`.
 Implemented `PATCH /api/chat/conversations/{conversationId}/pin`.
+Implemented `PATCH /api/chat/conversations/{conversationId}/mute`.
+Implemented `GET /api/chat/conversations/{conversationId}`.
+Implemented `GET /api/chat/conversations/{conversationId}/attachments`.
+Implemented `GET /api/chat/conversations/{conversationId}/links`.
+Implemented `GET /api/chat/conversations/{conversationId}/search`.
+Implemented `PATCH /api/chat/conversations/{conversationId}/block`.
 
 Key files:
 - `Viora.Application/Chat/ChatContracts.cs`
@@ -53,10 +59,17 @@ Behavior:
 - Recall updates message to `MessageType.Recall`, `IsDeleted = true`, and hides attachments in message history/list lastMessage.
 - Recall emits `MessageDeleted` to active members and then per-user `ConversationUpdated`.
 - Pin/unpin validates active membership, updates only the current user's `ConversationMembers.IsPinned` via `ExecuteUpdateAsync`, and emits `ConversationPinnedChanged` only to that user.
+- Mute/unmute validates active membership, updates only the current user's `ConversationMembers.IsMuted` via `ExecuteUpdateAsync`, and emits `ConversationMutedChanged` only to that user.
+- Conversation info validates active membership and returns current user's `isPinned`, `isMuted`, and `isBlocked`.
+- Private conversation info uses the other active member for `name` and `avatarUrl`; group info uses `Conversations.Name`/`AvatarUrl` and includes `CanSendMessage` plus `CreatedBy`.
+- Shared attachments are projected from `MessageAttachments` through messages in the same conversation, newest-first, with `type` filter: `0 All`, `1 Image`, `2 Video`, `3 File`, `4 Audio`.
+- Shared links are extracted from message content with an HTTP/HTTPS regex and returned paged newest-first.
+- Message search uses the same PostgreSQL `translate(lower(...))` accent-insensitive pattern as conversation keyword search.
+- Block/unblock is private-conversation only, creates/deletes `ConversationBlocks`, and emits `ConversationBlockedChanged` only to the current user.
 
 Verification:
 - `dotnet build viora-BE.sln --no-restore -v:minimal` passed.
-- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|RealtimeApiContractTests"` passed 26 tests.
+- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|RealtimeApiContractTests"` passed 33 tests.
 
 Note:
 - Build/test emitted `NU1900` warnings because NuGet vulnerability feed was unavailable; compilation and tests still succeeded.
