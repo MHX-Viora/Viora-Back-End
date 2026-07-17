@@ -27,6 +27,10 @@ public sealed record SendChatMessageCommand(
     IReadOnlyList<SendChatMessageAttachmentRequest>? Attachments)
     : IRequest<ChatResult<SendChatMessageResponse>>;
 
+public sealed record MarkConversationReadCommand(
+    Guid UserId,
+    Guid ConversationId) : IRequest<ChatResult<MarkConversationReadResponse>>;
+
 public sealed record SendChatMessageAttachmentRequest(
     string FileUrl,
     string? FileName,
@@ -111,6 +115,17 @@ public sealed record SendChatMessageResponse(
     bool IsDeleted,
     DateTime CreatedAt);
 
+public sealed record MarkConversationReadResponse(
+    Guid ConversationId,
+    Guid? LastReadMessageId,
+    DateTime ReadAt);
+
+public sealed record MessagesReadRealtimePayload(
+    Guid ConversationId,
+    Guid UserId,
+    Guid? LastReadMessageId,
+    DateTime ReadAt);
+
 public sealed record ChatMessageSenderResponse(
     Guid Id,
     string DisplayName,
@@ -158,11 +173,20 @@ public interface IChatConversationRepository
     Task<ChatResult<SendChatMessageRepositoryResult>> SendMessageAsync(
         SendChatMessageCommand command,
         CancellationToken cancellationToken);
+
+    Task<ChatResult<MarkConversationReadRepositoryResult>> MarkReadAsync(
+        MarkConversationReadCommand command,
+        CancellationToken cancellationToken);
 }
 
 public sealed record SendChatMessageRepositoryResult(
     SendChatMessageResponse Message,
     IReadOnlyList<Guid> ConversationMemberIds);
+
+public sealed record MarkConversationReadRepositoryResult(
+    MarkConversationReadResponse Response,
+    IReadOnlyList<Guid> ConversationMemberIds,
+    bool DidUpdate);
 
 public sealed class SendChatMessageValidator : AbstractValidator<SendChatMessageCommand>
 {

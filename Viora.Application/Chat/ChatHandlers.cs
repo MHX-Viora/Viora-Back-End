@@ -95,3 +95,37 @@ public sealed class SendChatMessageHandler(
         return ChatResult<SendChatMessageResponse>.Success(result.Value.Message);
     }
 }
+
+public sealed class MarkConversationReadHandler(
+    IChatConversationRepository repository,
+    IRealtimeService realtimeService)
+    : IRequestHandler<MarkConversationReadCommand, ChatResult<MarkConversationReadResponse>>
+{
+    public async Task<ChatResult<MarkConversationReadResponse>> Handle(
+        MarkConversationReadCommand request,
+        CancellationToken cancellationToken)
+    {
+        var result = await repository.MarkReadAsync(request, cancellationToken);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            return ChatResult<MarkConversationReadResponse>.Failure(
+                result.Error ?? ChatError.Validation,
+                result.Message ?? "Khong the danh dau da doc.");
+        }
+
+        if (result.Value.DidUpdate)
+        {
+            await realtimeService.SendToUsersAsync(
+                result.Value.ConversationMemberIds,
+                RealtimeEvents.MessagesRead,
+                new MessagesReadRealtimePayload(
+                    result.Value.Response.ConversationId,
+                    request.UserId,
+                    result.Value.Response.LastReadMessageId,
+                    result.Value.Response.ReadAt),
+                cancellationToken);
+        }
+
+        return ChatResult<MarkConversationReadResponse>.Success(result.Value.Response);
+    }
+}

@@ -3,6 +3,7 @@
 Implemented `GET /api/chat/conversations`.
 Implemented `GET /api/chat/conversations/{conversationId}/messages`.
 Implemented `POST /api/chat/messages`.
+Implemented `POST /api/chat/conversations/{conversationId}/read`.
 
 Key files:
 - `Viora.Application/Chat/ChatContracts.cs`
@@ -29,10 +30,15 @@ Behavior:
 - Message insert, attachments insert, and conversation last-message update run in one transaction.
 - After commit, handler emits SignalR `ReceiveMessage` to active conversation members with the API response payload.
 - Push is best-effort through existing FCM sender for offline recipients based on connection registry; the app does not yet track "currently opened conversation" state.
+- Mark-read adds nullable `ConversationMembers.LastReadAt` via migration `20260717033800_AddConversationMemberLastReadAt`.
+- Mark-read uses `Conversations.LastMessageId` to avoid scanning large message tables.
+- Mark-read updates only when the current member's `LastReadMessageId` differs from the conversation last message.
+- Mark-read returns success with `lastReadMessageId = null` for empty conversations and does not update data in that case.
+- Mark-read emits `MessagesRead` to active members only when the read pointer was updated.
 
 Verification:
 - `dotnet build viora-BE.sln --no-restore -v:minimal` passed.
-- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|SendChatMessageValidatorTests"` passed 15 tests.
+- `dotnet test Viora.Infrastructure.Tests\Viora.Infrastructure.Tests.csproj --no-restore -v:minimal --filter "ChatApiContractTests|PersistenceModelTests"` passed 26 tests.
 
 Note:
 - Build/test emitted `NU1900` warnings because NuGet vulnerability feed was unavailable; compilation and tests still succeeded.

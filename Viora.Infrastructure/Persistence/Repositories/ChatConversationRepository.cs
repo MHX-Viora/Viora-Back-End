@@ -399,6 +399,71 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             new SendChatMessageRepositoryResult(response, memberIds));
     }
 
+    public async Task<ChatResult<MarkConversationReadRepositoryResult>> MarkReadAsync(
+        MarkConversationReadCommand command,
+        CancellationToken cancellationToken)
+    {
+        var readAt = DateTime.UtcNow;
+
+        var conversation = await dbContext.Conversations
+            .AsNoTracking()
+            .Where(value => value.Id == command.ConversationId)
+            .Select(value => new
+            {
+                value.Id,
+                value.LastMessageId
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (conversation is null)
+        {
+            return ChatResult<MarkConversationReadRepositoryResult>.Failure(
+                ChatError.ConversationNotFound,
+                "Khong tim thay cuoc tro chuyen.");
+        }
+
+        var membership = await dbContext.ConversationMembers
+            .Where(member =>
+                member.ConversationId == command.ConversationId &&
+                member.UserId == command.UserId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (membership?.Status != ConversationMemberStatus.Active)
+        {
+            return ChatResult<MarkConversationReadRepositoryResult>.Failure(
+                ChatError.Forbidden,
+                "Ban khong co quyen danh dau da doc cuoc tro chuyen nay.");
+        }
+
+        var memberIds = await dbContext.ConversationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.ConversationId == command.ConversationId &&
+                member.Status == ConversationMemberStatus.Active)
+            .Select(member => member.UserId)
+            .ToListAsync(cancellationToken);
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var didUpdate = false;
+        if (conversation.LastMessageId.HasValue &&
+            membership.LastReadMessageId != conversation.LastMessageId.Value)
+        {
+            membership.LastReadMessageId = conversation.LastMessageId.Value;
+            membership.LastReadAt = readAt;
+            await dbContext.SaveChangesAsync(cancellationToken);
+            didUpdate = true;
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
+        var response = new MarkConversationReadResponse(
+            command.ConversationId,
+            conversation.LastMessageId,
+            readAt);
+
+        return ChatResult<MarkConversationReadRepositoryResult>.Success(
+            new MarkConversationReadRepositoryResult(response, memberIds, didUpdate));
+    }
+
     private static bool CanSendToGroup(
         ConversationSendPermission permission,
         ConversationMemberRole role) =>

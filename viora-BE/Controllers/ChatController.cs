@@ -96,6 +96,31 @@ public sealed class ChatController(IMediator mediator) : ControllerBase
         };
     }
 
+    [HttpPost("conversations/{conversationId:guid}/read")]
+    [ProducesResponseType<MarkConversationReadResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MarkConversationReadResponse>> MarkRead(
+        Guid conversationId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+
+        var result = await mediator.Send(
+            new MarkConversationReadCommand(userId, conversationId),
+            cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            return Ok(result.Value);
+        }
+
+        return result.Error == ChatError.ConversationNotFound
+            ? NotFoundProblem(ChatError.ConversationNotFound, result.Message ?? "Khong tim thay cuoc tro chuyen.")
+            : ForbiddenProblem(result.Message ?? "Ban khong co quyen danh dau da doc cuoc tro chuyen nay.");
+    }
+
     private bool TryGetViewerUserId(out Guid userId)
     {
         var value = User.FindFirstValue("user_id");

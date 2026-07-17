@@ -67,6 +67,16 @@ public sealed class PersistenceModelTests
     }
 
     [Fact]
+    public void Conversation_member_tracks_last_read_timestamp()
+    {
+        var lastReadAt = Context.Model.FindEntityType(typeof(ConversationMember))!
+            .FindProperty(nameof(ConversationMember.LastReadAt));
+
+        Assert.True(lastReadAt!.IsNullable);
+        Assert.Equal("timestamp with time zone", lastReadAt.GetColumnType());
+    }
+
+    [Fact]
     public void AddInfrastructure_rejects_missing_connection_string()
     {
         var services = new ServiceCollection();

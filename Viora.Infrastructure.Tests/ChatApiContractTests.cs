@@ -62,6 +62,16 @@ public sealed class ChatApiContractTests
     }
 
     [Fact]
+    public void Mark_conversation_read_has_no_body_and_uses_route_conversation_id()
+    {
+        var action = typeof(ChatController).GetMethod(nameof(ChatController.MarkRead))!;
+        var parameters = action.GetParameters().ToDictionary(parameter => parameter.Name!);
+
+        Assert.Equal(typeof(Guid), parameters["conversationId"].ParameterType);
+        Assert.DoesNotContain(parameters.Keys, name => name.Contains("user", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Chat_conversation_response_contract_has_expected_fields()
     {
         AssertProperties<ChatConversationListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
@@ -129,6 +139,20 @@ public sealed class ChatApiContractTests
     }
 
     [Fact]
+    public void Mark_conversation_read_response_contract_has_expected_fields()
+    {
+        AssertProperties<MarkConversationReadResponse>(
+            "ConversationId",
+            "LastReadMessageId",
+            "ReadAt");
+        AssertProperties<MessagesReadRealtimePayload>(
+            "ConversationId",
+            "UserId",
+            "LastReadMessageId",
+            "ReadAt");
+    }
+
+    [Fact]
     public void Chat_messages_documents_expected_status_codes()
     {
         var action = typeof(ChatController).GetMethod(nameof(ChatController.Messages))!;
@@ -170,6 +194,29 @@ public sealed class ChatApiContractTests
             action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
             attribute => attribute.StatusCode == StatusCodes.Status400BadRequest &&
                          attribute.Type == typeof(ProblemDetails));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status403Forbidden &&
+                         attribute.Type == typeof(ProblemDetails));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status404NotFound &&
+                         attribute.Type == typeof(ProblemDetails));
+    }
+
+    [Fact]
+    public void Mark_conversation_read_documents_expected_route_and_status_codes()
+    {
+        var action = typeof(ChatController).GetMethod(nameof(ChatController.MarkRead))!;
+
+        Assert.Equal("conversations/{conversationId:guid}/read", action.GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status200OK &&
+                         attribute.Type == typeof(MarkConversationReadResponse));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status401Unauthorized);
         Assert.Contains(
             action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
             attribute => attribute.StatusCode == StatusCodes.Status403Forbidden &&

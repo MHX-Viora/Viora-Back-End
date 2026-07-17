@@ -22,6 +22,7 @@ public sealed class ConversationMember
     public ConversationMemberRole Role { get; set; } = ConversationMemberRole.Member;
     public DateTime JoinedAt { get; set; }
     public Guid? LastReadMessageId { get; set; }
+    public DateTime? LastReadAt { get; set; }
     public bool IsMuted { get; set; }
     public bool IsPinned { get; set; }
     public ConversationMemberStatus? Status { get; set; }

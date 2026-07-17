@@ -5,6 +5,7 @@ Add chat read APIs for the authenticated user:
 - `GET /api/chat/conversations` lists active conversations with pagination, keyword search, last message, unread count, mute, and pin metadata.
 - `GET /api/chat/conversations/{conversationId}/messages` lists paged message history.
 - `POST /api/chat/messages` sends a message as the authenticated user.
+- `POST /api/chat/conversations/{conversationId}/read` marks the authenticated user's active conversation membership as read.
 
 ## Tech Stack
 ASP.NET Core controller, MediatR query handler, EF Core/Npgsql projection repository.
@@ -37,6 +38,7 @@ Contract tests verify route, authorization, query defaults, response fields, and
 - Always: derive current user from JWT `user_id`; clamp `page` to at least 1 and `pageSize` to at most 50.
 - Always: for message history, return 404 when the conversation does not exist and 403 when the viewer is not an active member.
 - Always: for sending, reject client-supplied sender identity, reject `Recall`, validate payload by `MessageType`, and send realtime only after transaction commit.
+- Always: for mark-read, update only the current active membership row and emit `MessagesRead` only when the read pointer changes.
 - Ask first: database schema changes, new dependencies, or endpoint contract changes.
 - Never: accept `UserId` from query/body for this API.
 
@@ -49,3 +51,4 @@ Contract tests verify route, authorization, query defaults, response fields, and
 - Message history is fetched newest-first for paging, then returned oldest-to-newest within the page.
 - Message history includes sender, reply preview, attachments, reactions, reaction summary, edit/delete flags, and ownership flag.
 - Sending creates `Messages` and `MessageAttachments`, updates `Conversations.LastMessageId` and `LastMessageAt`, and emits `ReceiveMessage` with the API response payload.
+- Mark-read stores `ConversationMembers.LastReadMessageId` and nullable `LastReadAt`; it does not create `MessageReads`.
