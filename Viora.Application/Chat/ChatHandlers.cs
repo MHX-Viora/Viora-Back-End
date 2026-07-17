@@ -320,3 +320,32 @@ public sealed class RecallChatMessageHandler(
         return ChatResult<RecallChatMessageResponse>.Success(result.Value.Response);
     }
 }
+
+public sealed class SetConversationPinHandler(
+    IChatConversationRepository repository,
+    IRealtimeService realtimeService)
+    : IRequestHandler<SetConversationPinCommand, ChatResult<SetConversationPinResponse>>
+{
+    public async Task<ChatResult<SetConversationPinResponse>> Handle(
+        SetConversationPinCommand request,
+        CancellationToken cancellationToken)
+    {
+        var result = await repository.SetPinAsync(request, cancellationToken);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            return ChatResult<SetConversationPinResponse>.Failure(
+                result.Error ?? ChatError.Validation,
+                result.Message ?? "Khong the cap nhat trang thai ghim.");
+        }
+
+        await realtimeService.SendToUserAsync(
+            request.UserId,
+            RealtimeEvents.ConversationPinnedChanged,
+            new ConversationPinnedChangedPayload(
+                result.Value.ConversationId,
+                result.Value.IsPinned),
+            cancellationToken);
+
+        return ChatResult<SetConversationPinResponse>.Success(result.Value);
+    }
+}

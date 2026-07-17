@@ -40,6 +40,11 @@ public sealed record RecallChatMessageCommand(
     Guid UserId,
     Guid MessageId) : IRequest<ChatResult<RecallChatMessageResponse>>;
 
+public sealed record SetConversationPinCommand(
+    Guid UserId,
+    Guid ConversationId,
+    bool IsPinned) : IRequest<ChatResult<SetConversationPinResponse>>;
+
 public sealed record SendChatMessageAttachmentRequest(
     string FileUrl,
     string? FileName,
@@ -184,6 +189,14 @@ public sealed record RecallChatMessageResponse(
     Guid DeletedBy,
     DateTime DeletedAt);
 
+public sealed record SetConversationPinResponse(
+    Guid ConversationId,
+    bool IsPinned);
+
+public sealed record ConversationPinnedChangedPayload(
+    Guid ConversationId,
+    bool IsPinned);
+
 public sealed record MarkConversationReadResponse(
     Guid ConversationId,
     Guid? LastReadMessageId,
@@ -261,6 +274,10 @@ public interface IChatConversationRepository
 
     Task<ChatResult<RecallChatMessageRepositoryResult>> RecallMessageAsync(
         RecallChatMessageCommand command,
+        CancellationToken cancellationToken);
+
+    Task<ChatResult<SetConversationPinResponse>> SetPinAsync(
+        SetConversationPinCommand command,
         CancellationToken cancellationToken);
 }
 

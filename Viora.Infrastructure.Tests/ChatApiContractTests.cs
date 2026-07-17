@@ -85,6 +85,14 @@ public sealed class ChatApiContractTests
     }
 
     [Fact]
+    public void Set_conversation_pin_request_contract_has_expected_fields()
+    {
+        AssertProperties<SetConversationPinRequest>("IsPinned");
+        AssertProperties<SetConversationPinResponse>("ConversationId", "IsPinned");
+        AssertProperties<ConversationPinnedChangedPayload>("ConversationId", "IsPinned");
+    }
+
+    [Fact]
     public void Chat_conversation_response_contract_has_expected_fields()
     {
         AssertProperties<ChatConversationListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
@@ -322,6 +330,29 @@ public sealed class ChatApiContractTests
             action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
             attribute => attribute.StatusCode == StatusCodes.Status200OK &&
                          attribute.Type == typeof(MarkConversationReadResponse));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status401Unauthorized);
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status403Forbidden &&
+                         attribute.Type == typeof(ProblemDetails));
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status404NotFound &&
+                         attribute.Type == typeof(ProblemDetails));
+    }
+
+    [Fact]
+    public void Set_conversation_pin_documents_expected_route_and_status_codes()
+    {
+        var action = typeof(ChatController).GetMethod(nameof(ChatController.SetPin))!;
+
+        Assert.Equal("conversations/{conversationId:guid}/pin", action.GetCustomAttribute<HttpPatchAttribute>()!.Template);
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status200OK &&
+                         attribute.Type == typeof(SetConversationPinResponse));
         Assert.Contains(
             action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
             attribute => attribute.StatusCode == StatusCodes.Status401Unauthorized);

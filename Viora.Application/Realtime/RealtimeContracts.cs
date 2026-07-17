@@ -28,6 +28,7 @@ public static class RealtimeEvents
     public const string UserOnline = nameof(UserOnline);
     public const string UserOffline = nameof(UserOffline);
     public const string ConversationPinned = nameof(ConversationPinned);
+    public const string ConversationPinnedChanged = nameof(ConversationPinnedChanged);
     public const string ConversationMuted = nameof(ConversationMuted);
     public const string ConversationRenamed = nameof(ConversationRenamed);
     public const string ConversationAvatarChanged = nameof(ConversationAvatarChanged);

@@ -8,6 +8,7 @@ Add chat read APIs for the authenticated user:
 - `POST /api/chat/attachments/upload` uploads chat files to public storage before sending a message.
 - `POST /api/chat/messages/{messageId}/recall` recalls a sent message.
 - `POST /api/chat/conversations/{conversationId}/read` marks the authenticated user's active conversation membership as read.
+- `PATCH /api/chat/conversations/{conversationId}/pin` pins or unpins a conversation for the authenticated user.
 
 ## Tech Stack
 ASP.NET Core controller, MediatR query handler, EF Core/Npgsql projection repository.
@@ -57,6 +58,7 @@ Contract tests verify route, authorization, query defaults, response fields, and
 - Attachment upload accepts multipart `files` and returns public URLs plus metadata for `POST /api/chat/messages`.
 - Recall marks the message as deleted, changes `MessageType` to `Recall`, hides old attachments in read APIs, emits `MessageDeleted`, and sends `ConversationUpdated`.
 - Mark-read stores `ConversationMembers.LastReadMessageId` and nullable `LastReadAt`; it does not create `MessageReads`.
+- Pin/unpin updates only `ConversationMembers.IsPinned` for the current user and emits `ConversationPinnedChanged` only to that user.
 
 ## Realtime Events
 Canonical event names are defined in `RealtimeEvents`.

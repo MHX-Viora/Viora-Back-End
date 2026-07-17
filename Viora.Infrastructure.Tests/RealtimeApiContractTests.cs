@@ -93,6 +93,7 @@ public sealed class RealtimeApiContractTests
             "UserOnline",
             "UserOffline",
             "ConversationPinned",
+            "ConversationPinnedChanged",
             "ConversationMuted",
             "ConversationRenamed",
             "ConversationAvatarChanged",

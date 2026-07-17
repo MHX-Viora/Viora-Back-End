@@ -628,6 +628,46 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             new RecallChatMessageRepositoryResult(response, memberIds));
     }
 
+    public async Task<ChatResult<SetConversationPinResponse>> SetPinAsync(
+        SetConversationPinCommand command,
+        CancellationToken cancellationToken)
+    {
+        var conversationExists = await dbContext.Conversations
+            .AsNoTracking()
+            .AnyAsync(conversation => conversation.Id == command.ConversationId, cancellationToken);
+        if (!conversationExists)
+        {
+            return ChatResult<SetConversationPinResponse>.Failure(
+                ChatError.ConversationNotFound,
+                "Khong tim thay cuoc tro chuyen.");
+        }
+
+        var isActiveMember = await dbContext.ConversationMembers
+            .AsNoTracking()
+            .AnyAsync(member =>
+                member.ConversationId == command.ConversationId &&
+                member.UserId == command.UserId &&
+                member.Status == ConversationMemberStatus.Active,
+                cancellationToken);
+        if (!isActiveMember)
+        {
+            return ChatResult<SetConversationPinResponse>.Failure(
+                ChatError.Forbidden,
+                "Ban khong co quyen ghim cuoc tro chuyen nay.");
+        }
+
+        await dbContext.ConversationMembers
+            .Where(member =>
+                member.ConversationId == command.ConversationId &&
+                member.UserId == command.UserId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(member => member.IsPinned, command.IsPinned),
+                cancellationToken);
+
+        return ChatResult<SetConversationPinResponse>.Success(
+            new SetConversationPinResponse(command.ConversationId, command.IsPinned));
+    }
+
     private async Task PopulateLastMessageAttachmentsAsync(
         List<ChatConversationItemResponse> items,
         CancellationToken cancellationToken)
