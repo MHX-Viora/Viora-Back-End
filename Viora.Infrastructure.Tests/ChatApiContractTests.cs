@@ -112,7 +112,13 @@ public sealed class ChatApiContractTests
             "IsMuted",
             "IsBlocked",
             "CanSendMessage",
-            "CreatedBy");
+            "CreatedBy",
+            "OtherUser");
+        AssertProperties<ChatConversationOtherUserResponse>(
+            "Id",
+            "DisplayName",
+            "AvatarUrl",
+            "IsVerified");
         AssertProperties<ChatAttachmentListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
         AssertProperties<ChatAttachmentListItemResponse>(
             "MessageId",

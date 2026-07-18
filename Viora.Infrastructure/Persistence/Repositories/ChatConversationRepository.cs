@@ -800,8 +800,17 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 member.Conversation.CanSendMessage,
                 member.Conversation.CreatedBy,
                 OtherMember = member.Conversation.Members
-                    .Where(other => other.UserId != query.UserId && other.Status == ConversationMemberStatus.Active)
-                    .Select(other => new { other.User.DisplayName, other.User.AvatarUrl })
+                    .Where(other =>
+                        member.Conversation.ConversationType == ConversationType.Private &&
+                        other.UserId != query.UserId &&
+                        other.Status == ConversationMemberStatus.Active)
+                    .Select(other => new
+                    {
+                        other.UserId,
+                        other.User.DisplayName,
+                        other.User.AvatarUrl,
+                        other.User.IsVerified
+                    })
                     .FirstOrDefault(),
                 MemberCount = member.Conversation.Members.Count(other => other.Status == ConversationMemberStatus.Active),
                 IsBlocked = dbContext.ConversationBlocks.Any(block =>
@@ -820,7 +829,14 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             info.IsMuted,
             info.IsBlocked,
             info.ConversationType == ConversationType.Group ? info.CanSendMessage : null,
-            info.ConversationType == ConversationType.Group ? info.CreatedBy : null));
+            info.ConversationType == ConversationType.Group ? info.CreatedBy : null,
+            info.ConversationType == ConversationType.Private && info.OtherMember is not null
+                ? new ChatConversationOtherUserResponse(
+                    info.OtherMember.UserId,
+                    info.OtherMember.DisplayName,
+                    info.OtherMember.AvatarUrl,
+                    info.OtherMember.IsVerified)
+                : null));
     }
 
     public async Task<ChatResult<ChatAttachmentListResponse>> GetAttachmentsAsync(

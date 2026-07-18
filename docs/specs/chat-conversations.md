@@ -10,7 +10,7 @@ Add chat read APIs for the authenticated user:
 - `POST /api/chat/conversations/{conversationId}/read` marks the authenticated user's active conversation membership as read.
 - `PATCH /api/chat/conversations/{conversationId}/pin` pins or unpins a conversation for the authenticated user.
 - `PATCH /api/chat/conversations/{conversationId}/mute` mutes or unmutes a conversation for the authenticated user.
-- `GET /api/chat/conversations/{conversationId}` returns chat settings/header metadata.
+- `GET /api/chat/conversations/{conversationId}` returns chat settings/header metadata and the other user's profile for private chats (`otherUser`; `null` for groups).
 - `GET /api/chat/conversations/{conversationId}/attachments` lists shared image/video/file/audio attachments.
 - `GET /api/chat/conversations/{conversationId}/links` lists URLs extracted from message content.
 - `GET /api/chat/conversations/{conversationId}/search` searches message content.

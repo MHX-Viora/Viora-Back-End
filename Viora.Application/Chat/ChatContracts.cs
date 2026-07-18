@@ -245,7 +245,14 @@ public sealed record ChatConversationInfoResponse(
     bool IsMuted,
     bool IsBlocked,
     ConversationSendPermission? CanSendMessage,
-    Guid? CreatedBy);
+    Guid? CreatedBy,
+    ChatConversationOtherUserResponse? OtherUser);
+
+public sealed record ChatConversationOtherUserResponse(
+    Guid Id,
+    string DisplayName,
+    string? AvatarUrl,
+    bool IsVerified);
 
 public enum ChatAttachmentFilterType : short { All = 0, Image = 1, Video = 2, File = 3, Audio = 4 }
 
