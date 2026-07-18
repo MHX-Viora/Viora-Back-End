@@ -6,6 +6,89 @@ namespace Viora.Infrastructure.Persistence.Repositories;
 
 public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedRepository
 {
+    public async Task<Result<PostDetailResponse>> GetPostDetailAsync(
+        GetPostDetailQuery query,
+        CancellationToken cancellationToken)
+    {
+        var access = await dbContext.Posts
+            .AsNoTracking()
+            .Where(post => post.Id == query.PostId)
+            .Select(post => new
+            {
+                post.UserId,
+                post.Status,
+                post.Visibility,
+                post.DeletedAt,
+                IsFollower = dbContext.Follows.Any(follow =>
+                    follow.FollowerId == query.UserId &&
+                    follow.FollowingId == post.UserId)
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (access is null || access.Status == PostStatus.Deleted || access.DeletedAt is not null)
+        {
+            return Result<PostDetailResponse>.Failure(PostInteractionError.NotFound, "Khong tim thay bai viet.");
+        }
+
+        var isOwner = access.UserId == query.UserId;
+        var canView = access.Status == PostStatus.Published &&
+            (isOwner || access.Visibility == PostVisibility.Public ||
+                (access.Visibility == PostVisibility.Followers && access.IsFollower));
+
+        if (!canView)
+        {
+            return Result<PostDetailResponse>.Failure(PostInteractionError.Forbidden, "Ban khong co quyen xem bai viet nay.");
+        }
+
+        var response = await dbContext.Posts
+            .AsNoTracking()
+            .Where(post => post.Id == query.PostId && post.Status == PostStatus.Published && post.DeletedAt == null)
+            .Select(post => new PostDetailResponse(
+                post.Id,
+                post.PostType,
+                post.Content,
+                post.Visibility,
+                post.Location,
+                post.CreatedAt,
+                post.UpdatedAt,
+                post.ReactionCount,
+                post.CommentCount,
+                post.ShareCount,
+                post.SaveCount,
+                post.ViewCount,
+                dbContext.PostReactions
+                    .Where(reaction => reaction.PostId == post.Id && reaction.UserId == query.UserId)
+                    .Select(reaction => (ReactionType?)reaction.ReactionType)
+                    .FirstOrDefault(),
+                dbContext.SavedPosts.Any(saved => saved.PostId == post.Id && saved.UserId == query.UserId),
+                post.UserId == query.UserId,
+                new PostDetailUserResponse(
+                    post.User.Id,
+                    post.User.DisplayName,
+                    post.User.AvatarUrl,
+                    post.User.IsVerified),
+                post.Media
+                    .OrderBy(media => media.CreatedAt)
+                    .Select(media => new PostDetailMediaResponse(
+                        media.Id,
+                        post.PostType == PostType.ShortVideo
+                            ? PostDetailMediaType.Video
+                            : PostDetailMediaType.Image,
+                        media.MediaUrl,
+                        media.ThumbnailUrl))
+                    .ToList(),
+                dbContext.PostHashtags
+                    .Where(postHashtag => postHashtag.PostId == post.Id)
+                    .OrderBy(postHashtag => postHashtag.Hashtag.Name)
+                    .Select(postHashtag => new PostDetailHashtagResponse(
+                        postHashtag.Hashtag.Id,
+                        postHashtag.Hashtag.Name))
+                    .ToList()))
+            .SingleAsync(cancellationToken);
+
+        return Result<PostDetailResponse>.Success(response);
+    }
+
     public async Task<PostFeedResponse> GetCommunityPostsAsync(
         GetCommunityPostsQuery query,
         CancellationToken cancellationToken)

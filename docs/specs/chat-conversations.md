@@ -2,7 +2,7 @@
 
 ## Objective
 Add chat read APIs for the authenticated user:
-- `GET /api/chat/conversations` lists active conversations with pagination, keyword search, last message, unread count, mute, and pin metadata.
+- `GET /api/chat/conversations` lists active conversations with pagination, keyword search, private-chat friendship/stranger state, last message, unread count, mute, and pin metadata.
 - `GET /api/chat/conversations/{conversationId}/messages` lists paged message history.
 - `POST /api/chat/messages` sends a message as the authenticated user.
 - `POST /api/chat/attachments/upload` uploads chat files to public storage before sending a message.
@@ -14,6 +14,7 @@ Add chat read APIs for the authenticated user:
 - `GET /api/chat/conversations/{conversationId}/attachments` lists shared image/video/file/audio attachments.
 - `GET /api/chat/conversations/{conversationId}/links` lists URLs extracted from message content.
 - `GET /api/chat/conversations/{conversationId}/search` searches message content.
+- `POST /api/chat/conversations/private` gets or creates the single private conversation between the authenticated user and a target user. Creation respects the target's `AllowMessageEveryone` setting and is serialized per user pair in a database transaction.
 - `PATCH /api/chat/conversations/{conversationId}/block` blocks or unblocks a private conversation.
 
 ## Tech Stack

@@ -13,6 +13,12 @@ public sealed record GetChatConversationsQuery(
     int PageSize,
     string? Keyword) : IRequest<ChatConversationListResponse>;
 
+public sealed record CreatePrivateConversationCommand(Guid CurrentUserId, Guid UserId)
+    : IRequest<ChatResult<CreatePrivateConversationResponse>>;
+
+public sealed record CreatePrivateConversationRequest(Guid UserId);
+public sealed record CreatePrivateConversationResponse(Guid ConversationId, bool IsCreated);
+
 public sealed record GetChatConversationMessagesQuery(
     Guid UserId,
     Guid ConversationId,
@@ -91,6 +97,7 @@ public enum ChatError
 {
     ConversationNotFound,
     MessageNotFound,
+    UserNotFound,
     Forbidden,
     Validation
 }
@@ -113,7 +120,7 @@ public sealed record ChatConversationItemResponse(
     ConversationType ConversationType,
     string? Name,
     string? AvatarUrl,
-    ChatParticipantResponse? OtherParticipant,
+    ChatConversationParticipantResponse? OtherParticipant,
     int MemberCount,
     ChatLastMessageResponse? LastMessage,
     int UnreadCount,
@@ -324,6 +331,16 @@ public sealed record ChatParticipantResponse(
     string DisplayName,
     string? AvatarUrl);
 
+public sealed record ChatConversationParticipantResponse(
+    Guid Id,
+    string DisplayName,
+    string? AvatarUrl,
+    bool IsVerified,
+    bool IsStranger,
+    ChatFriendshipResponse Friendship);
+
+public sealed record ChatFriendshipResponse(string? Status, bool IsRequester);
+
 public sealed record ChatReplyMessageResponse(
     Guid Id,
     string? Content,
@@ -355,6 +372,10 @@ public sealed record ChatReactionSummaryResponse(
 
 public interface IChatConversationRepository
 {
+    Task<ChatResult<CreatePrivateConversationResponse>> CreatePrivateConversationAsync(
+        CreatePrivateConversationCommand command,
+        CancellationToken cancellationToken);
+
     Task<ChatConversationListResponse> GetConversationsAsync(
         GetChatConversationsQuery query,
         CancellationToken cancellationToken);
@@ -409,6 +430,18 @@ public sealed record ChatConversationRecipientState(
 public sealed record RecallChatMessageRepositoryResult(
     RecallChatMessageResponse Response,
     IReadOnlyList<Guid> ConversationMemberIds);
+
+public sealed class CreatePrivateConversationValidator : AbstractValidator<CreatePrivateConversationCommand>
+{
+    public CreatePrivateConversationValidator()
+    {
+        RuleFor(command => command.CurrentUserId).NotEmpty();
+        RuleFor(command => command.UserId).NotEmpty();
+        RuleFor(command => command.UserId)
+            .NotEqual(command => command.CurrentUserId)
+            .WithMessage("Khong the tao phong chat voi chinh minh.");
+    }
+}
 
 public sealed class SendChatMessageValidator : AbstractValidator<SendChatMessageCommand>
 {

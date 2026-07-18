@@ -13,6 +13,17 @@ namespace viora_BE.Controllers;
 [Authorize]
 public sealed class PostsController(IMediator mediator) : ControllerBase
 {
+    [HttpGet("{postId:guid}")]
+    [ProducesResponseType<PostDetailResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Detail(Guid postId, CancellationToken cancellationToken)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new GetPostDetailQuery(userId, postId), cancellationToken);
+        return ToActionResult(result);
+    }
+
     [HttpPost("{postId:guid}/reactions")]
     [ProducesResponseType<PostReactionResponse>(StatusCodes.Status200OK)]
     public async Task<IActionResult> React(

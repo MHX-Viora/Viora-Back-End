@@ -23,6 +23,27 @@ public sealed class ChatApiContractTests
     }
 
     [Fact]
+    public void Chat_controller_exposes_create_private_conversation_route()
+    {
+        var action = typeof(ChatController).GetMethod(nameof(ChatController.CreatePrivateConversation))!;
+
+        Assert.Equal("conversations/private", action.GetCustomAttribute<HttpPostAttribute>()!.Template);
+        var responses = action.GetCustomAttributes<ProducesResponseTypeAttribute>().ToList();
+        Assert.Contains(responses, value => value.StatusCode == StatusCodes.Status200OK && value.Type == typeof(CreatePrivateConversationResponse));
+        Assert.Contains(responses, value => value.StatusCode == StatusCodes.Status201Created && value.Type == typeof(CreatePrivateConversationResponse));
+        Assert.Contains(responses, value => value.StatusCode == StatusCodes.Status400BadRequest && value.Type == typeof(ProblemDetails));
+        Assert.Contains(responses, value => value.StatusCode == StatusCodes.Status403Forbidden && value.Type == typeof(ProblemDetails));
+        Assert.Contains(responses, value => value.StatusCode == StatusCodes.Status404NotFound && value.Type == typeof(ProblemDetails));
+    }
+
+    [Fact]
+    public void Create_private_conversation_contracts_have_expected_fields()
+    {
+        AssertProperties<CreatePrivateConversationRequest>("UserId");
+        AssertProperties<CreatePrivateConversationResponse>("ConversationId", "IsCreated");
+    }
+
+    [Fact]
     public void Chat_conversations_query_parameters_match_contract()
     {
         var action = typeof(ChatController).GetMethod(nameof(ChatController.Conversations))!;
@@ -188,6 +209,14 @@ public sealed class ChatApiContractTests
         AssertProperties<ChatMessageReactionResponse>("UserId", "DisplayName", "ReactionType");
         AssertProperties<ChatReactionSummaryResponse>("Like", "Love", "Haha", "Wow", "Sad", "Angry", "Total");
         AssertProperties<ChatParticipantResponse>("Id", "DisplayName", "AvatarUrl");
+        AssertProperties<ChatConversationParticipantResponse>(
+            "Id",
+            "DisplayName",
+            "AvatarUrl",
+            "IsVerified",
+            "IsStranger",
+            "Friendship");
+        AssertProperties<ChatFriendshipResponse>("Status", "IsRequester");
     }
 
     [Fact]

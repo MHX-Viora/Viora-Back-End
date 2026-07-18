@@ -19,6 +19,101 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
     private const string VietnameseAscii =
         "aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd";
 
+    public async Task<ChatResult<CreatePrivateConversationResponse>> CreatePrivateConversationAsync(
+        CreatePrivateConversationCommand command,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var firstUserId = command.CurrentUserId.CompareTo(command.UserId) < 0
+            ? command.CurrentUserId
+            : command.UserId;
+        var secondUserId = command.CurrentUserId.CompareTo(command.UserId) < 0
+            ? command.UserId
+            : command.CurrentUserId;
+        var pairKey = $"{firstUserId:N}:{secondUserId:N}";
+
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({pairKey}, 0))",
+            cancellationToken);
+
+        var recipient = await dbContext.Users
+            .AsNoTracking()
+            .Where(user =>
+                user.Id == command.UserId &&
+                user.Account.Status == AccountStatus.Active &&
+                user.Account.DeletedAt == null)
+            .Select(user => new
+            {
+                AllowMessageEveryone = user.Settings == null || user.Settings.AllowMessageEveryone
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (recipient is null)
+        {
+            return ChatResult<CreatePrivateConversationResponse>.Failure(
+                ChatError.UserNotFound,
+                "Khong tim thay nguoi dung.");
+        }
+
+        var existingConversationId = await dbContext.Conversations
+            .AsNoTracking()
+            .Where(conversation =>
+                conversation.ConversationType == ConversationType.Private &&
+                conversation.Members.Any(member => member.UserId == firstUserId) &&
+                conversation.Members.Any(member => member.UserId == secondUserId))
+            .OrderByDescending(conversation => conversation.CreatedAt)
+            .Select(conversation => (Guid?)conversation.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (existingConversationId.HasValue)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return ChatResult<CreatePrivateConversationResponse>.Success(
+                new CreatePrivateConversationResponse(existingConversationId.Value, false));
+        }
+
+        if (!recipient.AllowMessageEveryone)
+        {
+            return ChatResult<CreatePrivateConversationResponse>.Failure(
+                ChatError.Forbidden,
+                "Người dùng này không cho phép người lạ nhắn tin.");
+        }
+
+        var now = DateTime.UtcNow;
+        var conversation = new Conversation
+        {
+            ConversationType = ConversationType.Private,
+            CanSendMessage = ConversationSendPermission.Everyone,
+            CreatedBy = command.CurrentUserId,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        conversation.Members.Add(new ConversationMember
+        {
+            Conversation = conversation,
+            UserId = command.CurrentUserId,
+            Role = ConversationMemberRole.Owner,
+            Status = ConversationMemberStatus.Active,
+            JoinedAt = now
+        });
+        conversation.Members.Add(new ConversationMember
+        {
+            Conversation = conversation,
+            UserId = command.UserId,
+            Role = ConversationMemberRole.Member,
+            Status = ConversationMemberStatus.Active,
+            JoinedAt = now
+        });
+
+        dbContext.Conversations.Add(conversation);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return ChatResult<CreatePrivateConversationResponse>.Success(
+            new CreatePrivateConversationResponse(conversation.Id, true));
+    }
+
     public async Task<ChatConversationListResponse> GetConversationsAsync(
         GetChatConversationsQuery query,
         CancellationToken cancellationToken)
@@ -48,6 +143,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 LastMessageAt = member.Conversation.LastMessageAt,
                 OtherMember = member.Conversation.Members
                     .Where(other =>
+                        member.Conversation.ConversationType == ConversationType.Private &&
                         other.UserId != query.UserId &&
                         other.Status == ConversationMemberStatus.Active)
                     .OrderBy(other => other.JoinedAt)
@@ -55,7 +151,19 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                     {
                         other.User.Id,
                         other.User.DisplayName,
-                        other.User.AvatarUrl
+                        other.User.AvatarUrl,
+                        other.User.IsVerified,
+                        Friendship = dbContext.Friendships
+                            .Where(friendship =>
+                                (friendship.RequesterUserId == query.UserId && friendship.AddresseeUserId == other.UserId) ||
+                                (friendship.RequesterUserId == other.UserId && friendship.AddresseeUserId == query.UserId))
+                            .OrderByDescending(friendship => friendship.UpdatedAt)
+                            .Select(friendship => new
+                            {
+                                friendship.Status,
+                                IsRequester = friendship.RequesterUserId == query.UserId
+                            })
+                            .FirstOrDefault()
                     })
                     .FirstOrDefault(),
                 MemberCount = member.Conversation.Members
@@ -114,10 +222,23 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                     ? conversation.OtherMember == null ? null : conversation.OtherMember.AvatarUrl
                     : conversation.GroupAvatarUrl,
                 conversation.ConversationType == ConversationType.Private && conversation.OtherMember != null
-                    ? new ChatParticipantResponse(
+                    ? new ChatConversationParticipantResponse(
                         conversation.OtherMember.Id,
                         conversation.OtherMember.DisplayName,
-                        conversation.OtherMember.AvatarUrl)
+                        conversation.OtherMember.AvatarUrl,
+                        conversation.OtherMember.IsVerified,
+                        conversation.OtherMember.Friendship == null ||
+                            conversation.OtherMember.Friendship.Status != FriendshipStatus.Accepted,
+                        new ChatFriendshipResponse(
+                            conversation.OtherMember.Friendship == null ? null :
+                            conversation.OtherMember.Friendship.Status == FriendshipStatus.Pending ? "Pending" :
+                            conversation.OtherMember.Friendship.Status == FriendshipStatus.Accepted ? "Accepted" :
+                            conversation.OtherMember.Friendship.Status == FriendshipStatus.Rejected ? "Rejected" :
+                            conversation.OtherMember.Friendship.Status == FriendshipStatus.Cancelled ? "Cancelled" : null,
+                            conversation.OtherMember.Friendship != null &&
+                            conversation.OtherMember.Friendship.Status != FriendshipStatus.Blocked &&
+                            conversation.OtherMember.Friendship.Status != FriendshipStatus.Unfriended &&
+                            conversation.OtherMember.Friendship.IsRequester))
                     : null,
                 conversation.MemberCount,
                 conversation.LastMessage,
@@ -330,6 +451,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 LastMessageAt = member.Conversation.LastMessageAt,
                 OtherMember = member.Conversation.Members
                     .Where(other =>
+                        member.Conversation.ConversationType == ConversationType.Private &&
                         other.UserId != userId &&
                         other.Status == ConversationMemberStatus.Active)
                     .OrderBy(other => other.JoinedAt)
@@ -337,7 +459,19 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                     {
                         other.User.Id,
                         other.User.DisplayName,
-                        other.User.AvatarUrl
+                        other.User.AvatarUrl,
+                        other.User.IsVerified,
+                        Friendship = dbContext.Friendships
+                            .Where(friendship =>
+                                (friendship.RequesterUserId == userId && friendship.AddresseeUserId == other.UserId) ||
+                                (friendship.RequesterUserId == other.UserId && friendship.AddresseeUserId == userId))
+                            .OrderByDescending(friendship => friendship.UpdatedAt)
+                            .Select(friendship => new
+                            {
+                                friendship.Status,
+                                IsRequester = friendship.RequesterUserId == userId
+                            })
+                            .FirstOrDefault()
                     })
                     .FirstOrDefault(),
                 MemberCount = member.Conversation.Members
@@ -368,10 +502,23 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                     ? conversation.OtherMember == null ? null : conversation.OtherMember.AvatarUrl
                     : conversation.GroupAvatarUrl,
                 conversation.ConversationType == ConversationType.Private && conversation.OtherMember != null
-                    ? new ChatParticipantResponse(
+                    ? new ChatConversationParticipantResponse(
                         conversation.OtherMember.Id,
                         conversation.OtherMember.DisplayName,
-                        conversation.OtherMember.AvatarUrl)
+                        conversation.OtherMember.AvatarUrl,
+                        conversation.OtherMember.IsVerified,
+                        conversation.OtherMember.Friendship == null ||
+                            conversation.OtherMember.Friendship.Status != FriendshipStatus.Accepted,
+                        new ChatFriendshipResponse(
+                            conversation.OtherMember.Friendship == null ? null :
+                            conversation.OtherMember.Friendship.Status == FriendshipStatus.Pending ? "Pending" :
+                            conversation.OtherMember.Friendship.Status == FriendshipStatus.Accepted ? "Accepted" :
+                            conversation.OtherMember.Friendship.Status == FriendshipStatus.Rejected ? "Rejected" :
+                            conversation.OtherMember.Friendship.Status == FriendshipStatus.Cancelled ? "Cancelled" : null,
+                            conversation.OtherMember.Friendship != null &&
+                            conversation.OtherMember.Friendship.Status != FriendshipStatus.Blocked &&
+                            conversation.OtherMember.Friendship.Status != FriendshipStatus.Unfriended &&
+                            conversation.OtherMember.Friendship.IsRequester))
                     : null,
                 conversation.MemberCount,
                 conversation.LastMessage,

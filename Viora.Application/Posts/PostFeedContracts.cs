@@ -10,6 +10,9 @@ public sealed record GetCommunityPostsQuery(
     Guid? UserId,
     Guid? ViewerUserId) : IRequest<PostFeedResponse>;
 
+public sealed record GetPostDetailQuery(Guid UserId, Guid PostId)
+    : IRequest<Result<PostDetailResponse>>;
+
 public sealed record PostFeedResponse(
     int Page,
     int PageSize,
@@ -64,9 +67,53 @@ public sealed record PostFeedMediaResponse(
     string MediaUrl,
     string? ThumbnailUrl);
 
+public enum PostDetailMediaType : short
+{
+    Image = 0,
+    Video = 1
+}
+
+public sealed record PostDetailResponse(
+    Guid Id,
+    PostType PostType,
+    string? Content,
+    PostVisibility Visibility,
+    string? Location,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    int ReactionCount,
+    int CommentCount,
+    int ShareCount,
+    int SaveCount,
+    int ViewCount,
+    ReactionType? MyReaction,
+    bool IsSaved,
+    bool IsOwner,
+    PostDetailUserResponse User,
+    IReadOnlyList<PostDetailMediaResponse> Media,
+    IReadOnlyList<PostDetailHashtagResponse> Hashtags);
+
+public sealed record PostDetailUserResponse(
+    Guid Id,
+    string DisplayName,
+    string? AvatarUrl,
+    bool IsVerified);
+
+public sealed record PostDetailMediaResponse(
+    Guid Id,
+    PostDetailMediaType MediaType,
+    string MediaUrl,
+    string? ThumbnailUrl);
+
+public sealed record PostDetailHashtagResponse(Guid Id, string Name);
+
 public interface IPostFeedRepository
 {
     Task<PostFeedResponse> GetCommunityPostsAsync(
         GetCommunityPostsQuery query,
+        CancellationToken cancellationToken);
+
+    Task<Result<PostDetailResponse>> GetPostDetailAsync(
+        GetPostDetailQuery query,
         CancellationToken cancellationToken);
 }

@@ -5,6 +5,27 @@ using Viora.Application.Realtime;
 
 namespace Viora.Application.Chat;
 
+public sealed class CreatePrivateConversationHandler(
+    IChatConversationRepository repository,
+    IValidator<CreatePrivateConversationCommand> validator)
+    : IRequestHandler<CreatePrivateConversationCommand, ChatResult<CreatePrivateConversationResponse>>
+{
+    public async Task<ChatResult<CreatePrivateConversationResponse>> Handle(
+        CreatePrivateConversationCommand request,
+        CancellationToken cancellationToken)
+    {
+        var validation = await validator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid)
+        {
+            return ChatResult<CreatePrivateConversationResponse>.Failure(
+                ChatError.Validation,
+                validation.Errors[0].ErrorMessage);
+        }
+
+        return await repository.CreatePrivateConversationAsync(request, cancellationToken);
+    }
+}
+
 public sealed class GetChatConversationsHandler(IChatConversationRepository repository)
     : IRequestHandler<GetChatConversationsQuery, ChatConversationListResponse>
 {

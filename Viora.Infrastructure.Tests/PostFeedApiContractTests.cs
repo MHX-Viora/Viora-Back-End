@@ -39,6 +39,7 @@ public sealed class PostFeedApiContractTests
             .ToDictionary(method => method.Name);
 
         Assert.Equal("{postId:guid}/reactions", methods[nameof(PostsController.React)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        Assert.Equal("{postId:guid}", methods[nameof(PostsController.Detail)].GetCustomAttribute<HttpGetAttribute>()!.Template);
         Assert.Equal("{postId:guid}/comments", methods[nameof(PostsController.Comment)].GetCustomAttribute<HttpPostAttribute>()!.Template);
         Assert.Equal("{postId:guid}/comments", methods[nameof(PostsController.ListComments)].GetCustomAttribute<HttpGetAttribute>()!.Template);
         Assert.Equal("/api/comments/{commentId:guid}/replies", methods[nameof(PostsController.Reply)].GetCustomAttribute<HttpPostAttribute>()!.Template);
@@ -47,6 +48,10 @@ public sealed class PostFeedApiContractTests
         Assert.Equal("{postId:guid}/share", methods[nameof(PostsController.Share)].GetCustomAttribute<HttpPostAttribute>()!.Template);
         Assert.Equal("{postId:guid}", methods[nameof(PostsController.Delete)].GetCustomAttribute<HttpDeleteAttribute>()!.Template);
         Assert.Equal("{postId:guid}/report", methods[nameof(PostsController.Report)].GetCustomAttribute<HttpPostAttribute>()!.Template);
+        var detailResponses = methods[nameof(PostsController.Detail)].GetCustomAttributes<ProducesResponseTypeAttribute>().ToList();
+        Assert.Contains(detailResponses, attribute => attribute.StatusCode == StatusCodes.Status200OK && attribute.Type == typeof(PostDetailResponse));
+        Assert.Contains(detailResponses, attribute => attribute.StatusCode == StatusCodes.Status403Forbidden && attribute.Type == typeof(ProblemDetails));
+        Assert.Contains(detailResponses, attribute => attribute.StatusCode == StatusCodes.Status404NotFound && attribute.Type == typeof(ProblemDetails));
         Assert.Equal(
             typeof(DeletePostResponse),
             methods[nameof(PostsController.Delete)]
@@ -100,6 +105,18 @@ public sealed class PostFeedApiContractTests
             "ViewCount");
         AssertProperties<PostFeedUserResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified");
         AssertProperties<PostFeedMediaResponse>("Id", "MediaUrl", "ThumbnailUrl");
+    }
+
+    [Fact]
+    public void Post_detail_response_contract_has_only_expected_fields()
+    {
+        AssertProperties<PostDetailResponse>(
+            "Id", "PostType", "Content", "Visibility", "Location", "CreatedAt", "UpdatedAt",
+            "ReactionCount", "CommentCount", "ShareCount", "SaveCount", "ViewCount",
+            "MyReaction", "IsSaved", "IsOwner", "User", "Media", "Hashtags");
+        AssertProperties<PostDetailUserResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified");
+        AssertProperties<PostDetailMediaResponse>("Id", "MediaType", "MediaUrl", "ThumbnailUrl");
+        AssertProperties<PostDetailHashtagResponse>("Id", "Name");
     }
 
     [Fact]

@@ -13,6 +13,38 @@ namespace viora_BE.Controllers;
 [Authorize]
 public sealed class ChatController(IMediator mediator) : ControllerBase
 {
+    [HttpPost("conversations/private")]
+    [ProducesResponseType<CreatePrivateConversationResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<CreatePrivateConversationResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CreatePrivateConversationResponse>> CreatePrivateConversation(
+        [FromBody] CreatePrivateConversationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetViewerUserId(out var currentUserId)) return Unauthorized();
+
+        var result = await mediator.Send(
+            new CreatePrivateConversationCommand(currentUserId, request.UserId),
+            cancellationToken);
+
+        if (result.IsSuccess && result.Value is not null)
+        {
+            return result.Value.IsCreated
+                ? StatusCode(StatusCodes.Status201Created, result.Value)
+                : Ok(result.Value);
+        }
+
+        return result.Error switch
+        {
+            ChatError.UserNotFound => NotFoundProblem(ChatError.UserNotFound, result.Message ?? "Khong tim thay nguoi dung."),
+            ChatError.Forbidden => ForbiddenProblem(result.Message ?? "Khong the tao phong chat rieng."),
+            _ => BadRequestProblem(result.Message ?? "Yeu cau khong hop le.")
+        };
+    }
+
     [HttpGet("conversations")]
     [ProducesResponseType<ChatConversationListResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -315,7 +347,12 @@ public sealed class ChatController(IMediator mediator) : ControllerBase
         var problem = new ProblemDetails
         {
             Status = StatusCodes.Status404NotFound,
-            Title = code == ChatError.MessageNotFound ? "Message not found" : "Conversation not found",
+            Title = code switch
+            {
+                ChatError.MessageNotFound => "Message not found",
+                ChatError.UserNotFound => "User not found",
+                _ => "Conversation not found"
+            },
             Detail = detail
         };
         problem.Extensions["code"] = code.ToString();

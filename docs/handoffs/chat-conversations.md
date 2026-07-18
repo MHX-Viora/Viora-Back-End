@@ -9,6 +9,8 @@ Implemented `POST /api/chat/conversations/{conversationId}/read`.
 Implemented `PATCH /api/chat/conversations/{conversationId}/pin`.
 Implemented `PATCH /api/chat/conversations/{conversationId}/mute`.
 Implemented `GET /api/chat/conversations/{conversationId}`.
+Private items returned by `GET /api/chat/conversations` include the other participant's verification, stranger, and friendship state. Group items keep `otherParticipant = null`; friendship data is projected in the conversation query without per-item database calls.
+Implemented `POST /api/chat/conversations/private` to get or create a private conversation. The operation validates the recipient's messaging setting for new conversations and uses a PostgreSQL transaction advisory lock per normalized user pair to prevent concurrent duplicates.
 Implemented `GET /api/chat/conversations/{conversationId}/attachments`.
 Implemented `GET /api/chat/conversations/{conversationId}/links`.
 Implemented `GET /api/chat/conversations/{conversationId}/search`.
