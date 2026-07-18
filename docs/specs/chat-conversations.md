@@ -62,7 +62,7 @@ Contract tests verify route, authorization, query defaults, response fields, and
 - Results sort by `LastMessageAt`, falling back to `CreatedAt`, descending.
 - Keyword search is case-insensitive and Vietnamese accent-insensitive.
 - Message history is fetched newest-first for paging, then returned oldest-to-newest within the page.
-- Message history includes sender, reply preview, attachments, reactions, reaction summary, edit/delete flags, and ownership flag.
+- Message history includes conversation `id`, `type`, private block state (`isBlocked`, `blockedBy`), sender, reply preview, attachments, reactions, reaction summary, edit/delete flags, and ownership flag.
 - Sending creates `Messages` and `MessageAttachments`, updates `Conversations.LastMessageId` and `LastMessageAt`, and emits `ReceiveMessage` with the API response payload.
 - Attachment upload accepts multipart `files` and returns public URLs plus metadata for `POST /api/chat/messages`.
 - Recall marks the message as deleted, changes `MessageType` to `Recall`, hides old attachments in read APIs, emits `MessageDeleted`, and sends `ConversationUpdated`.

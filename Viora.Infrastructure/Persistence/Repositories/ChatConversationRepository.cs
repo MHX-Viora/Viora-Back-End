@@ -164,6 +164,34 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 "Ban khong co quyen xem cuoc tro chuyen nay.");
         }
 
+        var conversation = await dbContext.Conversations
+            .AsNoTracking()
+            .Where(value => value.Id == query.ConversationId)
+            .Select(value => new
+            {
+                value.Id,
+                value.ConversationType
+            })
+            .FirstAsync(cancellationToken);
+
+        var blockedBy = conversation.ConversationType == ConversationType.Private
+            ? await dbContext.ConversationBlocks
+                .AsNoTracking()
+                .Where(block => block.ConversationId == query.ConversationId)
+                .OrderBy(block => block.CreatedAt)
+                .Select(block => new ChatParticipantResponse(
+                    block.User.Id,
+                    block.User.DisplayName,
+                    block.User.AvatarUrl))
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
+        var conversationResponse = new ChatMessageConversationResponse(
+            conversation.Id,
+            conversation.ConversationType,
+            conversation.ConversationType == ConversationType.Private && blockedBy is not null,
+            blockedBy);
+
         var messages = dbContext.Messages
             .AsNoTracking()
             .Where(message => message.ConversationId == query.ConversationId);
@@ -277,7 +305,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         items.Reverse();
 
         return ChatResult<ChatMessageListResponse>.Success(
-            new ChatMessageListResponse(page, pageSize, totalItems, totalPages, items));
+            new ChatMessageListResponse(page, pageSize, totalItems, totalPages, conversationResponse, items));
     }
 
     public async Task<ChatConversationItemResponse?> GetConversationItemAsync(

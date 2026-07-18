@@ -136,7 +136,14 @@ public sealed record ChatMessageListResponse(
     int PageSize,
     int TotalItems,
     int TotalPages,
+    ChatMessageConversationResponse Conversation,
     IReadOnlyList<ChatMessageItemResponse> Items);
+
+public sealed record ChatMessageConversationResponse(
+    Guid Id,
+    ConversationType Type,
+    bool IsBlocked,
+    ChatParticipantResponse? BlockedBy);
 
 public sealed record ChatMessageItemResponse(
     Guid Id,
