@@ -66,12 +66,20 @@ public sealed class GroupChatService(
         group.Members.Add(Member(group, command.CurrentUserId, ConversationMemberRole.Owner, command.CurrentUserId, now));
         foreach (var id in ids) group.Members.Add(Member(group, id, ConversationMemberRole.Member, command.CurrentUserId, now));
         var message = SystemMessage(group, command.CurrentUserId, $"{actor.DisplayName} đã tạo nhóm {group.Name}.", now);
-        group.LastMessageId = message.Id; group.LastMessageAt = now;
         var notifications = ids.Select(id => GroupNotification(id, command.CurrentUserId, NotificationType.GroupInvite, group.Id, $"{actor.DisplayName} đã thêm bạn vào nhóm {group.Name}.", now)).ToList();
         await using (var tx = await db.Database.BeginTransactionAsync(token))
         {
-            db.Conversations.Add(group); db.Messages.Add(message); db.Notifications.AddRange(notifications);
-            await db.SaveChangesAsync(token); await tx.CommitAsync(token);
+            // Save the conversation first to avoid a circular dependency between
+            // Conversation.LastMessageId and Message.ConversationId.
+            db.Conversations.Add(group);
+            await db.SaveChangesAsync(token);
+
+            db.Messages.Add(message);
+            db.Notifications.AddRange(notifications);
+            group.LastMessageId = message.Id;
+            group.LastMessageAt = now;
+            await db.SaveChangesAsync(token);
+            await tx.CommitAsync(token);
         }
         var response = new CreateGroupResponse(group.Id, group.Name, group.AvatarUrl, ids.Length + 1, group.CreatedAt);
         await Publish(ids.Append(command.CurrentUserId), RealtimeEvents.ConversationCreated, response, notifications, token);
