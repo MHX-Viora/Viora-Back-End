@@ -9,6 +9,7 @@ public sealed class Conversation : AuditableEntity
     public DateTime? LastMessageAt { get; set; }
     public ConversationSendPermission CanSendMessage { get; set; }
     public Guid? CreatedBy { get; set; }
+    public DateTime? DeletedAt { get; set; }
     public User? Creator { get; set; }
     public Message? LastMessage { get; set; }
     public ICollection<ConversationMember> Members { get; set; } = [];

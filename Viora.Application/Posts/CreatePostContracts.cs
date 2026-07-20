@@ -95,6 +95,11 @@ public interface IMediaStorage
         Guid userId,
         CreatePostFile file,
         CancellationToken cancellationToken);
+
+    Task<UploadedMedia> UploadGroupAvatarAsync(
+        Guid userId,
+        CreatePostFile file,
+        CancellationToken cancellationToken);
 }
 
 public interface IPostRepository

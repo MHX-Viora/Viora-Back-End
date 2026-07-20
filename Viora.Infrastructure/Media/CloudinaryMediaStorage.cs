@@ -205,6 +205,33 @@ public sealed class CloudinaryMediaStorage : IMediaStorage
         }
     }
 
+    public async Task<UploadedMedia> UploadGroupAvatarAsync(
+        Guid userId,
+        CreatePostFile file,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await cloudinary.UploadAsync(new ImageUploadParams
+            {
+                File = new FileDescription(file.FileName, file.Content),
+                Folder = $"viora/users/{userId:N}/groups",
+                UseFilename = false,
+                UniqueFilename = true,
+                Overwrite = false
+            }, cancellationToken);
+
+            EnsureUploadSucceeded(result.Error, result.SecureUrl);
+            return new UploadedMedia(result.SecureUrl!.AbsoluteUri, null);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (CreatePostException) { throw; }
+        catch (Exception exception)
+        {
+            throw new CreatePostException("MEDIA_UPLOAD_FAILED", "Không thể tải avatar nhóm lên dịch vụ lưu trữ.", exception);
+        }
+    }
+
     private static void EnsureUploadSucceeded(Error? error, Uri? secureUrl)
     {
         if (error is not null || secureUrl is null)

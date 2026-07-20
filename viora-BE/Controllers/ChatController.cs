@@ -11,7 +11,7 @@ namespace viora_BE.Controllers;
 [ApiController]
 [Route("api/chat")]
 [Authorize]
-public sealed class ChatController(IMediator mediator) : ControllerBase
+public sealed class ChatController(IMediator mediator, IGroupChatService groupChatService) : ControllerBase
 {
     [HttpPost("conversations/private")]
     [ProducesResponseType<CreatePrivateConversationResponse>(StatusCodes.Status200OK)]
@@ -336,6 +336,74 @@ public sealed class ChatController(IMediator mediator) : ControllerBase
         return ToChatActionResult(result, "Ban khong co quyen tim kiem trong cuoc tro chuyen nay.");
     }
 
+    [HttpPost("groups")]
+    public async Task<IActionResult> CreateGroup([FromForm] CreateGroupForm request, CancellationToken cancellationToken)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        await using var stream = request.Avatar?.OpenReadStream();
+        var avatar = request.Avatar is null ? null : new CreatePostFile(stream!, request.Avatar.FileName, request.Avatar.ContentType, request.Avatar.Length);
+        var result = await groupChatService.CreateAsync(new(userId, request.Name, request.MemberIds ?? [], avatar), cancellationToken);
+        return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : ToGroupActionResult(result);
+    }
+
+    [HttpGet("groups/{conversationId:guid}")]
+    public async Task<IActionResult> GetGroup(Guid conversationId, CancellationToken token) => await WithUser(id => groupChatService.GetAsync(id, conversationId, token));
+
+    [HttpGet("groups/{conversationId:guid}/members")]
+    public async Task<IActionResult> GetGroupMembers(Guid conversationId, [FromQuery] string? keyword = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 30, CancellationToken token = default) =>
+        await WithUser(id => groupChatService.GetMembersAsync(id, conversationId, keyword, page, pageSize, token));
+
+    [HttpPost("groups/{conversationId:guid}/members")]
+    public async Task<IActionResult> AddGroupMembers(Guid conversationId, AddGroupMembersRequest request, CancellationToken token) => await WithUser(id => groupChatService.AddMembersAsync(id, conversationId, request.MemberIds ?? [], token));
+
+    [HttpDelete("groups/{conversationId:guid}/members/{userId:guid}")]
+    public async Task<IActionResult> RemoveGroupMember(Guid conversationId, Guid userId, CancellationToken token) => await WithUser(id => groupChatService.RemoveMemberAsync(id, conversationId, userId, token));
+
+    [HttpPost("groups/{conversationId:guid}/leave")]
+    public async Task<IActionResult> LeaveGroup(Guid conversationId, CancellationToken token) => await WithUser(id => groupChatService.LeaveAsync(id, conversationId, token));
+
+    [HttpPut("groups/{conversationId:guid}/name")]
+    public async Task<IActionResult> RenameGroup(Guid conversationId, RenameGroupRequest request, CancellationToken token) => await WithUser(id => groupChatService.RenameAsync(id, conversationId, request.Name, token));
+
+    [HttpPut("groups/{conversationId:guid}/avatar")]
+    public async Task<IActionResult> ChangeGroupAvatar(Guid conversationId, [FromForm] GroupAvatarForm request, CancellationToken token)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        if (request.Avatar is null) return BadRequestProblem("Avatar là bắt buộc.");
+        await using var stream = request.Avatar.OpenReadStream();
+        return ToGroupActionResult(await groupChatService.ChangeAvatarAsync(userId, conversationId, new(stream, request.Avatar.FileName, request.Avatar.ContentType, request.Avatar.Length), token));
+    }
+
+    [HttpPut("groups/{conversationId:guid}/permission")]
+    public async Task<IActionResult> ChangeGroupPermission(Guid conversationId, ChangeGroupPermissionRequest request, CancellationToken token) => await WithUser(id => groupChatService.ChangePermissionAsync(id, conversationId, request.CanSendMessage, token));
+
+    [HttpPut("groups/{conversationId:guid}/members/{userId:guid}/admin")]
+    public async Task<IActionResult> PromoteGroupAdmin(Guid conversationId, Guid userId, CancellationToken token) => await WithUser(id => groupChatService.SetAdminAsync(id, conversationId, userId, true, token));
+
+    [HttpDelete("groups/{conversationId:guid}/members/{userId:guid}/admin")]
+    public async Task<IActionResult> DemoteGroupAdmin(Guid conversationId, Guid userId, CancellationToken token) => await WithUser(id => groupChatService.SetAdminAsync(id, conversationId, userId, false, token));
+
+    [HttpPut("groups/{conversationId:guid}/owner")]
+    public async Task<IActionResult> TransferGroupOwner(Guid conversationId, TransferGroupOwnerRequest request, CancellationToken token) => await WithUser(id => groupChatService.TransferOwnerAsync(id, conversationId, request.UserId, token));
+
+    [HttpDelete("groups/{conversationId:guid}")]
+    public async Task<IActionResult> DissolveGroup(Guid conversationId, CancellationToken token) => await WithUser(id => groupChatService.DissolveAsync(id, conversationId, token));
+
+    private async Task<IActionResult> WithUser<T>(Func<Guid, Task<GroupChatResult<T>>> action)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        return ToGroupActionResult(await action(userId));
+    }
+
+    private IActionResult ToGroupActionResult<T>(GroupChatResult<T> result)
+    {
+        if (result.IsSuccess) return Ok(result.Value);
+        var status = result.Error switch { GroupChatError.NotFound => 404, GroupChatError.Forbidden => 403, GroupChatError.Conflict => 409, _ => 400 };
+        var problem = new ProblemDetails { Status = status, Title = "Group chat request failed", Detail = result.Message };
+        problem.Extensions["code"] = result.Error?.ToString();
+        return new ObjectResult(problem) { StatusCode = status };
+    }
+
     private bool TryGetViewerUserId(out Guid userId)
     {
         var value = User.FindFirstValue("user_id");
@@ -415,3 +483,15 @@ public sealed class ChatAttachmentUploadRequest
 public sealed record SetConversationPinRequest(bool IsPinned);
 public sealed record SetConversationMuteRequest(bool IsMuted);
 public sealed record SetConversationBlockRequest(bool IsBlocked);
+
+public sealed class CreateGroupForm
+{
+    [FromForm(Name = "name")] public string Name { get; init; } = string.Empty;
+    [FromForm(Name = "avatar")] public IFormFile? Avatar { get; init; }
+    [FromForm(Name = "memberIds[]")] public List<Guid>? MemberIds { get; init; }
+}
+
+public sealed class GroupAvatarForm
+{
+    [FromForm(Name = "avatar")] public IFormFile? Avatar { get; init; }
+}

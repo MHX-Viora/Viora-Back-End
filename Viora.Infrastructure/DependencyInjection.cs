@@ -123,6 +123,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationDeliveryRepository, NotificationDeliveryRepository>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IChatConversationRepository, ChatConversationRepository>();
+        services.AddScoped<IGroupChatService, GroupChatService>();
         services.Configure<FirebaseOptions>(configuration.GetSection("Firebase"));
         services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
         services.AddSingleton<ConnectionRegistry>();

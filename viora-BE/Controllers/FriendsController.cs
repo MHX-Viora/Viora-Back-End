@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Viora.Application.Social;
+using Viora.Application.Chat;
 using Viora.Domain.Entities;
 
 namespace viora_BE.Controllers;
@@ -11,8 +12,15 @@ namespace viora_BE.Controllers;
 [ApiController]
 [Route("api/friends")]
 [Authorize]
-public sealed class FriendsController(IMediator mediator) : ControllerBase
+public sealed class FriendsController(IMediator mediator, IGroupChatService groupChatService) : ControllerBase
 {
+    [HttpGet("selectable")]
+    [ProducesResponseType<SelectableFriendListResponse>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Selectable([FromQuery] string? keyword = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
+    {
+        if (!TryGetCurrentUserId(out var currentUserId)) return Unauthorized();
+        return Ok(await groupChatService.GetSelectableFriendsAsync(currentUserId, keyword, page, pageSize, cancellationToken));
+    }
     [HttpGet]
     [ProducesResponseType<FriendshipListResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]

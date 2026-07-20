@@ -450,7 +450,7 @@ public sealed class SendChatMessageValidator : AbstractValidator<SendChatMessage
         RuleFor(command => command.SenderUserId).NotEmpty();
         RuleFor(command => command.ConversationId).NotEmpty();
         RuleFor(command => command.MessageType)
-            .Must(type => type != MessageType.Recall && Enum.IsDefined(type))
+            .Must(type => type is not (MessageType.Recall or MessageType.System) && Enum.IsDefined(type))
             .WithMessage("Loai tin nhan khong hop le.");
         RuleFor(command => command.Attachments)
             .Must(attachments => attachments is null || attachments.Count <= 10)
