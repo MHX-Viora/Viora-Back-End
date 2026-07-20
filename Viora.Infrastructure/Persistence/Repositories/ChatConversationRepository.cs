@@ -410,12 +410,16 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             {
                 attachmentsByMessage.TryGetValue(message.Id, out var attachments);
                 attachments ??= [];
-                if (message.MessageType == MessageType.Recall)
+                if (message.MessageType is MessageType.Recall or MessageType.System)
                 {
                     attachments = [];
                 }
                 reactionsByMessage.TryGetValue(message.Id, out var reactions);
                 reactions ??= [];
+                if (message.MessageType == MessageType.System)
+                {
+                    reactions = [];
+                }
 
                 return new ChatMessageItemResponse(
                     message.Id,
@@ -603,23 +607,36 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         ChatReplyMessageResponse? replyMessage = null;
         if (command.ReplyMessageId.HasValue)
         {
-            replyMessage = await dbContext.Messages
+            var replyTarget = await dbContext.Messages
                 .AsNoTracking()
                 .Where(message =>
                     message.Id == command.ReplyMessageId.Value &&
                     message.ConversationId == command.ConversationId)
-                .Select(message => new ChatReplyMessageResponse(
+                .Select(message => new
+                {
                     message.Id,
                     message.Content,
                     message.MessageType,
-                    message.SenderUser.DisplayName))
+                    SenderName = message.SenderUser.DisplayName
+                })
                 .FirstOrDefaultAsync(cancellationToken);
-            if (replyMessage is null)
+            if (replyTarget is null)
             {
                 return ChatResult<SendChatMessageRepositoryResult>.Failure(
                     ChatError.MessageNotFound,
                     "Tin nhan reply khong ton tai trong cuoc tro chuyen nay.");
             }
+            if (!ChatMessagePolicy.CanReply(replyTarget.MessageType))
+            {
+                return ChatResult<SendChatMessageRepositoryResult>.Failure(
+                    ChatError.Validation,
+                    "Không thể trả lời tin nhắn hệ thống.");
+            }
+            replyMessage = new ChatReplyMessageResponse(
+                replyTarget.Id,
+                replyTarget.Content,
+                replyTarget.MessageType,
+                replyTarget.SenderName);
         }
 
         var now = DateTime.UtcNow;
@@ -773,6 +790,13 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             return ChatResult<RecallChatMessageRepositoryResult>.Failure(
                 ChatError.MessageNotFound,
                 "Khong tim thay tin nhan.");
+        }
+
+        if (!ChatMessagePolicy.CanRecall(message.MessageType))
+        {
+            return ChatResult<RecallChatMessageRepositoryResult>.Failure(
+                ChatError.Validation,
+                "Không thể thu hồi tin nhắn hệ thống.");
         }
 
         var isActiveMember = await dbContext.ConversationMembers

@@ -50,7 +50,7 @@ public sealed class GroupChatApiContractTests
     public void Domain_enums_preserve_group_wire_values()
     {
         Assert.Equal((short)1, (short)ConversationType.Group);
-        Assert.Equal((short)8, (short)MessageType.System);
+        Assert.Equal((short)100, (short)MessageType.System);
         Assert.Equal((short)2, (short)ConversationMemberRole.Owner);
         Assert.Equal((short)2, (short)ConversationSendPermission.OwnerOnly);
     }
@@ -74,6 +74,42 @@ public sealed class GroupChatApiContractTests
         AssertProperties<ChangeGroupPermissionResponse>("ConversationId", "CanSendMessage", "UpdatedAt");
         AssertProperties<RenameGroupResponse>("ConversationId", "Name", "UpdatedAt");
         AssertProperties<ChangeGroupAvatarResponse>("ConversationId", "AvatarUrl", "UpdatedAt");
+    }
+
+    [Fact]
+    public void Group_role_messages_are_fully_vietnamese()
+    {
+        var messages = new[]
+        {
+            GroupChatRoleMessages.OwnerMustTransferBeforeLeaving,
+            GroupChatRoleMessages.PromotionNotification,
+            GroupChatRoleMessages.DemotionNotification,
+            GroupChatRoleMessages.PromotionSystemMessage("Quyền", "Nguyễn Văn A"),
+            GroupChatRoleMessages.DemotionSystemMessage("Quyền", "Nguyễn Văn A"),
+            GroupChatRoleMessages.OwnerTransferNotification,
+            GroupChatRoleMessages.OwnerTransferSystemMessage("Quyền", "Nguyễn Văn A")
+        };
+
+        Assert.All(messages, message =>
+        {
+            Assert.DoesNotContain("Admin", message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Owner", message, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public void System_message_contract_uses_actor_names_and_is_immutable()
+    {
+        Assert.Equal("Quyền đã tạo nhóm.", GroupChatSystemMessages.Created("Quyền"));
+        Assert.Equal("Quyền đã đổi tên nhóm thành \"Du lịch Đà Lạt\".", GroupChatSystemMessages.Renamed("Quyền", "Du lịch Đà Lạt"));
+        Assert.Equal("Quyền đã thêm Nam vào nhóm.", GroupChatSystemMessages.MembersAdded("Quyền", ["Nam"]));
+        Assert.Equal("Quyền đã xóa Nam khỏi nhóm.", GroupChatSystemMessages.MemberRemoved("Quyền", "Nam"));
+        Assert.Equal("Nam đã rời khỏi nhóm.", GroupChatSystemMessages.MemberLeft("Nam"));
+        Assert.Equal("Quyền đã bật chế độ chỉ quản trị viên được gửi tin nhắn.", GroupChatSystemMessages.PermissionChanged("Quyền", ConversationSendPermission.AdminsAndOwner));
+        Assert.False(ChatMessagePolicy.CanReply(MessageType.System));
+        Assert.False(ChatMessagePolicy.CanEdit(MessageType.System));
+        Assert.False(ChatMessagePolicy.CanRecall(MessageType.System));
+        Assert.False(ChatMessagePolicy.CanReact(MessageType.System));
     }
 
     [Fact]

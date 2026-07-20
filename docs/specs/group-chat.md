@@ -1,5 +1,13 @@
 # Spec: Group chat backend
 
+## System messages
+
+- Group mutations persist a `Messages` row with `MessageType = 100` and Vietnamese text in `Content`.
+- They use the actor as `SenderUserId`, have no attachments, and appear in the existing message-history pagination by creation time.
+- Clients cannot create system messages through the send-message API.
+- System messages cannot be replied to, edited, recalled, or reacted to.
+- Existing stored system messages using the legacy value `8` are migrated to `100`.
+
 ## Objective
 
 Add authenticated group-chat APIs without breaking private chat. Reuse `Conversations`,

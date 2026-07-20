@@ -65,7 +65,7 @@ public sealed class GroupChatService(
         var group = new Conversation { ConversationType = ConversationType.Group, Name = command.Name.Trim(), AvatarUrl = avatarUrl, CreatedBy = command.CurrentUserId, CanSendMessage = ConversationSendPermission.Everyone, CreatedAt = now, UpdatedAt = now };
         group.Members.Add(Member(group, command.CurrentUserId, ConversationMemberRole.Owner, command.CurrentUserId, now));
         foreach (var id in ids) group.Members.Add(Member(group, id, ConversationMemberRole.Member, command.CurrentUserId, now));
-        var message = SystemMessage(group, command.CurrentUserId, $"{actor.DisplayName} đã tạo nhóm {group.Name}.", now);
+        var message = SystemMessage(group, command.CurrentUserId, GroupChatSystemMessages.Created(actor.DisplayName), now);
         var notifications = ids.Select(id => GroupNotification(id, command.CurrentUserId, NotificationType.GroupInvite, group.Id, $"{actor.DisplayName} đã thêm bạn vào nhóm {group.Name}.", now)).ToList();
         await using (var tx = await db.Database.BeginTransactionAsync(token))
         {
@@ -130,7 +130,7 @@ public sealed class GroupChatService(
             else { old.Status = ConversationMemberStatus.Active; old.Role = ConversationMemberRole.Member; old.JoinedAt = now; old.JoinedBy = actorId; }
         }
         var notifications = ids.Select(x => GroupNotification(x, actorId, NotificationType.GroupInvite, id, "Bạn đã được thêm vào một nhóm chat.", now)).ToList();
-        return await SaveMutation(access.Group, actorId, $"Đã thêm {string.Join(", ", names)} vào nhóm.", "members-added", RealtimeEvents.MemberAdded, ids, notifications, token);
+        return await SaveMutation(access.Group, actorId, GroupChatSystemMessages.MembersAdded(access.Member.User.DisplayName, names), "members-added", RealtimeEvents.MemberAdded, ids, notifications, token);
     }
 
     public async Task<GroupChatResult<GroupMutationResponse>> RemoveMemberAsync(Guid actorId, Guid id, Guid userId, CancellationToken token)
@@ -143,17 +143,17 @@ public sealed class GroupChatService(
         if (!allowed) return Forbidden();
         target.Status = ConversationMemberStatus.Kicked;
         var notice = GroupNotification(userId, actorId, NotificationType.GroupRemoved, id, "Bạn đã bị xóa khỏi nhóm chat.", DateTime.UtcNow);
-        return await SaveMutation(access.Group, actorId, $"{target.User.DisplayName} đã bị xóa khỏi nhóm.", "member-removed", RealtimeEvents.MemberRemoved, [userId], [notice], token);
+        return await SaveMutation(access.Group, actorId, GroupChatSystemMessages.MemberRemoved(access.Member.User.DisplayName, target.User.DisplayName), "member-removed", RealtimeEvents.MemberRemoved, [userId], [notice], token);
     }
 
     public async Task<GroupChatResult<GroupMutationResponse>> LeaveAsync(Guid actorId, Guid id, CancellationToken token)
     {
         var access = await Access(actorId, id, token); if (access.Group is null) return Missing(); if (access.Member is null) return Forbidden();
         var others = access.Group.Members.Count(x => x.Status == ConversationMemberStatus.Active && x.UserId != actorId);
-        if (access.Member.Role == ConversationMemberRole.Owner && others > 0) return FailMutation(GroupChatError.Conflict, "Owner phải chuyển quyền sở hữu trước khi rời nhóm.");
+        if (access.Member.Role == ConversationMemberRole.Owner && others > 0) return FailMutation(GroupChatError.Conflict, GroupChatRoleMessages.OwnerMustTransferBeforeLeaving);
         access.Member.Status = ConversationMemberStatus.Left;
         if (others == 0) access.Group.DeletedAt = DateTime.UtcNow;
-        return await SaveMutation(access.Group, actorId, $"{access.Member.User.DisplayName} đã rời nhóm.", "left", RealtimeEvents.MemberLeft, [actorId], [], token);
+        return await SaveMutation(access.Group, actorId, GroupChatSystemMessages.MemberLeft(access.Member.User.DisplayName), "left", RealtimeEvents.MemberLeft, [actorId], [], token);
     }
 
     public async Task<GroupChatResult<RenameGroupResponse>> RenameAsync(Guid actorId, Guid id, string name, CancellationToken token)
@@ -164,7 +164,7 @@ public sealed class GroupChatService(
         if (access.Group is null) return Fail<RenameGroupResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
         if (access.Member?.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)) return Fail<RenameGroupResponse>(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
         access.Group.Name = name;
-        var mutation = await SaveMutation(access.Group, actorId, $"Đã đổi tên nhóm thành {name}.", "renamed", RealtimeEvents.ConversationRenamed, [], [], token);
+        var mutation = await SaveMutation(access.Group, actorId, GroupChatSystemMessages.Renamed(access.Member.User.DisplayName, name), "renamed", RealtimeEvents.ConversationRenamed, [], [], token);
         return mutation.IsSuccess && mutation.Value is not null
             ? GroupChatResult<RenameGroupResponse>.Success(new(id, name, mutation.Value.UpdatedAt))
             : Fail<RenameGroupResponse>(mutation.Error ?? GroupChatError.Validation, mutation.Message ?? "Không thể đổi tên nhóm.");
@@ -177,7 +177,7 @@ public sealed class GroupChatService(
         if (access.Group is null) return Fail<ChangeGroupAvatarResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
         if (access.Member?.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)) return Fail<ChangeGroupAvatarResponse>(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
         access.Group.AvatarUrl = (await mediaStorage.UploadGroupAvatarAsync(actorId, avatar, token)).MediaUrl;
-        var mutation = await SaveMutation(access.Group, actorId, "Đã đổi avatar nhóm.", "avatar-changed", RealtimeEvents.ConversationAvatarChanged, [], [], token);
+        var mutation = await SaveMutation(access.Group, actorId, GroupChatSystemMessages.AvatarChanged(access.Member.User.DisplayName), "avatar-changed", RealtimeEvents.ConversationAvatarChanged, [], [], token);
         return mutation.IsSuccess && mutation.Value is not null
             ? GroupChatResult<ChangeGroupAvatarResponse>.Success(new(id, access.Group.AvatarUrl, mutation.Value.UpdatedAt))
             : Fail<ChangeGroupAvatarResponse>(mutation.Error ?? GroupChatError.Validation, mutation.Message ?? "Không thể đổi avatar nhóm.");
@@ -191,7 +191,7 @@ public sealed class GroupChatService(
         if (access.Member?.Role != ConversationMemberRole.Owner) return Fail<ChangeGroupPermissionResponse>(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
 
         access.Group.CanSendMessage = permission;
-        var mutation = await SaveMutation(access.Group, actorId, "Đã thay đổi quyền gửi tin nhắn.", "permission-changed", RealtimeEvents.ConversationUpdated, [], [], token);
+        var mutation = await SaveMutation(access.Group, actorId, GroupChatSystemMessages.PermissionChanged(access.Member.User.DisplayName, permission), "permission-changed", RealtimeEvents.ConversationUpdated, [], [], token);
         return mutation.IsSuccess && mutation.Value is not null
             ? GroupChatResult<ChangeGroupPermissionResponse>.Success(new(id, permission, mutation.Value.UpdatedAt))
             : Fail<ChangeGroupPermissionResponse>(mutation.Error ?? GroupChatError.Validation, mutation.Message ?? "Không thể thay đổi quyền gửi tin nhắn.");
@@ -205,8 +205,8 @@ public sealed class GroupChatService(
         if (target is null) return FailMutation(GroupChatError.NotFound, "Không tìm thấy thành viên.");
         if (target.Role != expected) return FailMutation(GroupChatError.Conflict, "Vai trò hiện tại không phù hợp.");
         target.Role = isAdmin ? ConversationMemberRole.Admin : ConversationMemberRole.Member;
-        var notice = GroupNotification(userId, actorId, NotificationType.GroupRoleChanged, id, isAdmin ? "Bạn đã được bổ nhiệm làm Admin." : "Vai trò Admin của bạn đã được gỡ.", DateTime.UtcNow);
-        return await SaveMutation(access.Group, actorId, isAdmin ? $"{target.User.DisplayName} đã trở thành Admin." : $"{target.User.DisplayName} không còn là Admin.", isAdmin ? "admin-promoted" : "admin-demoted", RealtimeEvents.ConversationUpdated, [userId], [notice], token);
+        var notice = GroupNotification(userId, actorId, NotificationType.GroupRoleChanged, id, isAdmin ? GroupChatRoleMessages.PromotionNotification : GroupChatRoleMessages.DemotionNotification, DateTime.UtcNow);
+        return await SaveMutation(access.Group, actorId, isAdmin ? GroupChatRoleMessages.PromotionSystemMessage(access.Member.User.DisplayName, target.User.DisplayName) : GroupChatRoleMessages.DemotionSystemMessage(access.Member.User.DisplayName, target.User.DisplayName), isAdmin ? "admin-promoted" : "admin-demoted", RealtimeEvents.ConversationUpdated, [userId], [notice], token);
     }
 
     public async Task<GroupChatResult<GroupMutationResponse>> TransferOwnerAsync(Guid actorId, Guid id, Guid userId, CancellationToken token)
@@ -215,8 +215,8 @@ public sealed class GroupChatService(
         var target = access.Group.Members.SingleOrDefault(x => x.UserId == userId && x.Status == ConversationMemberStatus.Active && x.Role != ConversationMemberRole.Owner);
         if (target is null) return FailMutation(GroupChatError.NotFound, "Không tìm thấy thành viên nhận quyền.");
         access.Member.Role = ConversationMemberRole.Admin; target.Role = ConversationMemberRole.Owner;
-        var notice = GroupNotification(userId, actorId, NotificationType.GroupRoleChanged, id, "Bạn đã trở thành Owner của nhóm.", DateTime.UtcNow);
-        return await SaveMutation(access.Group, actorId, $"Đã chuyển quyền Owner cho {target.User.DisplayName}.", "owner-transferred", RealtimeEvents.ConversationUpdated, [userId], [notice], token);
+        var notice = GroupNotification(userId, actorId, NotificationType.GroupRoleChanged, id, GroupChatRoleMessages.OwnerTransferNotification, DateTime.UtcNow);
+        return await SaveMutation(access.Group, actorId, GroupChatRoleMessages.OwnerTransferSystemMessage(access.Member.User.DisplayName, target.User.DisplayName), "owner-transferred", RealtimeEvents.ConversationUpdated, [userId], [notice], token);
     }
 
     public async Task<GroupChatResult<GroupMutationResponse>> DissolveAsync(Guid actorId, Guid id, CancellationToken token)

@@ -4,6 +4,43 @@ using Viora.Domain.Entities;
 
 namespace Viora.Application.Chat;
 
+public static class GroupChatRoleMessages
+{
+    public const string OwnerMustTransferBeforeLeaving = "Chủ nhóm phải chuyển quyền sở hữu trước khi rời nhóm.";
+    public const string PromotionNotification = "Bạn đã được bổ nhiệm làm quản trị viên.";
+    public const string DemotionNotification = "Vai trò quản trị viên của bạn đã được gỡ.";
+    public const string OwnerTransferNotification = "Bạn đã trở thành chủ nhóm.";
+
+    public static string PromotionSystemMessage(string actorName, string targetName) => $"{actorName} đã cấp quyền quản trị viên cho {targetName}.";
+    public static string DemotionSystemMessage(string actorName, string targetName) => $"{actorName} đã thu hồi quyền quản trị viên của {targetName}.";
+    public static string OwnerTransferSystemMessage(string actorName, string targetName) => $"{actorName} đã chuyển quyền trưởng nhóm cho {targetName}.";
+}
+
+public static class GroupChatSystemMessages
+{
+    public static string Created(string actorName) => $"{actorName} đã tạo nhóm.";
+    public static string Renamed(string actorName, string groupName) => $"{actorName} đã đổi tên nhóm thành \"{groupName}\".";
+    public static string AvatarChanged(string actorName) => $"{actorName} đã đổi ảnh nhóm.";
+    public static string MembersAdded(string actorName, IEnumerable<string> memberNames) => $"{actorName} đã thêm {string.Join(", ", memberNames)} vào nhóm.";
+    public static string MemberRemoved(string actorName, string memberName) => $"{actorName} đã xóa {memberName} khỏi nhóm.";
+    public static string MemberLeft(string memberName) => $"{memberName} đã rời khỏi nhóm.";
+    public static string PermissionChanged(string actorName, ConversationSendPermission permission) => permission switch
+    {
+        ConversationSendPermission.Everyone => $"{actorName} đã tắt chế độ chỉ quản trị viên được gửi tin nhắn.",
+        ConversationSendPermission.AdminsAndOwner => $"{actorName} đã bật chế độ chỉ quản trị viên được gửi tin nhắn.",
+        ConversationSendPermission.OwnerOnly => $"{actorName} đã bật chế độ chỉ trưởng nhóm được gửi tin nhắn.",
+        _ => throw new ArgumentOutOfRangeException(nameof(permission))
+    };
+}
+
+public static class ChatMessagePolicy
+{
+    public static bool CanReply(MessageType messageType) => messageType != MessageType.System;
+    public static bool CanEdit(MessageType messageType) => messageType != MessageType.System;
+    public static bool CanRecall(MessageType messageType) => messageType != MessageType.System;
+    public static bool CanReact(MessageType messageType) => messageType != MessageType.System;
+}
+
 public enum GroupChatError { Validation, NotFound, Forbidden, Conflict }
 
 public sealed record GroupChatResult<T>(bool IsSuccess, T? Value, GroupChatError? Error, string? Message)
