@@ -4,6 +4,7 @@
 
 - Group mutations persist a `Messages` row with `MessageType = 100` and Vietnamese text in `Content`.
 - They use the actor as `SenderUserId`, have no attachments, and appear in the existing message-history pagination by creation time.
+- Every committed group mutation also emits `ReceiveMessage` to each affected user using the normal `ChatRealtimeMessageResponse` shape; `isMine` is calculated per recipient.
 - Clients cannot create system messages through the send-message API.
 - System messages cannot be replied to, edited, recalled, or reacted to.
 - Existing stored system messages using the legacy value `8` are migrated to `100`.

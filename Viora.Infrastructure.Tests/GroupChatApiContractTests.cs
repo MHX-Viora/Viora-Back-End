@@ -113,6 +113,31 @@ public sealed class GroupChatApiContractTests
     }
 
     [Fact]
+    public void Group_system_realtime_payload_matches_normal_message_shape()
+    {
+        var messageId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var senderId = Guid.NewGuid();
+        var createdAt = DateTime.UtcNow;
+        var sender = new ChatMessageSenderResponse(senderId, "Quyền", null, false);
+
+        var payload = GroupChatRealtimeMessages.CreateSystemMessage(
+            messageId,
+            conversationId,
+            sender,
+            "Quyền đã đổi tên nhóm.",
+            createdAt,
+            true);
+
+        Assert.Equal(MessageType.System, payload.MessageType);
+        Assert.Equal("Quyền đã đổi tên nhóm.", payload.Content);
+        Assert.True(payload.IsMine);
+        Assert.Empty(payload.Attachments);
+        Assert.Empty(payload.Reactions);
+        Assert.Null(payload.Reply);
+    }
+
+    [Fact]
     public void Selectable_friends_query_can_be_translated_by_postgresql_provider()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()

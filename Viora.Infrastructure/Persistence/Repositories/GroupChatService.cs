@@ -82,7 +82,7 @@ public sealed class GroupChatService(
             await tx.CommitAsync(token);
         }
         var response = new CreateGroupResponse(group.Id, group.Name, group.AvatarUrl, ids.Length + 1, group.CreatedAt);
-        await Publish(ids.Append(command.CurrentUserId), RealtimeEvents.ConversationCreated, response, notifications, token);
+        await Publish(ids.Append(command.CurrentUserId), RealtimeEvents.ConversationCreated, response, message, actor, notifications, token);
         return GroupChatResult<CreateGroupResponse>.Success(response);
     }
 
@@ -234,14 +234,34 @@ public sealed class GroupChatService(
         var members = group.Members.Where(x => x.Status == ConversationMemberStatus.Active).Select(x => x.UserId).Concat(directRecipients).Distinct().ToArray();
         await using (var tx = await db.Database.BeginTransactionAsync(token)) { db.Messages.Add(message); db.Notifications.AddRange(notifications); await db.SaveChangesAsync(token); await tx.CommitAsync(token); }
         var response = new GroupMutationResponse(group.Id, action, group.UpdatedAt);
-        await Publish(members, eventName, new { response, systemMessage = content }, notifications, token);
+        var actor = group.Members.Single(x => x.UserId == actorId).User;
+        await Publish(members, eventName, new { response, systemMessage = content }, message, actor, notifications, token);
         return GroupChatResult<GroupMutationResponse>.Success(response);
     }
 
-    private async Task Publish(IEnumerable<Guid> users, string eventName, object payload, IReadOnlyList<Notification> notifications, CancellationToken token)
+    private async Task Publish(
+        IEnumerable<Guid> users,
+        string eventName,
+        object payload,
+        Message systemMessage,
+        User actor,
+        IReadOnlyList<Notification> notifications,
+        CancellationToken token)
     {
-        await realtime.SendToUsersAsync(users, eventName, payload, token);
-        await realtime.SendToUsersAsync(users, RealtimeEvents.ReceiveMessage, payload, token);
+        var recipients = users.Distinct().ToArray();
+        await realtime.SendToUsersAsync(recipients, eventName, payload, token);
+        var sender = new ChatMessageSenderResponse(actor.Id, actor.DisplayName, actor.AvatarUrl, actor.IsVerified);
+        foreach (var userId in recipients)
+        {
+            var realtimeMessage = GroupChatRealtimeMessages.CreateSystemMessage(
+                systemMessage.Id,
+                systemMessage.ConversationId,
+                sender,
+                systemMessage.Content!,
+                systemMessage.CreatedAt,
+                userId == systemMessage.SenderUserId);
+            await realtime.SendToUserAsync(userId, RealtimeEvents.ReceiveMessage, realtimeMessage, token);
+        }
         foreach (var notification in notifications) await notificationService.PublishAsync(notification, token);
     }
 

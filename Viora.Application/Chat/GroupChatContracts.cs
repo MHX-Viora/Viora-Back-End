@@ -43,6 +43,30 @@ public static class ChatMessagePolicy
     public static bool CanReact(MessageType messageType) => messageType != MessageType.System;
 }
 
+public static class GroupChatRealtimeMessages
+{
+    public static ChatRealtimeMessageResponse CreateSystemMessage(
+        Guid messageId,
+        Guid conversationId,
+        ChatMessageSenderResponse sender,
+        string content,
+        DateTime createdAt,
+        bool isMine) =>
+        new(
+            messageId,
+            conversationId,
+            sender,
+            MessageType.System,
+            content,
+            null,
+            [],
+            [],
+            isMine,
+            false,
+            false,
+            createdAt);
+}
+
 public enum GroupChatError { Validation, NotFound, Forbidden, Conflict }
 
 public sealed record GroupChatResult<T>(bool IsSuccess, T? Value, GroupChatError? Error, string? Message)
