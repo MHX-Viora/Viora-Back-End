@@ -91,6 +91,7 @@ public sealed class GroupChatService(
         var group = await ActiveGroup(conversationId, token);
         var me = group?.Members.FirstOrDefault(x => x.UserId == actorId && x.Status == ConversationMemberStatus.Active);
         if (group is null) return Fail<GroupDetailsResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        if (group.DeletedAt.HasValue) return Dissolved<GroupDetailsResponse>();
         if (me is null) return Fail<GroupDetailsResponse>(GroupChatError.Forbidden, "Bạn không phải thành viên của nhóm.");
         var creator = await db.Users.AsNoTracking().Where(x => x.Id == group.CreatedBy).Select(x => new GroupUserResponse(x.Id, x.DisplayName, x.AvatarUrl)).SingleAsync(token);
         var active = group.Members.Where(x => x.Status == ConversationMemberStatus.Active).ToList();
@@ -100,8 +101,10 @@ public sealed class GroupChatService(
 
     public async Task<GroupChatResult<GroupMemberListResponse>> GetMembersAsync(Guid actorId, Guid conversationId, string? keyword, int page, int pageSize, CancellationToken token)
     {
-        if (!await IsActiveMember(actorId, conversationId, token)) return Fail<GroupMemberListResponse>(GroupChatError.Forbidden, "Bạn không phải thành viên của nhóm.");
-        if (!await IsActiveGroup(conversationId, token)) return Fail<GroupMemberListResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        var group = await ActiveGroup(conversationId, token);
+        if (group is null) return Fail<GroupMemberListResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        if (group.DeletedAt.HasValue) return Dissolved<GroupMemberListResponse>();
+        if (!IsActiveMember(group, actorId)) return Fail<GroupMemberListResponse>(GroupChatError.Forbidden, "Bạn không phải thành viên của nhóm.");
         page = Math.Max(page, 1); pageSize = Math.Clamp(pageSize, 1, 100);
         var query = db.ConversationMembers.AsNoTracking().Where(x => x.ConversationId == conversationId && x.Status == ConversationMemberStatus.Active);
         if (!string.IsNullOrWhiteSpace(keyword)) { var pattern = $"%{keyword.Trim()}%"; query = query.Where(x => EF.Functions.ILike(x.User.DisplayName, pattern)); }
@@ -118,6 +121,7 @@ public sealed class GroupChatService(
         if (ids.Length == 0 || ids.Length != memberIds.Count || ids.Contains(actorId)) return FailMutation(GroupChatError.Validation, "Danh sách thành viên không hợp lệ.");
         var access = await Access(actorId, id, token);
         if (access.Group is null) return Missing();
+        if (access.Group.DeletedAt.HasValue) return DissolvedMutation();
         if (access.Member?.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)) return Forbidden();
         var valid = await db.Users.Where(x => ids.Contains(x.Id) && x.Account.Status == AccountStatus.Active && x.Account.DeletedAt == null).Select(x => x.Id).ToListAsync(token);
         if (valid.Count != ids.Length) return FailMutation(GroupChatError.NotFound, "Một hoặc nhiều người dùng không tồn tại hoặc đã bị khóa.");
@@ -136,7 +140,9 @@ public sealed class GroupChatService(
     public async Task<GroupChatResult<GroupMutationResponse>> RemoveMemberAsync(Guid actorId, Guid id, Guid userId, CancellationToken token)
     {
         if (actorId == userId) return FailMutation(GroupChatError.Validation, "Hãy dùng API rời nhóm.");
-        var access = await Access(actorId, id, token); if (access.Group is null) return Missing(); if (access.Member is null) return Forbidden();
+        var access = await Access(actorId, id, token); if (access.Group is null) return Missing();
+        if (access.Group.DeletedAt.HasValue) return DissolvedMutation();
+        if (access.Member is null) return Forbidden();
         var target = access.Group.Members.SingleOrDefault(x => x.UserId == userId && x.Status == ConversationMemberStatus.Active);
         if (target is null) return FailMutation(GroupChatError.NotFound, "Không tìm thấy thành viên.");
         var allowed = access.Member.Role == ConversationMemberRole.Owner || access.Member.Role == ConversationMemberRole.Admin && target.Role == ConversationMemberRole.Member;
@@ -148,12 +154,24 @@ public sealed class GroupChatService(
 
     public async Task<GroupChatResult<GroupMutationResponse>> LeaveAsync(Guid actorId, Guid id, CancellationToken token)
     {
-        var access = await Access(actorId, id, token); if (access.Group is null) return Missing(); if (access.Member is null) return Forbidden();
+        var access = await Access(actorId, id, token); if (access.Group is null) return Missing();
+        if (access.Group.DeletedAt.HasValue) return DissolvedMutation();
+        if (access.Member is null) return Forbidden();
         var others = access.Group.Members.Count(x => x.Status == ConversationMemberStatus.Active && x.UserId != actorId);
         if (access.Member.Role == ConversationMemberRole.Owner && others > 0) return FailMutation(GroupChatError.Conflict, GroupChatRoleMessages.OwnerMustTransferBeforeLeaving);
         access.Member.Status = ConversationMemberStatus.Left;
-        if (others == 0) access.Group.DeletedAt = DateTime.UtcNow;
-        return await SaveMutation(access.Group, actorId, GroupChatSystemMessages.MemberLeft(access.Member.User.DisplayName), "left", RealtimeEvents.MemberLeft, [actorId], [], token);
+        var dissolved = others == 0;
+        if (dissolved) access.Group.DeletedAt = DateTime.UtcNow;
+        return await SaveMutation(
+            access.Group,
+            actorId,
+            GroupChatSystemMessages.MemberLeft(access.Member.User.DisplayName),
+            "left",
+            dissolved ? RealtimeEvents.ConversationDissolved : RealtimeEvents.MemberLeft,
+            [actorId],
+            [],
+            token,
+            dissolve: dissolved);
     }
 
     public async Task<GroupChatResult<RenameGroupResponse>> RenameAsync(Guid actorId, Guid id, string name, CancellationToken token)
@@ -162,6 +180,7 @@ public sealed class GroupChatService(
         if (name.Length is 0 or > 100) return Fail<RenameGroupResponse>(GroupChatError.Validation, "Tên nhóm phải từ 1 đến 100 ký tự.");
         var access = await Access(actorId, id, token);
         if (access.Group is null) return Fail<RenameGroupResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        if (access.Group.DeletedAt.HasValue) return Dissolved<RenameGroupResponse>();
         if (access.Member?.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)) return Fail<RenameGroupResponse>(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
         access.Group.Name = name;
         var mutation = await SaveMutation(access.Group, actorId, GroupChatSystemMessages.Renamed(access.Member.User.DisplayName, name), "renamed", RealtimeEvents.ConversationRenamed, [], [], token);
@@ -175,6 +194,7 @@ public sealed class GroupChatService(
         if (avatar.Length is <= 0 or > 5 * 1024 * 1024 || avatar.ContentType is not ("image/jpeg" or "image/png" or "image/webp")) return Fail<ChangeGroupAvatarResponse>(GroupChatError.Validation, "Avatar không hợp lệ.");
         var access = await Access(actorId, id, token);
         if (access.Group is null) return Fail<ChangeGroupAvatarResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        if (access.Group.DeletedAt.HasValue) return Dissolved<ChangeGroupAvatarResponse>();
         if (access.Member?.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)) return Fail<ChangeGroupAvatarResponse>(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
         access.Group.AvatarUrl = (await mediaStorage.UploadGroupAvatarAsync(actorId, avatar, token)).MediaUrl;
         var mutation = await SaveMutation(access.Group, actorId, GroupChatSystemMessages.AvatarChanged(access.Member.User.DisplayName), "avatar-changed", RealtimeEvents.ConversationAvatarChanged, [], [], token);
@@ -188,6 +208,7 @@ public sealed class GroupChatService(
         if (!Enum.IsDefined(permission)) return Fail<ChangeGroupPermissionResponse>(GroupChatError.Validation, "Quyền gửi tin nhắn không hợp lệ.");
         var access = await Access(actorId, id, token);
         if (access.Group is null) return Fail<ChangeGroupPermissionResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        if (access.Group.DeletedAt.HasValue) return Dissolved<ChangeGroupPermissionResponse>();
         if (access.Member?.Role != ConversationMemberRole.Owner) return Fail<ChangeGroupPermissionResponse>(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
 
         access.Group.CanSendMessage = permission;
@@ -199,7 +220,9 @@ public sealed class GroupChatService(
 
     public async Task<GroupChatResult<GroupMutationResponse>> SetAdminAsync(Guid actorId, Guid id, Guid userId, bool isAdmin, CancellationToken token)
     {
-        var access = await Access(actorId, id, token); if (access.Group is null) return Missing(); if (access.Member?.Role != ConversationMemberRole.Owner) return Forbidden();
+        var access = await Access(actorId, id, token); if (access.Group is null) return Missing();
+        if (access.Group.DeletedAt.HasValue) return DissolvedMutation();
+        if (access.Member?.Role != ConversationMemberRole.Owner) return Forbidden();
         var target = access.Group.Members.SingleOrDefault(x => x.UserId == userId && x.Status == ConversationMemberStatus.Active);
         var expected = isAdmin ? ConversationMemberRole.Member : ConversationMemberRole.Admin;
         if (target is null) return FailMutation(GroupChatError.NotFound, "Không tìm thấy thành viên.");
@@ -211,7 +234,9 @@ public sealed class GroupChatService(
 
     public async Task<GroupChatResult<GroupMutationResponse>> TransferOwnerAsync(Guid actorId, Guid id, Guid userId, CancellationToken token)
     {
-        var access = await Access(actorId, id, token); if (access.Group is null) return Missing(); if (access.Member?.Role != ConversationMemberRole.Owner) return Forbidden();
+        var access = await Access(actorId, id, token); if (access.Group is null) return Missing();
+        if (access.Group.DeletedAt.HasValue) return DissolvedMutation();
+        if (access.Member?.Role != ConversationMemberRole.Owner) return Forbidden();
         var target = access.Group.Members.SingleOrDefault(x => x.UserId == userId && x.Status == ConversationMemberStatus.Active && x.Role != ConversationMemberRole.Owner);
         if (target is null) return FailMutation(GroupChatError.NotFound, "Không tìm thấy thành viên nhận quyền.");
         access.Member.Role = ConversationMemberRole.Admin; target.Role = ConversationMemberRole.Owner;
@@ -221,22 +246,60 @@ public sealed class GroupChatService(
 
     public async Task<GroupChatResult<GroupMutationResponse>> DissolveAsync(Guid actorId, Guid id, CancellationToken token)
     {
-        var access = await Access(actorId, id, token); if (access.Group is null) return Missing(); if (access.Member?.Role != ConversationMemberRole.Owner) return Forbidden();
+        var access = await Access(actorId, id, token); if (access.Group is null) return Missing();
+        if (access.Group.DeletedAt.HasValue) return DissolvedMutation();
+        if (access.Member?.Role != ConversationMemberRole.Owner) return Forbidden();
         var recipients = access.Group.Members.Where(x => x.Status == ConversationMemberStatus.Active).Select(x => x.UserId).ToArray();
         foreach (var member in access.Group.Members.Where(x => x.Status == ConversationMemberStatus.Active)) member.Status = ConversationMemberStatus.Kicked;
         access.Group.DeletedAt = DateTime.UtcNow;
-        return await SaveMutation(access.Group, actorId, "Nhóm đã được giải tán.", "dissolved", RealtimeEvents.ConversationUpdated, recipients, [], token);
+        return await SaveMutation(access.Group, actorId, "Nhóm đã được giải tán.", "dissolved", RealtimeEvents.ConversationDissolved, recipients, [], token, dissolve: true);
     }
 
-    private async Task<GroupChatResult<GroupMutationResponse>> SaveMutation(Conversation group, Guid actorId, string content, string action, string eventName, IEnumerable<Guid> directRecipients, IReadOnlyList<Notification> notifications, CancellationToken token)
+    private async Task<GroupChatResult<GroupMutationResponse>> SaveMutation(Conversation group, Guid actorId, string content, string action, string eventName, IEnumerable<Guid> directRecipients, IReadOnlyList<Notification> notifications, CancellationToken token, bool dissolve = false)
     {
         var now = DateTime.UtcNow; var message = SystemMessage(group, actorId, content, now); group.LastMessageId = message.Id; group.LastMessageAt = now; group.UpdatedAt = now;
         var members = group.Members.Where(x => x.Status == ConversationMemberStatus.Active).Select(x => x.UserId).Concat(directRecipients).Distinct().ToArray();
         await using (var tx = await db.Database.BeginTransactionAsync(token)) { db.Messages.Add(message); db.Notifications.AddRange(notifications); await db.SaveChangesAsync(token); await tx.CommitAsync(token); }
         var response = new GroupMutationResponse(group.Id, action, group.UpdatedAt);
         var actor = group.Members.Single(x => x.UserId == actorId).User;
-        await Publish(members, eventName, new { response, systemMessage = content }, message, actor, notifications, token);
+        if (dissolve)
+        {
+            await PublishDissolved(members, message, actor, notifications, token);
+        }
+        else
+        {
+            await Publish(members, eventName, new { response, systemMessage = content }, message, actor, notifications, token);
+        }
         return GroupChatResult<GroupMutationResponse>.Success(response);
+    }
+
+    private async Task PublishDissolved(
+        IReadOnlyCollection<Guid> users,
+        Message systemMessage,
+        User actor,
+        IReadOnlyList<Notification> notifications,
+        CancellationToken token)
+    {
+        var sender = new ChatMessageSenderResponse(actor.Id, actor.DisplayName, actor.AvatarUrl, actor.IsVerified);
+        foreach (var userId in users)
+        {
+            var realtimeMessage = GroupChatRealtimeMessages.CreateSystemMessage(
+                systemMessage.Id,
+                systemMessage.ConversationId,
+                sender,
+                systemMessage.Content!,
+                systemMessage.CreatedAt,
+                userId == systemMessage.SenderUserId);
+            await realtime.SendToUserAsync(userId, RealtimeEvents.ReceiveMessage, realtimeMessage, token);
+        }
+
+        await realtime.SendToUsersAsync(
+            users,
+            RealtimeEvents.ConversationDissolved,
+            new ConversationDissolvedPayload(systemMessage.ConversationId),
+            token);
+        await realtime.RemoveUsersFromGroupAsync(users, systemMessage.ConversationId.ToString(), token);
+        foreach (var notification in notifications) await notificationService.PublishAsync(notification, token);
     }
 
     private async Task Publish(
@@ -269,9 +332,9 @@ public sealed class GroupChatService(
     {
         var group = await ActiveGroup(id, token); return (group, group?.Members.SingleOrDefault(x => x.UserId == actorId && x.Status == ConversationMemberStatus.Active));
     }
-    private Task<Conversation?> ActiveGroup(Guid id, CancellationToken token) => db.Conversations.Include(x => x.Members).ThenInclude(x => x.User).SingleOrDefaultAsync(x => x.Id == id && x.ConversationType == ConversationType.Group && x.DeletedAt == null, token);
-    private Task<bool> IsActiveGroup(Guid id, CancellationToken token) => db.Conversations.AnyAsync(x => x.Id == id && x.ConversationType == ConversationType.Group && x.DeletedAt == null, token);
-    private Task<bool> IsActiveMember(Guid userId, Guid id, CancellationToken token) => db.ConversationMembers.AnyAsync(x => x.ConversationId == id && x.UserId == userId && x.Status == ConversationMemberStatus.Active, token);
+    private Task<Conversation?> ActiveGroup(Guid id, CancellationToken token) => db.Conversations.Include(x => x.Members).ThenInclude(x => x.User).SingleOrDefaultAsync(x => x.Id == id && x.ConversationType == ConversationType.Group, token);
+    private static bool IsActiveMember(Conversation group, Guid userId) =>
+        group.Members.Any(x => x.UserId == userId && x.Status == ConversationMemberStatus.Active);
     private async Task<HashSet<Guid>> AcceptedFriendIds(Guid actorId, Guid[] ids, CancellationToken token) => (await db.Friendships.Where(x => x.Status == FriendshipStatus.Accepted && ((x.RequesterUserId == actorId && ids.Contains(x.AddresseeUserId)) || (x.AddresseeUserId == actorId && ids.Contains(x.RequesterUserId)))).Select(x => x.RequesterUserId == actorId ? x.AddresseeUserId : x.RequesterUserId).ToListAsync(token)).ToHashSet();
     private static ConversationMember Member(Conversation group, Guid userId, ConversationMemberRole role, Guid joinedBy, DateTime now) => new() { Conversation = group, UserId = userId, Role = role, Status = ConversationMemberStatus.Active, JoinedBy = joinedBy, JoinedAt = now };
     private static Message SystemMessage(Conversation group, Guid actorId, string content, DateTime now) => new() { Id = Guid.NewGuid(), Conversation = group, ConversationId = group.Id, SenderUserId = actorId, MessageType = MessageType.System, Content = content, CreatedAt = now, UpdatedAt = now };
@@ -280,5 +343,7 @@ public sealed class GroupChatService(
     private static GroupChatResult<T> Fail<T>(GroupChatError error, string message) => GroupChatResult<T>.Failure(error, message);
     private static GroupChatResult<GroupMutationResponse> FailMutation(GroupChatError error, string message) => Fail<GroupMutationResponse>(error, message);
     private static GroupChatResult<GroupMutationResponse> Missing() => FailMutation(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+    private static GroupChatResult<T> Dissolved<T>() => Fail<T>(GroupChatError.Dissolved, "Conversation has been dissolved.");
+    private static GroupChatResult<GroupMutationResponse> DissolvedMutation() => Dissolved<GroupMutationResponse>();
     private static GroupChatResult<GroupMutationResponse> Forbidden() => FailMutation(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
 }

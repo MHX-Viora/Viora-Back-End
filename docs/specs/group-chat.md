@@ -17,6 +17,12 @@
 - Each destination receives a new `Messages` row with a new ID, the forwarding user as sender, copied content/type/reply reference, and newly created attachment rows that reuse the existing file URLs.
 - Creation is atomic across destinations. Normal receive-message, conversation-update, notification, delivery, and push realtime flows run after commit.
 
+## Dissolved conversations
+
+- Dissolving a group sets `Conversation.DeletedAt` and marks every active member as inactive using the existing `Kicked` status.
+- After commit, former members receive `ConversationDissolved` with `{ conversationId }`; their active SignalR connections are then removed from that conversation room without disconnecting their global realtime connection.
+- Conversation APIs check `DeletedAt` before membership. A dissolved conversation returns `ChatError.ConversationDissolved`, HTTP `410 Gone`, and `Conversation has been dissolved.`; a removed member of an active group still receives `403 Forbidden`.
+
 ## Objective
 
 Add authenticated group-chat APIs without breaking private chat. Reuse `Conversations`,

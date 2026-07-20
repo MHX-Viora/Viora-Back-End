@@ -85,9 +85,7 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
             return Ok(result.Value);
         }
 
-        return result.Error == ChatError.ConversationNotFound
-            ? NotFoundProblem(ChatError.ConversationNotFound, result.Message ?? "Khong tim thay cuoc tro chuyen.")
-            : ForbiddenProblem(result.Message ?? "Ban khong co quyen xem cuoc tro chuyen nay.");
+        return ToChatActionResult(result, "Ban khong co quyen xem cuoc tro chuyen nay.");
     }
 
     [HttpPost("messages")]
@@ -121,6 +119,7 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
         {
             ChatError.ConversationNotFound =>
                 NotFoundProblem(ChatError.ConversationNotFound, result.Message ?? "Khong tim thay cuoc tro chuyen."),
+            ChatError.ConversationDissolved => DissolvedProblem(result.Message),
             ChatError.MessageNotFound =>
                 NotFoundProblem(ChatError.MessageNotFound, result.Message ?? "Khong tim thay tin nhan."),
             ChatError.Forbidden =>
@@ -184,9 +183,7 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
             return Ok(result.Value);
         }
 
-        return result.Error == ChatError.MessageNotFound
-            ? NotFoundProblem(ChatError.MessageNotFound, result.Message ?? "Khong tim thay tin nhan.")
-            : ForbiddenProblem(result.Message ?? "Ban khong co quyen thu hoi tin nhan nay.");
+        return ToChatActionResult(result, "Ban khong co quyen thu hoi tin nhan nay.");
     }
 
     [HttpPost("messages/{messageId:guid}/forward")]
@@ -230,9 +227,7 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
             return Ok(result.Value);
         }
 
-        return result.Error == ChatError.ConversationNotFound
-            ? NotFoundProblem(ChatError.ConversationNotFound, result.Message ?? "Khong tim thay cuoc tro chuyen.")
-            : ForbiddenProblem(result.Message ?? "Ban khong co quyen danh dau da doc cuoc tro chuyen nay.");
+        return ToChatActionResult(result, "Ban khong co quyen danh dau da doc cuoc tro chuyen nay.");
     }
 
     [HttpPatch("conversations/{conversationId:guid}/pin")]
@@ -256,9 +251,7 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
             return Ok(result.Value);
         }
 
-        return result.Error == ChatError.ConversationNotFound
-            ? NotFoundProblem(ChatError.ConversationNotFound, result.Message ?? "Khong tim thay cuoc tro chuyen.")
-            : ForbiddenProblem(result.Message ?? "Ban khong co quyen ghim cuoc tro chuyen nay.");
+        return ToChatActionResult(result, "Ban khong co quyen ghim cuoc tro chuyen nay.");
     }
 
     [HttpPatch("conversations/{conversationId:guid}/mute")]
@@ -421,9 +414,10 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
     private IActionResult ToGroupActionResult<T>(GroupChatResult<T> result)
     {
         if (result.IsSuccess) return Ok(result.Value);
-        var status = result.Error switch { GroupChatError.NotFound => 404, GroupChatError.Forbidden => 403, GroupChatError.Conflict => 409, _ => 400 };
+        var status = result.Error switch { GroupChatError.NotFound => 404, GroupChatError.Dissolved => 410, GroupChatError.Forbidden => 403, GroupChatError.Conflict => 409, _ => 400 };
         var problem = new ProblemDetails { Status = status, Title = "Group chat request failed", Detail = result.Message };
         problem.Extensions["code"] = result.Error?.ToString();
+        if (result.Error == GroupChatError.Dissolved) problem.Extensions["message"] = result.Message;
         return new ObjectResult(problem) { StatusCode = status };
     }
 
@@ -462,6 +456,20 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
         return new ObjectResult(problem) { StatusCode = StatusCodes.Status403Forbidden };
     }
 
+    private ObjectResult DissolvedProblem(string? detail = null)
+    {
+        detail ??= "Conversation has been dissolved.";
+        var problem = new ProblemDetails
+        {
+            Status = StatusCodes.Status410Gone,
+            Title = "Conversation dissolved",
+            Detail = detail
+        };
+        problem.Extensions["code"] = ChatError.ConversationDissolved.ToString();
+        problem.Extensions["message"] = detail;
+        return new ObjectResult(problem) { StatusCode = StatusCodes.Status410Gone };
+    }
+
     private ObjectResult BadRequestProblem(string detail)
     {
         var problem = new ProblemDetails
@@ -484,6 +492,7 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
         return result.Error switch
         {
             ChatError.ConversationNotFound => NotFoundProblem(ChatError.ConversationNotFound, result.Message ?? "Khong tim thay cuoc tro chuyen."),
+            ChatError.ConversationDissolved => DissolvedProblem(result.Message),
             ChatError.MessageNotFound => NotFoundProblem(ChatError.MessageNotFound, result.Message ?? "Không tìm thấy tin nhắn."),
             ChatError.Forbidden => ForbiddenProblem(result.Message ?? forbiddenMessage),
             _ => BadRequestProblem(result.Message ?? "Yeu cau khong hop le.")

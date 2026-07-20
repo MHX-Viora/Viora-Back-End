@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Viora.Application.Chat;
+using Viora.Application.Realtime;
 using Viora.Domain.Entities;
 using viora_BE.Controllers;
 using Xunit;
@@ -12,6 +13,16 @@ namespace Viora.Infrastructure.Tests;
 
 public sealed class ChatApiContractTests
 {
+    [Fact]
+    public void Dissolved_conversation_has_distinct_error_and_realtime_payload()
+    {
+        Assert.True(Enum.IsDefined(ChatError.ConversationDissolved));
+        AssertProperties<ConversationDissolvedPayload>("ConversationId");
+        Assert.Equal("ConversationDissolved", RealtimeEvents.ConversationDissolved);
+        Assert.Contains(
+            typeof(IRealtimeService).GetMethods(),
+            method => method.Name == "RemoveUsersFromGroupAsync");
+    }
     [Fact]
     public void Chat_controller_exposes_authenticated_conversations_route()
     {

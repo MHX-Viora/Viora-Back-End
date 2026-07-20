@@ -67,7 +67,7 @@ public static class GroupChatRealtimeMessages
             createdAt);
 }
 
-public enum GroupChatError { Validation, NotFound, Forbidden, Conflict }
+public enum GroupChatError { Validation, NotFound, Dissolved, Forbidden, Conflict }
 
 public sealed record GroupChatResult<T>(bool IsSuccess, T? Value, GroupChatError? Error, string? Message)
 {

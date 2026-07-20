@@ -17,6 +17,7 @@ public static class RealtimeEvents
     public const string MessageRead = nameof(MessageRead);
     public const string MessagesRead = nameof(MessagesRead);
     public const string ConversationUpdated = nameof(ConversationUpdated);
+    public const string ConversationDissolved = nameof(ConversationDissolved);
     public const string ConversationCreated = nameof(ConversationCreated);
     public const string ReactionAdded = nameof(ReactionAdded);
     public const string ReactionRemoved = nameof(ReactionRemoved);
@@ -38,6 +39,8 @@ public static class RealtimeEvents
     public const string MemberRemoved = nameof(MemberRemoved);
     public const string MemberLeft = nameof(MemberLeft);
 }
+
+public sealed record ConversationDissolvedPayload(Guid ConversationId);
 
 public sealed record RegisterDeviceTokenCommand(
     Guid UserId,
@@ -63,6 +66,7 @@ public interface IRealtimeService
     Task SendToUserAsync(Guid userId, string eventName, object payload, CancellationToken cancellationToken);
     Task SendToUsersAsync(IEnumerable<Guid> userIds, string eventName, object payload, CancellationToken cancellationToken);
     Task SendToGroupAsync(string groupName, string eventName, object payload, CancellationToken cancellationToken);
+    Task RemoveUsersFromGroupAsync(IEnumerable<Guid> userIds, string groupName, CancellationToken cancellationToken);
 }
 
 public interface IPushNotificationSender

@@ -261,14 +261,20 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var skip = (page - 1) * pageSize;
 
-        var conversationExists = await dbContext.Conversations
+        var conversationState = await dbContext.Conversations
             .AsNoTracking()
-            .AnyAsync(conversation => conversation.Id == query.ConversationId, cancellationToken);
-        if (!conversationExists)
+            .Where(conversation => conversation.Id == query.ConversationId)
+            .Select(conversation => new { conversation.DeletedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (conversationState is null)
         {
             return ChatResult<ChatMessageListResponse>.Failure(
                 ChatError.ConversationNotFound,
                 "Khong tim thay cuoc tro chuyen.");
+        }
+        if (conversationState.DeletedAt.HasValue)
+        {
+            return Dissolved<ChatMessageListResponse>();
         }
 
         var activeMember = await dbContext.ConversationMembers
@@ -563,6 +569,10 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 ChatError.ConversationNotFound,
                 "Khong tim thay cuoc tro chuyen.");
         }
+        if (conversation.DeletedAt.HasValue)
+        {
+            return Dissolved<SendChatMessageRepositoryResult>();
+        }
 
         var senderMember = await dbContext.ConversationMembers
             .AsNoTracking()
@@ -720,6 +730,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
     {
         var source = await dbContext.Messages
             .AsNoTracking()
+            .Include(message => message.Conversation)
             .Include(message => message.Attachments)
             .Include(message => message.ReplyMessage)
                 .ThenInclude(reply => reply!.SenderUser)
@@ -727,6 +738,10 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         if (source is null)
         {
             return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.MessageNotFound, "Không tìm thấy tin nhắn.");
+        }
+        if (source.Conversation.DeletedAt.HasValue)
+        {
+            return Dissolved<ForwardChatMessageRepositoryResult>();
         }
 
         var sourceMembership = await dbContext.ConversationMembers
@@ -760,11 +775,15 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         }
 
         var destinations = await dbContext.Conversations
-            .Where(conversation => destinationIds.Contains(conversation.Id) && conversation.DeletedAt == null)
+            .Where(conversation => destinationIds.Contains(conversation.Id))
             .ToListAsync(cancellationToken);
         if (destinations.Count != destinationIds.Length)
         {
             return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.ConversationNotFound, "Không tìm thấy một hoặc nhiều cuộc trò chuyện.");
+        }
+        if (destinations.Any(conversation => conversation.DeletedAt.HasValue))
+        {
+            return Dissolved<ForwardChatMessageRepositoryResult>();
         }
 
         var memberships = await dbContext.ConversationMembers
@@ -891,7 +910,8 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             .Select(value => new
             {
                 value.Id,
-                value.LastMessageId
+                value.LastMessageId,
+                value.DeletedAt
             })
             .FirstOrDefaultAsync(cancellationToken);
         if (conversation is null)
@@ -899,6 +919,10 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             return ChatResult<MarkConversationReadRepositoryResult>.Failure(
                 ChatError.ConversationNotFound,
                 "Khong tim thay cuoc tro chuyen.");
+        }
+        if (conversation.DeletedAt.HasValue)
+        {
+            return Dissolved<MarkConversationReadRepositoryResult>();
         }
 
         var membership = await dbContext.ConversationMembers
@@ -957,6 +981,16 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 "Khong tim thay tin nhan.");
         }
 
+        var conversationDissolved = await dbContext.Conversations
+            .AsNoTracking()
+            .Where(conversation => conversation.Id == message.ConversationId)
+            .Select(conversation => conversation.DeletedAt.HasValue)
+            .FirstAsync(cancellationToken);
+        if (conversationDissolved)
+        {
+            return Dissolved<RecallChatMessageRepositoryResult>();
+        }
+
         if (!ChatMessagePolicy.CanRecall(message.MessageType))
         {
             return ChatResult<RecallChatMessageRepositoryResult>.Failure(
@@ -1012,14 +1046,20 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         SetConversationPinCommand command,
         CancellationToken cancellationToken)
     {
-        var conversationExists = await dbContext.Conversations
+        var conversationState = await dbContext.Conversations
             .AsNoTracking()
-            .AnyAsync(conversation => conversation.Id == command.ConversationId, cancellationToken);
-        if (!conversationExists)
+            .Where(conversation => conversation.Id == command.ConversationId)
+            .Select(conversation => new { conversation.DeletedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (conversationState is null)
         {
             return ChatResult<SetConversationPinResponse>.Failure(
                 ChatError.ConversationNotFound,
                 "Khong tim thay cuoc tro chuyen.");
+        }
+        if (conversationState.DeletedAt.HasValue)
+        {
+            return Dissolved<SetConversationPinResponse>();
         }
 
         var isActiveMember = await dbContext.ConversationMembers
@@ -1077,11 +1117,15 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         var conversation = await dbContext.Conversations
             .AsNoTracking()
             .Where(value => value.Id == command.ConversationId)
-            .Select(value => new { value.Id, value.ConversationType })
+            .Select(value => new { value.Id, value.ConversationType, value.DeletedAt })
             .FirstOrDefaultAsync(cancellationToken);
         if (conversation is null)
         {
             return ChatResult<SetConversationBlockResponse>.Failure(ChatError.ConversationNotFound, "Khong tim thay cuoc tro chuyen.");
+        }
+        if (conversation.DeletedAt.HasValue)
+        {
+            return Dissolved<SetConversationBlockResponse>();
         }
 
         if (conversation.ConversationType != ConversationType.Private)
@@ -1382,12 +1426,18 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
         Guid userId,
         CancellationToken cancellationToken)
     {
-        var conversationExists = await dbContext.Conversations
+        var conversationState = await dbContext.Conversations
             .AsNoTracking()
-            .AnyAsync(conversation => conversation.Id == conversationId, cancellationToken);
-        if (!conversationExists)
+            .Where(conversation => conversation.Id == conversationId)
+            .Select(conversation => new { conversation.DeletedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (conversationState is null)
         {
             return ChatResult<bool>.Failure(ChatError.ConversationNotFound, "Khong tim thay cuoc tro chuyen.");
+        }
+        if (conversationState.DeletedAt.HasValue)
+        {
+            return Dissolved<bool>();
         }
 
         var isActiveMember = await dbContext.ConversationMembers
@@ -1404,6 +1454,9 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
 
         return ChatResult<bool>.Success(true);
     }
+
+    private static ChatResult<T> Dissolved<T>() =>
+        ChatResult<T>.Failure(ChatError.ConversationDissolved, "Conversation has been dissolved.");
 
     private static bool CanSendToGroup(
         ConversationSendPermission permission,

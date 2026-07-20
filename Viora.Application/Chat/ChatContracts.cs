@@ -103,6 +103,7 @@ public sealed record ChatAttachmentUploadResponse(
 public enum ChatError
 {
     ConversationNotFound,
+    ConversationDissolved,
     MessageNotFound,
     UserNotFound,
     Forbidden,

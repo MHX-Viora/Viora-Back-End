@@ -80,6 +80,7 @@ public sealed class RealtimeApiContractTests
             "ReceiveMessage",
             "ConversationCreated",
             "ConversationUpdated",
+            "ConversationDissolved",
             "NewMessageNotification",
             "ConversationRead",
             "MessageRead",
