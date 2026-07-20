@@ -71,6 +71,9 @@ public sealed class GroupChatApiContractTests
         AssertProperties<CreateGroupResponse>("Id", "Name", "AvatarUrl", "MemberCount", "CreatedAt");
         AssertProperties<GroupDetailsResponse>("Id", "Name", "AvatarUrl", "MemberCount", "MyRole", "CanSendMessage", "CreatedBy", "MembersPreview");
         AssertProperties<GroupMemberListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
+        AssertProperties<ChangeGroupPermissionResponse>("ConversationId", "CanSendMessage", "UpdatedAt");
+        AssertProperties<RenameGroupResponse>("ConversationId", "Name", "UpdatedAt");
+        AssertProperties<ChangeGroupAvatarResponse>("ConversationId", "AvatarUrl", "UpdatedAt");
     }
 
     [Fact]

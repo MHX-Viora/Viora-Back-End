@@ -363,9 +363,11 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
     public async Task<IActionResult> LeaveGroup(Guid conversationId, CancellationToken token) => await WithUser(id => groupChatService.LeaveAsync(id, conversationId, token));
 
     [HttpPut("groups/{conversationId:guid}/name")]
+    [ProducesResponseType<RenameGroupResponse>(StatusCodes.Status200OK)]
     public async Task<IActionResult> RenameGroup(Guid conversationId, RenameGroupRequest request, CancellationToken token) => await WithUser(id => groupChatService.RenameAsync(id, conversationId, request.Name, token));
 
     [HttpPut("groups/{conversationId:guid}/avatar")]
+    [ProducesResponseType<ChangeGroupAvatarResponse>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangeGroupAvatar(Guid conversationId, [FromForm] GroupAvatarForm request, CancellationToken token)
     {
         if (!TryGetViewerUserId(out var userId)) return Unauthorized();
@@ -375,6 +377,7 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
     }
 
     [HttpPut("groups/{conversationId:guid}/permission")]
+    [ProducesResponseType<ChangeGroupPermissionResponse>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangeGroupPermission(Guid conversationId, ChangeGroupPermissionRequest request, CancellationToken token) => await WithUser(id => groupChatService.ChangePermissionAsync(id, conversationId, request.CanSendMessage, token));
 
     [HttpPut("groups/{conversationId:guid}/members/{userId:guid}/admin")]

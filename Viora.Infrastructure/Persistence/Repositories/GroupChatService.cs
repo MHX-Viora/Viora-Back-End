@@ -156,26 +156,45 @@ public sealed class GroupChatService(
         return await SaveMutation(access.Group, actorId, $"{access.Member.User.DisplayName} đã rời nhóm.", "left", RealtimeEvents.MemberLeft, [actorId], [], token);
     }
 
-    public async Task<GroupChatResult<GroupMutationResponse>> RenameAsync(Guid actorId, Guid id, string name, CancellationToken token)
+    public async Task<GroupChatResult<RenameGroupResponse>> RenameAsync(Guid actorId, Guid id, string name, CancellationToken token)
     {
-        name = name?.Trim() ?? ""; if (name.Length is 0 or > 100) return FailMutation(GroupChatError.Validation, "Tên nhóm phải từ 1 đến 100 ký tự.");
-        var access = await Access(actorId, id, token); if (access.Group is null) return Missing(); if (access.Member?.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)) return Forbidden();
-        access.Group.Name = name; return await SaveMutation(access.Group, actorId, $"Đã đổi tên nhóm thành {name}.", "renamed", RealtimeEvents.ConversationRenamed, [], [], token);
+        name = name?.Trim() ?? "";
+        if (name.Length is 0 or > 100) return Fail<RenameGroupResponse>(GroupChatError.Validation, "Tên nhóm phải từ 1 đến 100 ký tự.");
+        var access = await Access(actorId, id, token);
+        if (access.Group is null) return Fail<RenameGroupResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        if (access.Member?.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)) return Fail<RenameGroupResponse>(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
+        access.Group.Name = name;
+        var mutation = await SaveMutation(access.Group, actorId, $"Đã đổi tên nhóm thành {name}.", "renamed", RealtimeEvents.ConversationRenamed, [], [], token);
+        return mutation.IsSuccess && mutation.Value is not null
+            ? GroupChatResult<RenameGroupResponse>.Success(new(id, name, mutation.Value.UpdatedAt))
+            : Fail<RenameGroupResponse>(mutation.Error ?? GroupChatError.Validation, mutation.Message ?? "Không thể đổi tên nhóm.");
     }
 
-    public async Task<GroupChatResult<GroupMutationResponse>> ChangeAvatarAsync(Guid actorId, Guid id, CreatePostFile avatar, CancellationToken token)
+    public async Task<GroupChatResult<ChangeGroupAvatarResponse>> ChangeAvatarAsync(Guid actorId, Guid id, CreatePostFile avatar, CancellationToken token)
     {
-        if (avatar.Length is <= 0 or > 5 * 1024 * 1024 || avatar.ContentType is not ("image/jpeg" or "image/png" or "image/webp")) return FailMutation(GroupChatError.Validation, "Avatar không hợp lệ.");
-        var access = await Access(actorId, id, token); if (access.Group is null) return Missing(); if (access.Member?.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)) return Forbidden();
+        if (avatar.Length is <= 0 or > 5 * 1024 * 1024 || avatar.ContentType is not ("image/jpeg" or "image/png" or "image/webp")) return Fail<ChangeGroupAvatarResponse>(GroupChatError.Validation, "Avatar không hợp lệ.");
+        var access = await Access(actorId, id, token);
+        if (access.Group is null) return Fail<ChangeGroupAvatarResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        if (access.Member?.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)) return Fail<ChangeGroupAvatarResponse>(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
         access.Group.AvatarUrl = (await mediaStorage.UploadGroupAvatarAsync(actorId, avatar, token)).MediaUrl;
-        return await SaveMutation(access.Group, actorId, "Đã đổi avatar nhóm.", "avatar-changed", RealtimeEvents.ConversationAvatarChanged, [], [], token);
+        var mutation = await SaveMutation(access.Group, actorId, "Đã đổi avatar nhóm.", "avatar-changed", RealtimeEvents.ConversationAvatarChanged, [], [], token);
+        return mutation.IsSuccess && mutation.Value is not null
+            ? GroupChatResult<ChangeGroupAvatarResponse>.Success(new(id, access.Group.AvatarUrl, mutation.Value.UpdatedAt))
+            : Fail<ChangeGroupAvatarResponse>(mutation.Error ?? GroupChatError.Validation, mutation.Message ?? "Không thể đổi avatar nhóm.");
     }
 
-    public async Task<GroupChatResult<GroupMutationResponse>> ChangePermissionAsync(Guid actorId, Guid id, ConversationSendPermission permission, CancellationToken token)
+    public async Task<GroupChatResult<ChangeGroupPermissionResponse>> ChangePermissionAsync(Guid actorId, Guid id, ConversationSendPermission permission, CancellationToken token)
     {
-        if (!Enum.IsDefined(permission)) return FailMutation(GroupChatError.Validation, "Quyền gửi tin nhắn không hợp lệ.");
-        var access = await Access(actorId, id, token); if (access.Group is null) return Missing(); if (access.Member?.Role != ConversationMemberRole.Owner) return Forbidden();
-        access.Group.CanSendMessage = permission; return await SaveMutation(access.Group, actorId, "Đã thay đổi quyền gửi tin nhắn.", "permission-changed", RealtimeEvents.ConversationUpdated, [], [], token);
+        if (!Enum.IsDefined(permission)) return Fail<ChangeGroupPermissionResponse>(GroupChatError.Validation, "Quyền gửi tin nhắn không hợp lệ.");
+        var access = await Access(actorId, id, token);
+        if (access.Group is null) return Fail<ChangeGroupPermissionResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        if (access.Member?.Role != ConversationMemberRole.Owner) return Fail<ChangeGroupPermissionResponse>(GroupChatError.Forbidden, "Bạn không có quyền thực hiện thao tác này.");
+
+        access.Group.CanSendMessage = permission;
+        var mutation = await SaveMutation(access.Group, actorId, "Đã thay đổi quyền gửi tin nhắn.", "permission-changed", RealtimeEvents.ConversationUpdated, [], [], token);
+        return mutation.IsSuccess && mutation.Value is not null
+            ? GroupChatResult<ChangeGroupPermissionResponse>.Success(new(id, permission, mutation.Value.UpdatedAt))
+            : Fail<ChangeGroupPermissionResponse>(mutation.Error ?? GroupChatError.Validation, mutation.Message ?? "Không thể thay đổi quyền gửi tin nhắn.");
     }
 
     public async Task<GroupChatResult<GroupMutationResponse>> SetAdminAsync(Guid actorId, Guid id, Guid userId, bool isAdmin, CancellationToken token)

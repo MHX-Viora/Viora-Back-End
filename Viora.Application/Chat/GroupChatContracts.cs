@@ -23,6 +23,9 @@ public sealed record GroupDetailsResponse(Guid Id, string Name, string? AvatarUr
 public sealed record GroupMemberListResponse(int Page, int PageSize, int TotalItems, int TotalPages, IReadOnlyList<GroupMemberResponse> Items);
 public sealed record GroupMemberResponse(Guid Id, string DisplayName, string? AvatarUrl, bool IsVerified, ConversationMemberRole Role, bool IsOnline, DateTime JoinedAt);
 public sealed record GroupMutationResponse(Guid ConversationId, string Action, DateTime UpdatedAt);
+public sealed record ChangeGroupPermissionResponse(Guid ConversationId, ConversationSendPermission CanSendMessage, DateTime UpdatedAt);
+public sealed record RenameGroupResponse(Guid ConversationId, string Name, DateTime UpdatedAt);
+public sealed record ChangeGroupAvatarResponse(Guid ConversationId, string AvatarUrl, DateTime UpdatedAt);
 
 public sealed record AddGroupMembersRequest(IReadOnlyList<Guid> MemberIds);
 public sealed record RenameGroupRequest(string Name);
@@ -55,9 +58,9 @@ public interface IGroupChatService
     Task<GroupChatResult<GroupMutationResponse>> AddMembersAsync(Guid actorId, Guid conversationId, IReadOnlyList<Guid> memberIds, CancellationToken token);
     Task<GroupChatResult<GroupMutationResponse>> RemoveMemberAsync(Guid actorId, Guid conversationId, Guid userId, CancellationToken token);
     Task<GroupChatResult<GroupMutationResponse>> LeaveAsync(Guid actorId, Guid conversationId, CancellationToken token);
-    Task<GroupChatResult<GroupMutationResponse>> RenameAsync(Guid actorId, Guid conversationId, string name, CancellationToken token);
-    Task<GroupChatResult<GroupMutationResponse>> ChangeAvatarAsync(Guid actorId, Guid conversationId, CreatePostFile avatar, CancellationToken token);
-    Task<GroupChatResult<GroupMutationResponse>> ChangePermissionAsync(Guid actorId, Guid conversationId, ConversationSendPermission permission, CancellationToken token);
+    Task<GroupChatResult<RenameGroupResponse>> RenameAsync(Guid actorId, Guid conversationId, string name, CancellationToken token);
+    Task<GroupChatResult<ChangeGroupAvatarResponse>> ChangeAvatarAsync(Guid actorId, Guid conversationId, CreatePostFile avatar, CancellationToken token);
+    Task<GroupChatResult<ChangeGroupPermissionResponse>> ChangePermissionAsync(Guid actorId, Guid conversationId, ConversationSendPermission permission, CancellationToken token);
     Task<GroupChatResult<GroupMutationResponse>> SetAdminAsync(Guid actorId, Guid conversationId, Guid userId, bool isAdmin, CancellationToken token);
     Task<GroupChatResult<GroupMutationResponse>> TransferOwnerAsync(Guid actorId, Guid conversationId, Guid userId, CancellationToken token);
     Task<GroupChatResult<GroupMutationResponse>> DissolveAsync(Guid actorId, Guid conversationId, CancellationToken token);

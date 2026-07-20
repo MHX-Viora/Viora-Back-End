@@ -271,14 +271,15 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 "Khong tim thay cuoc tro chuyen.");
         }
 
-        var isActiveMember = await dbContext.ConversationMembers
+        var activeMember = await dbContext.ConversationMembers
             .AsNoTracking()
-            .AnyAsync(member =>
+            .Where(member =>
                 member.ConversationId == query.ConversationId &&
                 member.UserId == query.UserId &&
-                member.Status == ConversationMemberStatus.Active,
-                cancellationToken);
-        if (!isActiveMember)
+                member.Status == ConversationMemberStatus.Active)
+            .Select(member => new { member.Role })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (activeMember is null)
         {
             return ChatResult<ChatMessageListResponse>.Failure(
                 ChatError.Forbidden,
@@ -291,7 +292,8 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             .Select(value => new
             {
                 value.Id,
-                value.ConversationType
+                value.ConversationType,
+                value.CanSendMessage
             })
             .FirstAsync(cancellationToken);
 
@@ -307,11 +309,20 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
+        var isBlocked = conversation.ConversationType == ConversationType.Private && blockedBy is not null;
+        var onlyAdminCanSend = conversation.ConversationType == ConversationType.Group &&
+            conversation.CanSendMessage != ConversationSendPermission.Everyone;
+        var canSendMessage = conversation.ConversationType == ConversationType.Private
+            ? !isBlocked
+            : CanSendToGroup(conversation.CanSendMessage, activeMember.Role);
+
         var conversationResponse = new ChatMessageConversationResponse(
             conversation.Id,
             conversation.ConversationType,
-            conversation.ConversationType == ConversationType.Private && blockedBy is not null,
-            blockedBy);
+            isBlocked,
+            blockedBy,
+            onlyAdminCanSend,
+            canSendMessage);
 
         var messages = dbContext.Messages
             .AsNoTracking()

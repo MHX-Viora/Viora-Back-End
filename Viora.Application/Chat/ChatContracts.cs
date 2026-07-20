@@ -150,7 +150,9 @@ public sealed record ChatMessageConversationResponse(
     Guid Id,
     ConversationType Type,
     bool IsBlocked,
-    ChatParticipantResponse? BlockedBy);
+    ChatParticipantResponse? BlockedBy,
+    bool OnlyAdminCanSend,
+    bool CanSendMessage);
 
 public sealed record ChatMessageItemResponse(
     Guid Id,

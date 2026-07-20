@@ -188,7 +188,13 @@ public sealed class ChatApiContractTests
     public void Chat_message_response_contract_has_expected_fields()
     {
         AssertProperties<ChatMessageListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Conversation", "Items");
-        AssertProperties<ChatMessageConversationResponse>("Id", "Type", "IsBlocked", "BlockedBy");
+        AssertProperties<ChatMessageConversationResponse>(
+            "Id",
+            "Type",
+            "IsBlocked",
+            "BlockedBy",
+            "OnlyAdminCanSend",
+            "CanSendMessage");
         AssertProperties<ChatMessageItemResponse>(
             "Id",
             "Sender",
