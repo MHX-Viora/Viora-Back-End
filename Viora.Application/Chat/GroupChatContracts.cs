@@ -35,6 +35,8 @@ public static class GroupChatSystemMessages
 
 public static class ChatMessagePolicy
 {
+    public static bool CanForward(MessageType messageType, bool isDeleted) =>
+        !isDeleted && messageType is not (MessageType.System or MessageType.Recall);
     public static bool CanReply(MessageType messageType) => messageType != MessageType.System;
     public static bool CanEdit(MessageType messageType) => messageType != MessageType.System;
     public static bool CanRecall(MessageType messageType) => messageType != MessageType.System;

@@ -714,6 +714,171 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             new SendChatMessageRepositoryResult(response, recipients));
     }
 
+    public async Task<ChatResult<ForwardChatMessageRepositoryResult>> ForwardMessageAsync(
+        ForwardChatMessageCommand command,
+        CancellationToken cancellationToken)
+    {
+        var source = await dbContext.Messages
+            .AsNoTracking()
+            .Include(message => message.Attachments)
+            .Include(message => message.ReplyMessage)
+                .ThenInclude(reply => reply!.SenderUser)
+            .FirstOrDefaultAsync(message => message.Id == command.MessageId, cancellationToken);
+        if (source is null)
+        {
+            return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.MessageNotFound, "Không tìm thấy tin nhắn.");
+        }
+
+        var sourceMembership = await dbContext.ConversationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.ConversationId == source.ConversationId &&
+                member.UserId == command.UserId &&
+                member.Status == ConversationMemberStatus.Active)
+            .Select(member => new
+            {
+                member.UserId,
+                member.User.DisplayName,
+                member.User.AvatarUrl,
+                member.User.IsVerified
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (sourceMembership is null)
+        {
+            return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.Forbidden, "Bạn không có quyền xem tin nhắn này.");
+        }
+
+        if (!ChatMessagePolicy.CanForward(source.MessageType, source.IsDeleted))
+        {
+            return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.Validation, "Tin nhắn này không thể chuyển tiếp.");
+        }
+
+        var destinationIds = command.ConversationIds.Distinct().ToArray();
+        if (destinationIds.Length == 0 || destinationIds.Length != command.ConversationIds.Count)
+        {
+            return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.Validation, "Danh sách cuộc trò chuyện không hợp lệ.");
+        }
+
+        var destinations = await dbContext.Conversations
+            .Where(conversation => destinationIds.Contains(conversation.Id) && conversation.DeletedAt == null)
+            .ToListAsync(cancellationToken);
+        if (destinations.Count != destinationIds.Length)
+        {
+            return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.ConversationNotFound, "Không tìm thấy một hoặc nhiều cuộc trò chuyện.");
+        }
+
+        var memberships = await dbContext.ConversationMembers
+            .AsNoTracking()
+            .Where(member =>
+                destinationIds.Contains(member.ConversationId) &&
+                member.UserId == command.UserId &&
+                member.Status == ConversationMemberStatus.Active)
+            .Select(member => new { member.ConversationId, member.Role })
+            .ToListAsync(cancellationToken);
+        if (memberships.Count != destinationIds.Length)
+        {
+            return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.Forbidden, "Bạn không phải thành viên của một hoặc nhiều cuộc trò chuyện đã chọn.");
+        }
+
+        var roles = memberships.ToDictionary(member => member.ConversationId, member => member.Role);
+        if (destinations.Any(conversation =>
+                conversation.ConversationType == ConversationType.Group &&
+                !CanSendToGroup(conversation.CanSendMessage, roles[conversation.Id])))
+        {
+            return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.Forbidden, "Bạn không có quyền gửi tin nhắn trong một hoặc nhiều nhóm đã chọn.");
+        }
+
+        var hasBlockedDestination = await dbContext.ConversationBlocks
+            .AsNoTracking()
+            .AnyAsync(block => destinationIds.Contains(block.ConversationId), cancellationToken);
+        if (hasBlockedDestination)
+        {
+            return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.Forbidden, "Một hoặc nhiều cuộc trò chuyện đang bị chặn.");
+        }
+
+        var now = DateTime.UtcNow;
+        var createdMessages = new List<(Message Message, List<MessageAttachment> Attachments)>();
+        foreach (var destination in destinations)
+        {
+            var message = new Message
+            {
+                Id = Guid.NewGuid(),
+                ConversationId = destination.Id,
+                SenderUserId = command.UserId,
+                ReplyMessageId = source.ReplyMessageId,
+                MessageType = source.MessageType,
+                Content = source.Content,
+                IsEdited = false,
+                IsDeleted = false,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            var attachments = source.Attachments.Select(attachment => new MessageAttachment
+            {
+                Id = Guid.NewGuid(),
+                MessageId = message.Id,
+                FileUrl = attachment.FileUrl,
+                FileName = attachment.FileName,
+                MimeType = attachment.MimeType,
+                ThumbnailUrl = attachment.ThumbnailUrl,
+                FileSize = attachment.FileSize,
+                Duration = attachment.Duration
+            }).ToList();
+
+            destination.LastMessageId = message.Id;
+            destination.LastMessageAt = now;
+            createdMessages.Add((message, attachments));
+        }
+
+        await using (var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken))
+        {
+            dbContext.Messages.AddRange(createdMessages.Select(item => item.Message));
+            dbContext.MessageAttachments.AddRange(createdMessages.SelectMany(item => item.Attachments));
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        var sender = new ChatMessageSenderResponse(
+            sourceMembership.UserId,
+            sourceMembership.DisplayName,
+            sourceMembership.AvatarUrl,
+            sourceMembership.IsVerified);
+        var reply = source.ReplyMessage is null
+            ? null
+            : new ChatReplyMessageResponse(
+                source.ReplyMessage.Id,
+                source.ReplyMessage.Content,
+                source.ReplyMessage.MessageType,
+                source.ReplyMessage.SenderUser.DisplayName);
+        var results = new List<SendChatMessageRepositoryResult>();
+        foreach (var created in createdMessages)
+        {
+            var response = new SendChatMessageResponse(
+                created.Message.Id,
+                created.Message.ConversationId,
+                sender,
+                created.Message.MessageType,
+                created.Message.Content,
+                reply,
+                created.Attachments.Select(attachment => new ChatMessageAttachmentResponse(
+                    attachment.Id,
+                    attachment.FileUrl,
+                    attachment.FileName,
+                    attachment.MimeType,
+                    attachment.ThumbnailUrl,
+                    attachment.FileSize,
+                    attachment.Duration)).ToList(),
+                true,
+                false,
+                false,
+                created.Message.CreatedAt);
+            var recipients = await BuildRecipientStatesAsync(created.Message.ConversationId, cancellationToken);
+            results.Add(new SendChatMessageRepositoryResult(response, recipients));
+        }
+
+        return ChatResult<ForwardChatMessageRepositoryResult>.Success(new(results));
+    }
+
     public async Task<ChatResult<MarkConversationReadRepositoryResult>> MarkReadAsync(
         MarkConversationReadCommand command,
         CancellationToken cancellationToken)

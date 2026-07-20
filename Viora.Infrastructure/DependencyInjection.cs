@@ -98,7 +98,9 @@ public static class DependencyInjection
         services.AddScoped<IValidator<RegisterDeviceTokenCommand>, RegisterDeviceTokenValidator>();
         services.AddScoped<IValidator<UnregisterDeviceTokenCommand>, UnregisterDeviceTokenValidator>();
         services.AddScoped<IValidator<SendChatMessageCommand>, SendChatMessageValidator>();
+        services.AddScoped<IValidator<ForwardChatMessageCommand>, ForwardChatMessageValidator>();
         services.AddScoped<IValidator<CreatePrivateConversationCommand>, CreatePrivateConversationValidator>();
+        services.AddScoped<ChatMessageDeliveryService>();
         services.AddScoped<IValidator<GetShortVideosQuery>, GetShortVideosValidator>();
         services.AddScoped<IValidator<ToggleVideoReactionCommand>, ToggleVideoReactionValidator>();
         services.AddScoped<IValidator<ToggleVideoSaveCommand>, ToggleVideoSaveValidator>();

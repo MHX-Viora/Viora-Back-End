@@ -46,6 +46,13 @@ public sealed record RecallChatMessageCommand(
     Guid UserId,
     Guid MessageId) : IRequest<ChatResult<RecallChatMessageResponse>>;
 
+public sealed record ForwardChatMessageCommand(
+    Guid UserId,
+    Guid MessageId,
+    IReadOnlyList<Guid> ConversationIds) : IRequest<ChatResult<ForwardChatMessageResponse>>;
+
+public sealed record ForwardChatMessageResponse(bool Success);
+
 public sealed record SetConversationPinCommand(
     Guid UserId,
     Guid ConversationId,
@@ -403,6 +410,10 @@ public interface IChatConversationRepository
         RecallChatMessageCommand command,
         CancellationToken cancellationToken);
 
+    Task<ChatResult<ForwardChatMessageRepositoryResult>> ForwardMessageAsync(
+        ForwardChatMessageCommand command,
+        CancellationToken cancellationToken);
+
     Task<ChatResult<SetConversationPinResponse>> SetPinAsync(
         SetConversationPinCommand command,
         CancellationToken cancellationToken);
@@ -433,6 +444,9 @@ public sealed record RecallChatMessageRepositoryResult(
     RecallChatMessageResponse Response,
     IReadOnlyList<Guid> ConversationMemberIds);
 
+public sealed record ForwardChatMessageRepositoryResult(
+    IReadOnlyList<SendChatMessageRepositoryResult> Messages);
+
 public sealed class CreatePrivateConversationValidator : AbstractValidator<CreatePrivateConversationCommand>
 {
     public CreatePrivateConversationValidator()
@@ -442,6 +456,22 @@ public sealed class CreatePrivateConversationValidator : AbstractValidator<Creat
         RuleFor(command => command.UserId)
             .NotEqual(command => command.CurrentUserId)
             .WithMessage("Khong the tao phong chat voi chinh minh.");
+    }
+}
+
+public sealed class ForwardChatMessageValidator : AbstractValidator<ForwardChatMessageCommand>
+{
+    public ForwardChatMessageValidator()
+    {
+        RuleFor(command => command.UserId).NotEmpty();
+        RuleFor(command => command.MessageId).NotEmpty();
+        RuleFor(command => command.ConversationIds)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty()
+            .Must(ids => ids.Count <= 20)
+            .WithMessage("Chỉ có thể chuyển tiếp đến tối đa 20 cuộc trò chuyện.")
+            .Must(ids => ids.All(id => id != Guid.Empty) && ids.Distinct().Count() == ids.Count)
+            .WithMessage("Danh sách cuộc trò chuyện không hợp lệ.");
     }
 }
 

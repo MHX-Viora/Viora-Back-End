@@ -189,6 +189,26 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
             : ForbiddenProblem(result.Message ?? "Ban khong co quyen thu hoi tin nhan nay.");
     }
 
+    [HttpPost("messages/{messageId:guid}/forward")]
+    [ProducesResponseType<ForwardChatMessageResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ForwardChatMessageResponse>> ForwardMessage(
+        Guid messageId,
+        [FromBody] ForwardChatMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+
+        var result = await mediator.Send(
+            new ForwardChatMessageCommand(userId, messageId, request.ConversationIds),
+            cancellationToken);
+
+        return ToChatActionResult(result, "Bạn không có quyền chuyển tiếp tin nhắn này.");
+    }
+
 
     [HttpPost("conversations/{conversationId:guid}/read")]
     [ProducesResponseType<MarkConversationReadResponse>(StatusCodes.Status200OK)]
@@ -464,6 +484,7 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
         return result.Error switch
         {
             ChatError.ConversationNotFound => NotFoundProblem(ChatError.ConversationNotFound, result.Message ?? "Khong tim thay cuoc tro chuyen."),
+            ChatError.MessageNotFound => NotFoundProblem(ChatError.MessageNotFound, result.Message ?? "Không tìm thấy tin nhắn."),
             ChatError.Forbidden => ForbiddenProblem(result.Message ?? forbiddenMessage),
             _ => BadRequestProblem(result.Message ?? "Yeu cau khong hop le.")
         };
@@ -476,6 +497,8 @@ public sealed record SendChatMessageRequest(
     MessageType MessageType,
     string? Content,
     IReadOnlyList<SendChatMessageAttachmentRequest>? Attachments);
+
+public sealed record ForwardChatMessageRequest(IReadOnlyList<Guid> ConversationIds);
 
 public sealed class ChatAttachmentUploadRequest
 {

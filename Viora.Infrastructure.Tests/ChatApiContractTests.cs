@@ -84,6 +84,38 @@ public sealed class ChatApiContractTests
     }
 
     [Fact]
+    public void Forward_message_contract_matches_route_and_response()
+    {
+        var action = typeof(ChatController).GetMethod(nameof(ChatController.ForwardMessage))!;
+        Assert.Equal("messages/{messageId:guid}/forward", action.GetCustomAttribute<HttpPostAttribute>()!.Template);
+        AssertProperties<ForwardChatMessageRequest>("ConversationIds");
+        AssertProperties<ForwardChatMessageResponse>("Success");
+    }
+
+    [Fact]
+    public async Task Forward_message_validator_rejects_empty_duplicate_or_oversized_targets()
+    {
+        var validator = new ForwardChatMessageValidator();
+        var userId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var duplicate = Guid.NewGuid();
+
+        Assert.False((await validator.ValidateAsync(new ForwardChatMessageCommand(userId, messageId, null!))).IsValid);
+        Assert.False((await validator.ValidateAsync(new ForwardChatMessageCommand(userId, messageId, []))).IsValid);
+        Assert.False((await validator.ValidateAsync(new ForwardChatMessageCommand(userId, messageId, [duplicate, duplicate]))).IsValid);
+        Assert.False((await validator.ValidateAsync(new ForwardChatMessageCommand(userId, messageId, Enumerable.Range(0, 21).Select(_ => Guid.NewGuid()).ToList()))).IsValid);
+    }
+
+    [Fact]
+    public void Forward_message_policy_rejects_system_recalled_and_deleted_messages()
+    {
+        Assert.False(ChatMessagePolicy.CanForward(MessageType.System, false));
+        Assert.False(ChatMessagePolicy.CanForward(MessageType.Recall, false));
+        Assert.False(ChatMessagePolicy.CanForward(MessageType.Text, true));
+        Assert.True(ChatMessagePolicy.CanForward(MessageType.Text, false));
+    }
+
+    [Fact]
     public void Chat_attachment_upload_request_contract_has_expected_fields()
     {
         AssertProperties<ChatAttachmentUploadRequest>("Files");

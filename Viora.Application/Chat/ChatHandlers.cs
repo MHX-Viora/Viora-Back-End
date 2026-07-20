@@ -59,9 +59,7 @@ public sealed class GetChatConversationMessagesHandler(IChatConversationReposito
 
 public sealed class SendChatMessageHandler(
     IChatConversationRepository repository,
-    IRealtimeService realtimeService,
-    IPushNotificationSender pushNotificationSender,
-    IOnlineUserRegistry onlineUserRegistry,
+    ChatMessageDeliveryService deliveryService,
     IValidator<SendChatMessageCommand> validator)
     : IRequestHandler<SendChatMessageCommand, ChatResult<SendChatMessageResponse>>
 {
@@ -91,28 +89,67 @@ public sealed class SendChatMessageHandler(
                 result.Message ?? "Khong the gui tin nhan.");
         }
 
-        foreach (var recipient in result.Value.Recipients)
+        await deliveryService.PublishAsync(request.SenderUserId, result.Value, cancellationToken);
+
+        return ChatResult<SendChatMessageResponse>.Success(result.Value.Message);
+    }
+}
+
+public sealed class ForwardChatMessageHandler(
+    IChatConversationRepository repository,
+    ChatMessageDeliveryService deliveryService,
+    IValidator<ForwardChatMessageCommand> validator)
+    : IRequestHandler<ForwardChatMessageCommand, ChatResult<ForwardChatMessageResponse>>
+{
+    public async Task<ChatResult<ForwardChatMessageResponse>> Handle(
+        ForwardChatMessageCommand request,
+        CancellationToken cancellationToken)
+    {
+        var validation = await validator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid)
         {
-            var isMine = recipient.UserId == request.SenderUserId;
-            var realtimeMessage = ToRealtimeMessage(result.Value.Message, isMine);
+            return ChatResult<ForwardChatMessageResponse>.Failure(ChatError.Validation, validation.Errors[0].ErrorMessage);
+        }
 
-            await realtimeService.SendToUserAsync(
-                recipient.UserId,
-                RealtimeEvents.ReceiveMessage,
-                realtimeMessage,
-                cancellationToken);
+        var result = await repository.ForwardMessageAsync(request, cancellationToken);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            return ChatResult<ForwardChatMessageResponse>.Failure(
+                result.Error ?? ChatError.Validation,
+                result.Message ?? "Không thể chuyển tiếp tin nhắn.");
+        }
 
-            var conversationItem = await repository.GetConversationItemAsync(
-                recipient.UserId,
-                request.ConversationId,
-                cancellationToken);
+        foreach (var message in result.Value.Messages)
+        {
+            await deliveryService.PublishAsync(request.UserId, message, cancellationToken);
+        }
+
+        return ChatResult<ForwardChatMessageResponse>.Success(new(true));
+    }
+}
+
+public sealed class ChatMessageDeliveryService(
+    IChatConversationRepository repository,
+    IRealtimeService realtimeService,
+    IPushNotificationSender pushNotificationSender,
+    IOnlineUserRegistry onlineUserRegistry)
+{
+    public async Task PublishAsync(
+        Guid senderUserId,
+        SendChatMessageRepositoryResult result,
+        CancellationToken cancellationToken)
+    {
+        foreach (var recipient in result.Recipients)
+        {
+            var isMine = recipient.UserId == senderUserId;
+            var realtimeMessage = ToRealtimeMessage(result.Message, isMine);
+
+            await realtimeService.SendToUserAsync(recipient.UserId, RealtimeEvents.ReceiveMessage, realtimeMessage, cancellationToken);
+
+            var conversationItem = await repository.GetConversationItemAsync(recipient.UserId, result.Message.ConversationId, cancellationToken);
             if (conversationItem is not null)
             {
-                await realtimeService.SendToUserAsync(
-                    recipient.UserId,
-                    RealtimeEvents.ConversationUpdated,
-                    conversationItem,
-                    cancellationToken);
+                await realtimeService.SendToUserAsync(recipient.UserId, RealtimeEvents.ConversationUpdated, conversationItem, cancellationToken);
             }
 
             if (isMine)
@@ -120,11 +157,7 @@ public sealed class SendChatMessageHandler(
                 await realtimeService.SendToUserAsync(
                     recipient.UserId,
                     RealtimeEvents.MessageDelivered,
-                    new MessageDeliveredPayload(
-                        request.ConversationId,
-                        result.Value.Message.Id,
-                        recipient.UserId,
-                        result.Value.Message.CreatedAt),
+                    new MessageDeliveredPayload(result.Message.ConversationId, result.Message.Id, recipient.UserId, result.Message.CreatedAt),
                     cancellationToken);
                 continue;
             }
@@ -135,17 +168,17 @@ public sealed class SendChatMessageHandler(
                     recipient.UserId,
                     RealtimeEvents.NewMessageNotification,
                     new NewMessageNotificationPayload(
-                        request.ConversationId,
+                        result.Message.ConversationId,
                         conversationItem?.ConversationType ?? default,
                         conversationItem?.Name,
                         conversationItem?.AvatarUrl,
-                        result.Value.Message.Sender,
+                        result.Message.Sender,
                         new NewMessageNotificationMessagePayload(
-                            result.Value.Message.Id,
-                            result.Value.Message.Content,
-                            result.Value.Message.MessageType,
-                            result.Value.Message.Attachments,
-                            result.Value.Message.CreatedAt),
+                            result.Message.Id,
+                            result.Message.Content,
+                            result.Message.MessageType,
+                            result.Message.Attachments,
+                            result.Message.CreatedAt),
                         recipient.UnreadCount,
                         recipient.IsMuted),
                     cancellationToken);
@@ -156,19 +189,17 @@ public sealed class SendChatMessageHandler(
                 await pushNotificationSender.SendAsync(
                     new PushMessage(
                         recipient.UserId,
-                        result.Value.Message.Sender.DisplayName,
-                        result.Value.Message.Content,
+                        result.Message.Sender.DisplayName,
+                        result.Message.Content,
                         new Dictionary<string, string>
                         {
                             ["type"] = "message",
-                            ["conversationId"] = request.ConversationId.ToString(),
-                            ["messageId"] = result.Value.Message.Id.ToString()
+                            ["conversationId"] = result.Message.ConversationId.ToString(),
+                            ["messageId"] = result.Message.Id.ToString()
                         }),
                     cancellationToken);
             }
         }
-
-        return ChatResult<SendChatMessageResponse>.Success(result.Value.Message);
     }
 
     private static ChatRealtimeMessageResponse ToRealtimeMessage(

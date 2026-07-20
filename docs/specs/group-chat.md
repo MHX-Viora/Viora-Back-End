@@ -8,6 +8,14 @@
 - System messages cannot be replied to, edited, recalled, or reacted to.
 - Existing stored system messages using the legacy value `8` are migrated to `100`.
 
+## Message forwarding
+
+- `POST /api/chat/messages/{messageId}/forward` accepts one to twenty distinct `conversationIds` and returns `{ "success": true }`.
+- The authenticated user must be an active member of the source and every destination, and must currently be allowed to send to every destination.
+- System, recalled, and deleted messages cannot be forwarded.
+- Each destination receives a new `Messages` row with a new ID, the forwarding user as sender, copied content/type/reply reference, and newly created attachment rows that reuse the existing file URLs.
+- Creation is atomic across destinations. Normal receive-message, conversation-update, notification, delivery, and push realtime flows run after commit.
+
 ## Objective
 
 Add authenticated group-chat APIs without breaking private chat. Reuse `Conversations`,
