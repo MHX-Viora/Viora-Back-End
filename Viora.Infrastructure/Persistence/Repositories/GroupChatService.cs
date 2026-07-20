@@ -20,8 +20,17 @@ public sealed class GroupChatService(
         pageSize = Math.Clamp(pageSize, 1, 100);
         var query = db.Friendships.AsNoTracking()
             .Where(x => x.Status == FriendshipStatus.Accepted && (x.RequesterUserId == userId || x.AddresseeUserId == userId))
-            .Select(x => x.RequesterUserId == userId ? x.AddresseeUser : x.RequesterUser)
-            .Where(x => x.Account.Status == AccountStatus.Active && x.Account.DeletedAt == null);
+            .Select(x => new
+            {
+                Id = x.RequesterUserId == userId ? x.AddresseeUserId : x.RequesterUserId,
+                DisplayName = x.RequesterUserId == userId ? x.AddresseeUser.DisplayName : x.RequesterUser.DisplayName,
+                AvatarUrl = x.RequesterUserId == userId ? x.AddresseeUser.AvatarUrl : x.RequesterUser.AvatarUrl,
+                IsVerified = x.RequesterUserId == userId ? x.AddresseeUser.IsVerified : x.RequesterUser.IsVerified,
+                AccountStatus = x.RequesterUserId == userId ? x.AddresseeUser.Account.Status : x.RequesterUser.Account.Status,
+                AccountDeletedAt = x.RequesterUserId == userId ? x.AddresseeUser.Account.DeletedAt : x.RequesterUser.Account.DeletedAt,
+                LastActiveAt = x.RequesterUserId == userId ? x.AddresseeUser.Account.LastLoginAt : x.RequesterUser.Account.LastLoginAt
+            })
+            .Where(x => x.AccountStatus == AccountStatus.Active && x.AccountDeletedAt == null);
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             var pattern = $"%{keyword.Trim()}%";
@@ -29,9 +38,7 @@ public sealed class GroupChatService(
         }
 
         var total = await query.CountAsync(token);
-        var rows = await query.OrderBy(x => x.DisplayName).ThenBy(x => x.Id)
-            .Select(x => new { x.Id, x.DisplayName, x.AvatarUrl, x.IsVerified, LastActiveAt = x.Account.LastLoginAt })
-            .ToListAsync(token);
+        var rows = await query.OrderBy(x => x.DisplayName).ThenBy(x => x.Id).ToListAsync(token);
         var items = rows.Select(x => new SelectableFriendResponse(x.Id, x.DisplayName, x.AvatarUrl, x.IsVerified, onlineUsers.IsOnline(x.Id), x.LastActiveAt))
             .OrderByDescending(x => x.IsOnline).ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
             .Skip((page - 1) * pageSize).Take(pageSize).ToList();

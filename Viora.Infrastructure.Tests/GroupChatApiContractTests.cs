@@ -2,9 +2,11 @@ using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
+using Microsoft.EntityFrameworkCore;
 using Viora.Application.Chat;
 using Viora.Domain.Entities;
 using viora_BE.Controllers;
+using Viora.Infrastructure.Persistence;
 using Xunit;
 
 namespace Viora.Infrastructure.Tests;
@@ -69,6 +71,31 @@ public sealed class GroupChatApiContractTests
         AssertProperties<CreateGroupResponse>("Id", "Name", "AvatarUrl", "MemberCount", "CreatedAt");
         AssertProperties<GroupDetailsResponse>("Id", "Name", "AvatarUrl", "MemberCount", "MyRole", "CanSendMessage", "CreatedBy", "MembersPreview");
         AssertProperties<GroupMemberListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
+    }
+
+    [Fact]
+    public void Selectable_friends_query_can_be_translated_by_postgresql_provider()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql("Host=localhost;Database=query_translation_only;Username=test;Password=test")
+            .Options;
+        using var db = new AppDbContext(options);
+        var userId = Guid.NewGuid();
+
+        var query = db.Friendships
+            .Where(x => x.Status == FriendshipStatus.Accepted &&
+                (x.RequesterUserId == userId || x.AddresseeUserId == userId))
+            .Select(x => new
+            {
+                Id = x.RequesterUserId == userId ? x.AddresseeUserId : x.RequesterUserId,
+                DisplayName = x.RequesterUserId == userId ? x.AddresseeUser.DisplayName : x.RequesterUser.DisplayName,
+                AccountStatus = x.RequesterUserId == userId ? x.AddresseeUser.Account.Status : x.RequesterUser.Account.Status,
+                AccountDeletedAt = x.RequesterUserId == userId ? x.AddresseeUser.Account.DeletedAt : x.RequesterUser.Account.DeletedAt
+            })
+            .Where(x => x.AccountStatus == AccountStatus.Active && x.AccountDeletedAt == null);
+
+        var sql = query.ToQueryString();
+        Assert.Contains("SELECT", sql);
     }
 
     private static MethodInfo Method<T>(string name) => typeof(T).GetMethod(name) ?? throw new InvalidOperationException(name);
