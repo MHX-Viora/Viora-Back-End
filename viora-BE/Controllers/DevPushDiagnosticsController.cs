@@ -39,12 +39,13 @@ public sealed class DevPushDiagnosticsController(
 
         try
         {
-            if (request.UserId.HasValue == !string.IsNullOrWhiteSpace(request.TokenSuffix))
+            var requestedTokenSuffix = NormalizeTokenSuffix(request.TokenSuffix);
+            if (!request.UserId.HasValue && string.IsNullOrWhiteSpace(requestedTokenSuffix))
             {
                 return BadRequest(DevPushTestResponse.Fail(
                     firebaseMessagingClientFactory.ProjectId,
-                    request.TokenSuffix,
-                    "Provide exactly one of userId or tokenSuffix."));
+                    requestedTokenSuffix,
+                    "Provide userId or tokenSuffix."));
             }
 
             var client = firebaseMessagingClientFactory.CreateClient();
@@ -63,8 +64,12 @@ public sealed class DevPushDiagnosticsController(
             }
 
             var tokens = request.UserId.HasValue
-                ? await deviceTokenRepository.GetActiveByUserIdAsync(request.UserId.Value, cancellationToken)
-                : await deviceTokenRepository.GetActiveByTokenSuffixAsync(request.TokenSuffix!.Trim(), cancellationToken);
+                ? string.IsNullOrWhiteSpace(requestedTokenSuffix)
+                    ? await deviceTokenRepository.GetActiveByUserIdAsync(request.UserId.Value, cancellationToken)
+                    : (await deviceTokenRepository.GetActiveByUserIdAsync(request.UserId.Value, cancellationToken))
+                        .Where(token => token.Token.EndsWith(requestedTokenSuffix))
+                        .ToArray()
+                : await deviceTokenRepository.GetActiveByTokenSuffixAsync(requestedTokenSuffix!, cancellationToken);
 
             var validTokens = tokens
                 .Where(token => !string.IsNullOrWhiteSpace(token.Token))
@@ -73,7 +78,7 @@ public sealed class DevPushDiagnosticsController(
             logger.LogInformation(
                 "Dev push test token lookup. UserId: {UserId}, RequestedTokenSuffix: {RequestedTokenSuffix}, ActiveTokenCount: {ActiveTokenCount}, ValidTokenCount: {ValidTokenCount}, FirebaseProjectId: {FirebaseProjectId}.",
                 request.UserId,
-                request.TokenSuffix,
+                requestedTokenSuffix,
                 tokens.Count,
                 validTokens.Length,
                 firebaseMessagingClientFactory.ProjectId ?? "unknown");
@@ -93,7 +98,7 @@ public sealed class DevPushDiagnosticsController(
             {
                 return NotFound(DevPushTestResponse.Fail(
                     firebaseMessagingClientFactory.ProjectId,
-                    request.TokenSuffix,
+                    requestedTokenSuffix,
                     "No active device token found."));
             }
 
@@ -107,7 +112,7 @@ public sealed class DevPushDiagnosticsController(
             var response = new DevPushTestResponse(
                 Success: results.All(result => result.Success),
                 FirebaseProjectId: firebaseMessagingClientFactory.ProjectId,
-                TokenSuffix: first?.TokenSuffix ?? request.TokenSuffix,
+                TokenSuffix: first?.TokenSuffix ?? requestedTokenSuffix,
                 FirebaseMessageId: results.Count == 1 ? first?.FirebaseMessageId : null,
                 MessagingErrorCode: results.Count == 1 ? first?.MessagingErrorCode : null,
                 ErrorCode: results.Count == 1 ? first?.ErrorCode : null,
@@ -126,7 +131,7 @@ public sealed class DevPushDiagnosticsController(
                 exception,
                 "Dev push test failed before send completed. FirebaseProjectId: {FirebaseProjectId}, TokenSuffix: {TokenSuffix}, MessagingErrorCode: {MessagingErrorCode}, ErrorCode: {ErrorCode}, ErrorType: {ErrorType}, InnerExceptionType: {InnerExceptionType}, InnerExceptionMessage: {InnerExceptionMessage}.",
                 firebaseMessagingClientFactory.ProjectId ?? "unknown",
-                request.TokenSuffix,
+                NormalizeTokenSuffix(request.TokenSuffix),
                 firebaseError.MessagingErrorCode,
                 firebaseError.ErrorCode,
                 exception.GetType().Name,
@@ -137,7 +142,7 @@ public sealed class DevPushDiagnosticsController(
                 StatusCodes.Status502BadGateway,
                 DevPushTestResponse.Fail(
                     firebaseMessagingClientFactory.ProjectId,
-                    request.TokenSuffix,
+                    NormalizeTokenSuffix(request.TokenSuffix),
                     firebaseError.Message,
                     firebaseError.MessagingErrorCode,
                     firebaseError.ErrorCode));
@@ -278,12 +283,23 @@ public sealed class DevPushDiagnosticsController(
     private static string GetTokenSuffix(string token) =>
         token.Length <= 8 ? token : token[^8..];
 
+    private static string? NormalizeTokenSuffix(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return GetTokenSuffix(trimmed);
+    }
+
     private sealed record FirebaseErrorDiagnostics(string? MessagingErrorCode, string? ErrorCode, string Message);
 }
 
 public sealed record DevPushTestRequest(
     Guid? UserId,
-    [property: StringLength(64, MinimumLength = 4)] string? TokenSuffix,
+    [property: StringLength(4096, MinimumLength = 4)] string? TokenSuffix,
     string? Title,
     string? Body,
     Guid? ConversationId,
