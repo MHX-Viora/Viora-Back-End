@@ -14,6 +14,7 @@ public static class NotificationFactory
         string? imageUrl = null)
     {
         var text = GetText(notificationType, sender?.DisplayName, postType);
+        var now = DateTime.UtcNow;
         return new Notification
         {
             UserId = recipientUserId,
@@ -24,7 +25,8 @@ public static class NotificationFactory
             ReferenceType = referenceType,
             Title = text.Title,
             Content = text.Content,
-            ImageUrl = imageUrl
+            ImageUrl = imageUrl,
+            CreatedAt = now
         };
     }
 

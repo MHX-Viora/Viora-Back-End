@@ -61,8 +61,35 @@ public sealed class NotificationServiceTests
         var pushMessage = Assert.Single(push.Messages);
         Assert.Equal(notification.Id.ToString(), pushMessage.Data["id"]);
         Assert.Equal(notification.Title, pushMessage.Data["title"]);
+        Assert.NotEqual(default, DateTime.Parse(pushMessage.Data["createdAt"]).ToUniversalTime());
+        Assert.True(long.Parse(pushMessage.Data["createdAtUnixMs"]) > 0);
         Assert.Equal(notification.SenderUser.DisplayName, pushMessage.Data["sender.displayName"]);
         Assert.Equal(notification.ReferenceId.ToString(), pushMessage.Data["reference.id"]);
+    }
+
+    [Fact]
+    public async Task Publish_assigns_current_timestamp_when_notification_created_at_is_default()
+    {
+        var push = new FakePushNotificationSender();
+        var service = new NotificationService(
+            new FakeNotificationDeliveryRepository(),
+            new FakeRealtimeService(),
+            push,
+            NullLogger<NotificationService>.Instance);
+        var notification = new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            NotificationType = NotificationType.PostComment,
+            Title = "Binh luan"
+        };
+
+        await service.PublishAsync(notification, CancellationToken.None);
+
+        var pushMessage = Assert.Single(push.Messages);
+        Assert.NotEqual(default, notification.CreatedAt);
+        Assert.NotEqual("0001-01-01T00:00:00.0000000", pushMessage.Data["createdAt"]);
+        Assert.True(long.Parse(pushMessage.Data["createdAtUnixMs"]) > 0);
     }
 
     private sealed class FakeRealtimeService : IRealtimeService

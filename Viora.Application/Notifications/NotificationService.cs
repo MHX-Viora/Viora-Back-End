@@ -42,6 +42,11 @@ public sealed class NotificationService(
 
     public async Task PublishAsync(Notification notification, CancellationToken cancellationToken)
     {
+        if (notification.CreatedAt == default)
+        {
+            notification.CreatedAt = DateTime.UtcNow;
+        }
+
         var payload = MapNotificationResponse(notification);
         logger.LogInformation(
             "Notification dispatch started. NotificationId: {NotificationId}, RecipientUserId: {RecipientUserId}, NotificationType: {NotificationType}.",
@@ -106,7 +111,8 @@ public sealed class NotificationService(
             ["content"] = notification.Content ?? string.Empty,
             ["imageUrl"] = notification.ImageUrl ?? string.Empty,
             ["isRead"] = notification.IsRead.ToString().ToLowerInvariant(),
-            ["createdAt"] = notification.CreatedAt.ToString("O")
+            ["createdAt"] = notification.CreatedAt.ToUniversalTime().ToString("O"),
+            ["createdAtUnixMs"] = new DateTimeOffset(notification.CreatedAt.ToUniversalTime()).ToUnixTimeMilliseconds().ToString()
         };
 
         if (notification.Sender is not null)
