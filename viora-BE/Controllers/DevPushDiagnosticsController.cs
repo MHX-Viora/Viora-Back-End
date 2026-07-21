@@ -26,19 +26,27 @@ public sealed class DevPushDiagnosticsController(
     [ProducesResponseType<DevPushTestResponse>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<DevPushTestResponse>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Send(
-        [FromBody] DevPushTestRequest request,
+        [FromBody] DevPushTestRequest? request,
         CancellationToken cancellationToken)
     {
-        if (!environment.IsDevelopment() && !configuration.GetValue<bool>("Diagnostics:EnablePushTest"))
-        {
-            return NotFound(DevPushTestResponse.Fail(
-                firebasePushProjectId: firebaseMessagingClientFactory.ProjectId,
-                tokenSuffix: request.TokenSuffix,
-                message: "Push diagnostics endpoint is only enabled in Development."));
-        }
-
         try
         {
+            if (!environment.IsDevelopment() && !configuration.GetValue<bool>("Diagnostics:EnablePushTest"))
+            {
+                return NotFound(DevPushTestResponse.Fail(
+                    firebasePushProjectId: firebaseMessagingClientFactory.ProjectId,
+                    tokenSuffix: request?.TokenSuffix,
+                    message: "Push diagnostics endpoint is only enabled in Development."));
+            }
+
+            if (request is null)
+            {
+                return BadRequest(DevPushTestResponse.Fail(
+                    firebaseMessagingClientFactory.ProjectId,
+                    null,
+                    "Request body is required."));
+            }
+
             var requestedTokenSuffix = NormalizeTokenSuffix(request.TokenSuffix);
             if (!request.UserId.HasValue && string.IsNullOrWhiteSpace(requestedTokenSuffix))
             {
@@ -131,7 +139,7 @@ public sealed class DevPushDiagnosticsController(
                 exception,
                 "Dev push test failed before send completed. FirebaseProjectId: {FirebaseProjectId}, TokenSuffix: {TokenSuffix}, MessagingErrorCode: {MessagingErrorCode}, ErrorCode: {ErrorCode}, ErrorType: {ErrorType}, InnerExceptionType: {InnerExceptionType}, InnerExceptionMessage: {InnerExceptionMessage}.",
                 firebaseMessagingClientFactory.ProjectId ?? "unknown",
-                NormalizeTokenSuffix(request.TokenSuffix),
+                NormalizeTokenSuffix(request?.TokenSuffix),
                 firebaseError.MessagingErrorCode,
                 firebaseError.ErrorCode,
                 exception.GetType().Name,
@@ -142,10 +150,35 @@ public sealed class DevPushDiagnosticsController(
                 StatusCodes.Status502BadGateway,
                 DevPushTestResponse.Fail(
                     firebaseMessagingClientFactory.ProjectId,
-                    NormalizeTokenSuffix(request.TokenSuffix),
+                    NormalizeTokenSuffix(request?.TokenSuffix),
                     firebaseError.Message,
                     firebaseError.MessagingErrorCode,
                     firebaseError.ErrorCode));
+        }
+    }
+
+    [HttpGet("ping")]
+    [ProducesResponseType<DevPushPingResponse>(StatusCodes.Status200OK)]
+    public IActionResult Ping()
+    {
+        try
+        {
+            return Ok(new DevPushPingResponse(
+                environment.EnvironmentName,
+                configuration.GetValue<bool>("Diagnostics:EnablePushTest"),
+                firebaseMessagingClientFactory.ProjectId,
+                DateTimeOffset.UtcNow));
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Dev push ping failed.");
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    success = false,
+                    message = exception.Message
+                });
         }
     }
 
@@ -304,6 +337,12 @@ public sealed record DevPushTestRequest(
     string? Body,
     Guid? ConversationId,
     Guid? MessageId);
+
+public sealed record DevPushPingResponse(
+    string EnvironmentName,
+    bool IsEnabled,
+    string? FirebaseProjectId,
+    DateTimeOffset Timestamp);
 
 public sealed record DevPushTestResponse(
     bool Success,
