@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Viora.Application.Realtime;
@@ -37,8 +39,17 @@ public sealed class FirebasePushConfigurationTests
     {
         var initializer = new FirebaseInitializer(
             Options.Create(new FirebaseOptions()),
+            new FakeHostEnvironment(),
             NullLogger<FirebaseInitializer>.Instance);
 
         Assert.Null(initializer.GetApp());
+    }
+
+    private sealed class FakeHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ApplicationName { get; set; } = "Viora.Tests";
+        public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }

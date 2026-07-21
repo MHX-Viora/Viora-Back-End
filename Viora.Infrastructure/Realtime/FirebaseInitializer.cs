@@ -1,5 +1,6 @@
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -13,6 +14,7 @@ public interface IFirebaseInitializer
 
 public sealed class FirebaseInitializer(
     IOptions<FirebaseOptions> options,
+    IHostEnvironment environment,
     ILogger<FirebaseInitializer> logger) : IFirebaseInitializer
 {
     private readonly object syncRoot = new();
@@ -51,8 +53,20 @@ public sealed class FirebaseInitializer(
         }
         else if (!string.IsNullOrWhiteSpace(firebaseOptions.ServiceAccountPath))
         {
-            credential = GoogleCredential.FromFile(firebaseOptions.ServiceAccountPath);
-            LogProjectId(File.ReadAllText(firebaseOptions.ServiceAccountPath));
+            var serviceAccountPath = ResolveServiceAccountPath(firebaseOptions.ServiceAccountPath);
+            if (serviceAccountPath is null)
+            {
+                logger.LogError(
+                    "Firebase service account file not found. ConfiguredPath: {ConfiguredPath}, ContentRootPath: {ContentRootPath}, AppBaseDirectory: {AppBaseDirectory}.",
+                    firebaseOptions.ServiceAccountPath,
+                    environment.ContentRootPath,
+                    AppContext.BaseDirectory);
+                return null;
+            }
+
+            credential = GoogleCredential.FromFile(serviceAccountPath);
+            logger.LogInformation("Firebase service account loaded from {ServiceAccountPath}.", serviceAccountPath);
+            LogProjectId(File.ReadAllText(serviceAccountPath));
         }
 
         if (credential is null)
@@ -68,6 +82,21 @@ public sealed class FirebaseInitializer(
         });
         logger.LogInformation("Firebase Admin app initialized.");
         return firebaseApp;
+    }
+
+    private string? ResolveServiceAccountPath(string configuredPath)
+    {
+        var candidates = Path.IsPathRooted(configuredPath)
+            ? [configuredPath]
+            :
+            new[]
+            {
+                Path.Combine(environment.ContentRootPath, configuredPath),
+                Path.Combine(AppContext.BaseDirectory, configuredPath),
+                Path.Combine(Directory.GetCurrentDirectory(), configuredPath)
+            };
+
+        return candidates.FirstOrDefault(File.Exists);
     }
 
     private void LogProjectId(string serviceAccountJson)
