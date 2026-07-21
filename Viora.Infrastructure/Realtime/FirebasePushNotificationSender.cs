@@ -94,13 +94,18 @@ public sealed class FirebasePushNotificationSender(
         {
             logger.LogWarning(
                 exception,
-                "Firebase token is invalid and will be deactivated. UserId: {UserId}, NotificationType: {NotificationType}, FirebaseError: {FirebaseError}, TokenSuffix: {TokenSuffix}, DeviceTokenHash: {DeviceTokenHash}.",
+                "Firebase token send failed. UserId: {UserId}, NotificationType: {NotificationType}, MessagingErrorCode: {MessagingErrorCode}, ErrorCode: {ErrorCode}, ShouldDeactivate: {ShouldDeactivate}, TokenSuffix: {TokenSuffix}, DeviceTokenHash: {DeviceTokenHash}.",
                 userId,
                 notificationType,
-                exception.FirebaseError,
+                exception.MessagingErrorCode,
+                exception.ErrorCode,
+                exception.ShouldDeactivate,
                 tokenSuffix,
                 tokenHash);
-            await deviceTokenRepository.DeactivateAsync(token, cancellationToken);
+            if (exception.ShouldDeactivate)
+            {
+                await deviceTokenRepository.DeactivateAsync(token, cancellationToken);
+            }
         }
         catch (Exception exception)
         {
@@ -225,13 +230,39 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
 
 public sealed class FirebasePushTokenInvalidException : Exception
 {
+    public FirebasePushTokenInvalidException(
+        string messagingErrorCode,
+        string? errorCode,
+        bool shouldDeactivate,
+        Exception innerException)
+        : base("Firebase push token is invalid.", innerException)
+    {
+        MessagingErrorCode = messagingErrorCode;
+        ErrorCode = errorCode;
+        HttpStatusCode = null;
+        ShouldDeactivate = shouldDeactivate;
+    }
+
     public FirebasePushTokenInvalidException(Exception innerException)
         : base("Firebase push token is invalid.", innerException)
     {
-        FirebaseError = innerException is FirebaseMessagingException firebaseException
-            ? firebaseException.MessagingErrorCode?.ToString() ?? "UnknownFirebaseError"
-            : innerException.GetType().Name;
+        if (innerException is FirebaseMessagingException firebaseException)
+        {
+            MessagingErrorCode = firebaseException.MessagingErrorCode?.ToString() ?? "UnknownFirebaseMessagingError";
+            ErrorCode = firebaseException.ErrorCode.ToString();
+            HttpStatusCode = firebaseException.HttpResponse?.StatusCode.ToString();
+            ShouldDeactivate = firebaseException.MessagingErrorCode == FirebaseAdmin.Messaging.MessagingErrorCode.Unregistered;
+            return;
+        }
+
+        MessagingErrorCode = innerException.GetType().Name;
+        ErrorCode = null;
+        HttpStatusCode = null;
+        ShouldDeactivate = false;
     }
 
-    public string FirebaseError { get; }
+    public string MessagingErrorCode { get; }
+    public string? ErrorCode { get; }
+    public string? HttpStatusCode { get; }
+    public bool ShouldDeactivate { get; }
 }

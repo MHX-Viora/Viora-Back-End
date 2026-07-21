@@ -3,6 +3,7 @@ using Google.Apis.Auth.OAuth2;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Text;
 using System.Text.Json;
 
 namespace Viora.Infrastructure.Realtime;
@@ -54,7 +55,14 @@ public sealed class FirebaseInitializer(
         {
             credential = GoogleCredential.FromJson(firebaseOptions.ServiceAccountJson);
             projectId = ReadProjectId(firebaseOptions.ServiceAccountJson);
-            LogProjectId(projectId);
+            LogCredentialDiagnostics(firebaseOptions.ServiceAccountJson, "Firebase:ServiceAccountJson");
+        }
+        else if (!string.IsNullOrWhiteSpace(firebaseOptions.ServiceAccountJsonBase64))
+        {
+            var serviceAccountJson = DecodeBase64(firebaseOptions.ServiceAccountJsonBase64);
+            credential = GoogleCredential.FromJson(serviceAccountJson);
+            projectId = ReadProjectId(serviceAccountJson);
+            LogCredentialDiagnostics(serviceAccountJson, "Firebase:ServiceAccountJsonBase64");
         }
         else if (!string.IsNullOrWhiteSpace(firebaseOptions.ServiceAccountPath))
         {
@@ -71,8 +79,9 @@ public sealed class FirebaseInitializer(
 
             credential = GoogleCredential.FromFile(serviceAccountPath);
             logger.LogInformation("Firebase service account loaded from {ServiceAccountPath}.", serviceAccountPath);
-            projectId = ReadProjectId(File.ReadAllText(serviceAccountPath));
-            LogProjectId(projectId);
+            var serviceAccountJson = File.ReadAllText(serviceAccountPath);
+            projectId = ReadProjectId(serviceAccountJson);
+            LogCredentialDiagnostics(serviceAccountJson, "Firebase:ServiceAccountPath");
         }
 
         if (credential is null)
@@ -120,16 +129,43 @@ public sealed class FirebaseInitializer(
         }
     }
 
-    private void LogProjectId(string? firebaseProjectId)
+    private static string DecodeBase64(string value)
     {
-        if (string.IsNullOrWhiteSpace(firebaseProjectId))
-        {
-            logger.LogWarning("Could not parse Firebase service account project_id for diagnostics.");
-            return;
-        }
+        var bytes = Convert.FromBase64String(value);
+        return Encoding.UTF8.GetString(bytes);
+    }
 
-        logger.LogInformation(
-            "Firebase service account project_id: {ProjectId}. Confirm it matches android google-services.json.",
-            firebaseProjectId);
+    private void LogCredentialDiagnostics(string serviceAccountJson, string source)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(serviceAccountJson);
+            var root = document.RootElement;
+            var firebaseProjectId = root.TryGetProperty("project_id", out var projectIdElement)
+                ? projectIdElement.GetString()
+                : null;
+            var clientEmail = root.TryGetProperty("client_email", out var emailElement)
+                ? emailElement.GetString()
+                : null;
+            var hasPrivateKey = root.TryGetProperty("private_key", out var privateKeyElement) &&
+                !string.IsNullOrWhiteSpace(privateKeyElement.GetString());
+
+            if (string.IsNullOrWhiteSpace(firebaseProjectId))
+            {
+                logger.LogWarning("Could not parse Firebase service account project_id for diagnostics. Source: {Source}.", source);
+                return;
+            }
+
+            logger.LogInformation(
+                "Firebase service account diagnostics. Source: {Source}, ProjectId: {ProjectId}, ClientEmail: {ClientEmail}, HasPrivateKey: {HasPrivateKey}.",
+                source,
+                firebaseProjectId,
+                clientEmail,
+                hasPrivateKey);
+        }
+        catch (JsonException exception)
+        {
+            logger.LogWarning(exception, "Could not parse Firebase service account diagnostics. Source: {Source}.", source);
+        }
     }
 }

@@ -45,9 +45,30 @@ public sealed class RealtimeApiContractTests
 
         var method = typeof(DevPushDiagnosticsController).GetMethod(nameof(DevPushDiagnosticsController.Send))!;
         Assert.Null(method.GetCustomAttribute<HttpPostAttribute>()!.Template);
-        AssertProperties<DevPushTestRequest>("Body", "Title", "TokenSuffix", "UserId");
-        AssertProperties<DevPushTestResponse>("ActiveTokenCount", "FirebaseProjectId", "Results", "ValidTokenCount");
-        AssertProperties<DevPushTestTokenResult>("Deactivated", "FirebaseMessageId", "MessagingErrorCode", "Success", "TokenSuffix", "UserId");
+        AssertProperties<DevPushTestRequest>("Body", "ConversationId", "MessageId", "Title", "TokenSuffix", "UserId");
+        AssertProperties<DevPushTestResponse>(
+            "ActiveTokenCount",
+            "ErrorCode",
+            "FirebaseMessageId",
+            "FirebaseProjectId",
+            "Message",
+            "MessagingErrorCode",
+            "Results",
+            "Success",
+            "Timestamp",
+            "TokenSuffix",
+            "ValidTokenCount");
+        AssertProperties<DevPushTestTokenResult>(
+            "Deactivated",
+            "DeviceId",
+            "ErrorCode",
+            "FirebaseMessageId",
+            "Message",
+            "MessagingErrorCode",
+            "Platform",
+            "Success",
+            "TokenSuffix",
+            "UserId");
     }
 
     [Fact]

@@ -160,7 +160,11 @@ public sealed class FirebasePushNotificationSenderTests
         {
             if (token == InvalidToken)
             {
-                throw new FirebasePushTokenInvalidException(new InvalidOperationException("Invalid token."));
+                throw new FirebasePushTokenInvalidException(
+                    "Unregistered",
+                    "NotFound",
+                    shouldDeactivate: true,
+                    new InvalidOperationException("Invalid token."));
             }
 
             SentTokens.Add(token);
