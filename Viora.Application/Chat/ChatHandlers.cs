@@ -1,5 +1,6 @@
 using MediatR;
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using Viora.Application.Posts;
 using Viora.Application.Realtime;
 
@@ -132,7 +133,8 @@ public sealed class ChatMessageDeliveryService(
     IChatConversationRepository repository,
     IRealtimeService realtimeService,
     IPushNotificationSender pushNotificationSender,
-    IOnlineUserRegistry onlineUserRegistry)
+    IOnlineUserRegistry onlineUserRegistry,
+    Microsoft.Extensions.Logging.ILogger<ChatMessageDeliveryService> logger)
 {
     public async Task PublishAsync(
         Guid senderUserId,
@@ -184,21 +186,44 @@ public sealed class ChatMessageDeliveryService(
                     cancellationToken);
             }
 
-            if (!recipient.IsMuted && !onlineUserRegistry.IsOnline(recipient.UserId))
+            if (recipient.IsMuted)
             {
-                await pushNotificationSender.SendAsync(
-                    new PushMessage(
-                        recipient.UserId,
-                        result.Message.Sender.DisplayName,
-                        result.Message.Content,
-                        new Dictionary<string, string>
-                        {
-                            ["type"] = "message",
-                            ["conversationId"] = result.Message.ConversationId.ToString(),
-                            ["messageId"] = result.Message.Id.ToString()
-                        }),
-                    cancellationToken);
+                logger.LogInformation(
+                    "Chat push skipped because recipient muted conversation. UserId: {UserId}, ConversationId: {ConversationId}, MessageId: {MessageId}.",
+                    recipient.UserId,
+                    result.Message.ConversationId,
+                    result.Message.Id);
+                continue;
             }
+
+            if (onlineUserRegistry.IsOnline(recipient.UserId))
+            {
+                logger.LogInformation(
+                    "Chat push skipped because recipient is online. UserId: {UserId}, ConversationId: {ConversationId}, MessageId: {MessageId}.",
+                    recipient.UserId,
+                    result.Message.ConversationId,
+                    result.Message.Id);
+                continue;
+            }
+
+            logger.LogInformation(
+                "Sending chat push to offline recipient. UserId: {UserId}, ConversationId: {ConversationId}, MessageId: {MessageId}.",
+                recipient.UserId,
+                result.Message.ConversationId,
+                result.Message.Id);
+
+            await pushNotificationSender.SendAsync(
+                new PushMessage(
+                    recipient.UserId,
+                    result.Message.Sender.DisplayName,
+                    result.Message.Content,
+                    new Dictionary<string, string>
+                    {
+                        ["type"] = "message",
+                        ["conversationId"] = result.Message.ConversationId.ToString(),
+                        ["messageId"] = result.Message.Id.ToString()
+                    }),
+                cancellationToken);
         }
     }
 

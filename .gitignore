@@ -50,3 +50,6 @@ logs/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+firebase-service-account.json
+*.json
