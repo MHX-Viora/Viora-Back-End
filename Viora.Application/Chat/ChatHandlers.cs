@@ -205,21 +205,12 @@ public sealed class ChatMessageDeliveryService(
                 continue;
             }
 
-            if (onlineUserRegistry.IsOnline(recipient.UserId))
-            {
-                logger.LogInformation(
-                    "Chat push skipped because recipient is online. UserId: {UserId}, ConversationId: {ConversationId}, MessageId: {MessageId}.",
-                    recipient.UserId,
-                    result.Message.ConversationId,
-                    result.Message.Id);
-                continue;
-            }
-
             logger.LogInformation(
-                "Sending chat push to offline recipient. UserId: {UserId}, ConversationId: {ConversationId}, MessageId: {MessageId}.",
+                "Sending chat push to recipient. UserId: {UserId}, ConversationId: {ConversationId}, MessageId: {MessageId}, IsOnline: {IsOnline}.",
                 recipient.UserId,
                 result.Message.ConversationId,
-                result.Message.Id);
+                result.Message.Id,
+                onlineUserRegistry.IsOnline(recipient.UserId));
 
             await pushNotificationSender.SendAsync(
                 new PushMessage(

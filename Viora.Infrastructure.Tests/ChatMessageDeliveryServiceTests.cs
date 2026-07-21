@@ -36,6 +36,27 @@ public sealed class ChatMessageDeliveryServiceTests
     }
 
     [Fact]
+    public async Task PublishAsync_online_recipient_still_receives_chat_push_payload()
+    {
+        var senderId = Guid.NewGuid();
+        var recipientId = Guid.NewGuid();
+        var push = new FakePushNotificationSender();
+        var service = new ChatMessageDeliveryService(
+            new FakeChatConversationRepository(),
+            new FakeRealtimeService(),
+            push,
+            new FakeOnlineUserRegistry(recipientId),
+            NullLogger<ChatMessageDeliveryService>.Instance);
+
+        await service.PublishAsync(
+            senderId,
+            CreateResult(Guid.NewGuid(), Guid.NewGuid(), senderId, recipientId, isMuted: false),
+            CancellationToken.None);
+
+        Assert.Single(push.Messages);
+    }
+
+    [Fact]
     public async Task PublishAsync_muted_recipient_does_not_receive_push()
     {
         var senderId = Guid.NewGuid();
@@ -96,9 +117,9 @@ public sealed class ChatMessageDeliveryServiceTests
         }
     }
 
-    private sealed class FakeOnlineUserRegistry : IOnlineUserRegistry
+    private sealed class FakeOnlineUserRegistry(params Guid[] onlineUserIds) : IOnlineUserRegistry
     {
-        public bool IsOnline(Guid userId) => false;
+        public bool IsOnline(Guid userId) => onlineUserIds.Contains(userId);
     }
 
     private sealed class FakeChatConversationRepository : IChatConversationRepository
