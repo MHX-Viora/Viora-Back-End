@@ -362,6 +362,21 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
     [HttpGet("groups/{conversationId:guid}")]
     public async Task<IActionResult> GetGroup(Guid conversationId, CancellationToken token) => await WithUser(id => groupChatService.GetAsync(id, conversationId, token));
 
+    [HttpGet("groups/preview/{conversationId:guid}")]
+    [ProducesResponseType<GroupPreviewResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status410Gone)]
+    public async Task<IActionResult> PreviewGroup(Guid conversationId, CancellationToken token) =>
+        await WithUser(id => groupChatService.PreviewAsync(id, conversationId, null, token));
+
+    [HttpGet("groups/preview")]
+    [ProducesResponseType<GroupPreviewResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status410Gone)]
+    public async Task<IActionResult> PreviewGroupByInviteCode([FromQuery] string? inviteCode, CancellationToken token) =>
+        await WithUser(id => groupChatService.PreviewAsync(id, null, inviteCode, token));
+
     [HttpGet("groups/{conversationId:guid}/members")]
     public async Task<IActionResult> GetGroupMembers(Guid conversationId, [FromQuery] string? keyword = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 30, CancellationToken token = default) =>
         await WithUser(id => groupChatService.GetMembersAsync(id, conversationId, keyword, page, pageSize, token));

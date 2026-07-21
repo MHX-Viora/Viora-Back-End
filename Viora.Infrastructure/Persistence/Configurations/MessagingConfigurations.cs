@@ -11,8 +11,10 @@ internal sealed class ConversationConfiguration : IEntityTypeConfiguration<Conve
         builder.ToTable("Conversations");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).HasMaxLength(100);
+        builder.Property(x => x.InviteCode).HasMaxLength(64);
         builder.Property(x => x.ConversationType).IsRequired();
         builder.Property(x => x.CanSendMessage).HasDefaultValue(ConversationSendPermission.Everyone);
+        builder.HasIndex(x => x.InviteCode).IsUnique().HasFilter("\"InviteCode\" IS NOT NULL");
         builder.HasOne(x => x.Creator).WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.LastMessage).WithMany().HasForeignKey(x => x.LastMessageId).OnDelete(DeleteBehavior.Restrict);
     }

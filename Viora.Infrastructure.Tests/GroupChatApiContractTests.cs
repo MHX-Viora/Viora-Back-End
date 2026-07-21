@@ -22,6 +22,8 @@ public sealed class GroupChatApiContractTests
 
         AssertRoute<HttpPostAttribute>(nameof(ChatController.CreateGroup), "groups");
         AssertRoute<HttpGetAttribute>(nameof(ChatController.GetGroup), "groups/{conversationId:guid}");
+        AssertRoute<HttpGetAttribute>(nameof(ChatController.PreviewGroup), "groups/preview/{conversationId:guid}");
+        AssertRoute<HttpGetAttribute>(nameof(ChatController.PreviewGroupByInviteCode), "groups/preview");
         AssertRoute<HttpGetAttribute>(nameof(ChatController.GetGroupMembers), "groups/{conversationId:guid}/members");
         AssertRoute<HttpPostAttribute>(nameof(ChatController.AddGroupMembers), "groups/{conversationId:guid}/members");
         AssertRoute<HttpDeleteAttribute>(nameof(ChatController.RemoveGroupMember), "groups/{conversationId:guid}/members/{userId:guid}");
@@ -70,6 +72,8 @@ public sealed class GroupChatApiContractTests
         AssertProperties<SelectableFriendResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified", "IsOnline", "LastActiveAt");
         AssertProperties<CreateGroupResponse>("Id", "Name", "AvatarUrl", "MemberCount", "CreatedAt");
         AssertProperties<GroupDetailsResponse>("Id", "Name", "AvatarUrl", "MemberCount", "MyRole", "CanSendMessage", "CreatedBy", "MembersPreview");
+        AssertProperties<GroupPreviewResponse>("Id", "Name", "AvatarUrl", "MemberCount", "IsJoined", "CreatedAt", "Members");
+        AssertProperties<GroupPreviewMemberResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified", "IsFriend");
         AssertProperties<GroupMemberListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
         AssertProperties<ChangeGroupPermissionResponse>("ConversationId", "CanSendMessage", "UpdatedAt");
         AssertProperties<RenameGroupResponse>("ConversationId", "Name", "UpdatedAt");
@@ -160,6 +164,44 @@ public sealed class GroupChatApiContractTests
 
         var sql = query.ToQueryString();
         Assert.Contains("SELECT", sql);
+    }
+
+    [Fact]
+    public void Group_preview_query_can_be_translated_by_postgresql_provider()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql("Host=localhost;Database=query_translation_only;Username=test;Password=test")
+            .Options;
+        using var db = new AppDbContext(options);
+        var actorId = Guid.NewGuid();
+        var groupId = Guid.NewGuid();
+
+        var query = db.ConversationMembers.AsNoTracking()
+            .Where(x => x.ConversationId == groupId && x.Status == ConversationMemberStatus.Active)
+            .Select(x => new
+            {
+                x.UserId,
+                x.User.DisplayName,
+                x.User.AvatarUrl,
+                x.User.IsVerified,
+                x.Role,
+                x.JoinedAt,
+                IsFriend = db.Friendships.Any(f =>
+                    f.Status == FriendshipStatus.Accepted &&
+                    ((f.RequesterUserId == actorId && f.AddresseeUserId == x.UserId) ||
+                     (f.AddresseeUserId == actorId && f.RequesterUserId == x.UserId)))
+            })
+            .OrderByDescending(x => x.IsFriend)
+            .ThenByDescending(x => x.Role == ConversationMemberRole.Owner)
+            .ThenByDescending(x => x.Role == ConversationMemberRole.Admin)
+            .ThenBy(x => x.JoinedAt)
+            .ThenBy(x => x.UserId)
+            .Take(5)
+            .Select(x => new GroupPreviewMemberResponse(x.UserId, x.DisplayName, x.AvatarUrl, x.IsVerified, x.IsFriend));
+
+        var sql = query.ToQueryString();
+        Assert.Contains("EXISTS", sql);
+        Assert.Contains("LIMIT", sql);
     }
 
     private static MethodInfo Method<T>(string name) => typeof(T).GetMethod(name) ?? throw new InvalidOperationException(name);

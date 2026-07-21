@@ -5,6 +5,7 @@ public sealed class Conversation : AuditableEntity
     public ConversationType ConversationType { get; set; }
     public string? Name { get; set; }
     public string? AvatarUrl { get; set; }
+    public string? InviteCode { get; set; }
     public Guid? LastMessageId { get; set; }
     public DateTime? LastMessageAt { get; set; }
     public ConversationSendPermission CanSendMessage { get; set; }

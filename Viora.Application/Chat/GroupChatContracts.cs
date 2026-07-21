@@ -83,6 +83,8 @@ public sealed record CreateGroupResponse(Guid Id, string Name, string? AvatarUrl
 public sealed record GroupUserResponse(Guid Id, string DisplayName, string? AvatarUrl);
 public sealed record GroupMemberPreviewResponse(Guid Id, string DisplayName, string? AvatarUrl, ConversationMemberRole Role);
 public sealed record GroupDetailsResponse(Guid Id, string Name, string? AvatarUrl, int MemberCount, ConversationMemberRole MyRole, ConversationSendPermission CanSendMessage, GroupUserResponse CreatedBy, IReadOnlyList<GroupMemberPreviewResponse> MembersPreview);
+public sealed record GroupPreviewMemberResponse(Guid Id, string DisplayName, string? AvatarUrl, bool IsVerified, bool IsFriend);
+public sealed record GroupPreviewResponse(Guid Id, string Name, string? AvatarUrl, int MemberCount, bool IsJoined, DateTime CreatedAt, IReadOnlyList<GroupPreviewMemberResponse> Members);
 public sealed record GroupMemberListResponse(int Page, int PageSize, int TotalItems, int TotalPages, IReadOnlyList<GroupMemberResponse> Items);
 public sealed record GroupMemberResponse(Guid Id, string DisplayName, string? AvatarUrl, bool IsVerified, ConversationMemberRole Role, bool IsOnline, DateTime JoinedAt);
 public sealed record GroupMutationResponse(Guid ConversationId, string Action, DateTime UpdatedAt);
@@ -117,6 +119,7 @@ public interface IGroupChatService
     Task<SelectableFriendListResponse> GetSelectableFriendsAsync(Guid currentUserId, string? keyword, int page, int pageSize, CancellationToken token);
     Task<GroupChatResult<CreateGroupResponse>> CreateAsync(CreateGroupCommand command, CancellationToken token);
     Task<GroupChatResult<GroupDetailsResponse>> GetAsync(Guid currentUserId, Guid conversationId, CancellationToken token);
+    Task<GroupChatResult<GroupPreviewResponse>> PreviewAsync(Guid currentUserId, Guid? conversationId, string? inviteCode, CancellationToken token);
     Task<GroupChatResult<GroupMemberListResponse>> GetMembersAsync(Guid currentUserId, Guid conversationId, string? keyword, int page, int pageSize, CancellationToken token);
     Task<GroupChatResult<GroupMutationResponse>> AddMembersAsync(Guid actorId, Guid conversationId, IReadOnlyList<Guid> memberIds, CancellationToken token);
     Task<GroupChatResult<GroupMutationResponse>> RemoveMemberAsync(Guid actorId, Guid conversationId, Guid userId, CancellationToken token);

@@ -99,6 +99,55 @@ public sealed class GroupChatService(
         return GroupChatResult<GroupDetailsResponse>.Success(new(group.Id, group.Name!, group.AvatarUrl, active.Count, me.Role, group.CanSendMessage, creator, preview));
     }
 
+    public async Task<GroupChatResult<GroupPreviewResponse>> PreviewAsync(Guid actorId, Guid? conversationId, string? inviteCode, CancellationToken token)
+    {
+        inviteCode = inviteCode?.Trim();
+        if (!conversationId.HasValue && string.IsNullOrWhiteSpace(inviteCode))
+        {
+            return Fail<GroupPreviewResponse>(GroupChatError.Validation, "Mã mời không hợp lệ.");
+        }
+
+        var group = await db.Conversations.AsNoTracking()
+            .Where(x => x.ConversationType == ConversationType.Group)
+            .Where(x => conversationId.HasValue ? x.Id == conversationId.Value : x.InviteCode == inviteCode)
+            .Select(x => new { x.Id, x.Name, x.AvatarUrl, x.CreatedAt, x.DeletedAt })
+            .SingleOrDefaultAsync(token);
+
+        if (group is null) return Fail<GroupPreviewResponse>(GroupChatError.NotFound, "Không tìm thấy nhóm.");
+        if (group.DeletedAt.HasValue) return Dissolved<GroupPreviewResponse>();
+
+        var memberCount = await db.ConversationMembers.AsNoTracking()
+            .CountAsync(x => x.ConversationId == group.Id && x.Status == ConversationMemberStatus.Active, token);
+        var isJoined = await db.ConversationMembers.AsNoTracking()
+            .AnyAsync(x => x.ConversationId == group.Id && x.UserId == actorId && x.Status == ConversationMemberStatus.Active, token);
+
+        var members = await db.ConversationMembers.AsNoTracking()
+            .Where(x => x.ConversationId == group.Id && x.Status == ConversationMemberStatus.Active)
+            .Select(x => new
+            {
+                x.UserId,
+                x.User.DisplayName,
+                x.User.AvatarUrl,
+                x.User.IsVerified,
+                x.Role,
+                x.JoinedAt,
+                IsFriend = db.Friendships.Any(f =>
+                    f.Status == FriendshipStatus.Accepted &&
+                    ((f.RequesterUserId == actorId && f.AddresseeUserId == x.UserId) ||
+                     (f.AddresseeUserId == actorId && f.RequesterUserId == x.UserId)))
+            })
+            .OrderByDescending(x => x.IsFriend)
+            .ThenByDescending(x => x.Role == ConversationMemberRole.Owner)
+            .ThenByDescending(x => x.Role == ConversationMemberRole.Admin)
+            .ThenBy(x => x.JoinedAt)
+            .ThenBy(x => x.UserId)
+            .Take(5)
+            .Select(x => new GroupPreviewMemberResponse(x.UserId, x.DisplayName, x.AvatarUrl, x.IsVerified, x.IsFriend))
+            .ToListAsync(token);
+
+        return GroupChatResult<GroupPreviewResponse>.Success(new(group.Id, group.Name!, group.AvatarUrl, memberCount, isJoined, group.CreatedAt, members));
+    }
+
     public async Task<GroupChatResult<GroupMemberListResponse>> GetMembersAsync(Guid actorId, Guid conversationId, string? keyword, int page, int pageSize, CancellationToken token)
     {
         var group = await ActiveGroup(conversationId, token);
