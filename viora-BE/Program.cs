@@ -115,6 +115,36 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
 
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        var traceId = context.TraceIdentifier;
+
+        app.Logger.LogError(
+            exception,
+            "Unhandled request exception. TraceId: {TraceId}, Path: {Path}, Method: {Method}.",
+            traceId,
+            context.Request.Path,
+            context.Request.Method);
+
+        if (context.Response.HasStarted)
+        {
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            success = false,
+            message = "Internal server error. Check server logs with traceId.",
+            traceId
+        });
+    });
+});
+
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
