@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Viora.Application.Realtime;
 using Viora.Domain.Entities;
 using Xunit;
@@ -11,7 +12,7 @@ public sealed class DeviceTokenHandlerTests
     {
         var userId = Guid.NewGuid();
         var repository = new FakeDeviceTokenRepository();
-        var handler = new RegisterDeviceTokenHandler(repository, new RegisterDeviceTokenValidator());
+        var handler = CreateRegisterHandler(repository);
 
         var response = await handler.Handle(new RegisterDeviceTokenCommand(
             userId,
@@ -45,7 +46,7 @@ public sealed class DeviceTokenHandlerTests
             Platform = DevicePlatform.Ios
         };
         var repository = new FakeDeviceTokenRepository(existing);
-        var handler = new RegisterDeviceTokenHandler(repository, new RegisterDeviceTokenValidator());
+        var handler = CreateRegisterHandler(repository);
 
         var response = await handler.Handle(new RegisterDeviceTokenCommand(
             currentUserId,
@@ -78,7 +79,7 @@ public sealed class DeviceTokenHandlerTests
             Platform = DevicePlatform.Android
         };
         var repository = new FakeDeviceTokenRepository(existing);
-        var handler = new RegisterDeviceTokenHandler(repository, new RegisterDeviceTokenValidator());
+        var handler = CreateRegisterHandler(repository);
 
         var response = await handler.Handle(new RegisterDeviceTokenCommand(
             currentUserId,
@@ -118,7 +119,7 @@ public sealed class DeviceTokenHandlerTests
             Platform = DevicePlatform.Android
         };
         var repository = new FakeDeviceTokenRepository(tokenRow, oldDeviceRow);
-        var handler = new RegisterDeviceTokenHandler(repository, new RegisterDeviceTokenValidator());
+        var handler = CreateRegisterHandler(repository);
 
         var response = await handler.Handle(new RegisterDeviceTokenCommand(
             currentUserId,
@@ -149,7 +150,10 @@ public sealed class DeviceTokenHandlerTests
             Platform = DevicePlatform.Android
         };
         var repository = new FakeDeviceTokenRepository(existing);
-        var handler = new UnregisterDeviceTokenHandler(repository, new UnregisterDeviceTokenValidator());
+        var handler = new UnregisterDeviceTokenHandler(
+            repository,
+            new UnregisterDeviceTokenValidator(),
+            NullLogger<UnregisterDeviceTokenHandler>.Instance);
 
         var response = await handler.Handle(new UnregisterDeviceTokenCommand(userId, "token-1"), CancellationToken.None);
 
@@ -158,6 +162,12 @@ public sealed class DeviceTokenHandlerTests
         Assert.False(existing.IsActive);
         Assert.Equal(1, repository.SaveCount);
     }
+
+    private static RegisterDeviceTokenHandler CreateRegisterHandler(FakeDeviceTokenRepository repository) =>
+        new(
+            repository,
+            new RegisterDeviceTokenValidator(),
+            NullLogger<RegisterDeviceTokenHandler>.Instance);
 
     private sealed class FakeDeviceTokenRepository(params DeviceToken[] tokens) : IDeviceTokenRepository
     {

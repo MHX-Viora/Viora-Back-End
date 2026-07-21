@@ -1,11 +1,13 @@
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Viora.Domain.Entities;
 
 namespace Viora.Application.Realtime;
 
 public sealed class RegisterDeviceTokenHandler(
     IDeviceTokenRepository repository,
-    FluentValidation.IValidator<RegisterDeviceTokenCommand> validator)
+    FluentValidation.IValidator<RegisterDeviceTokenCommand> validator,
+    ILogger<RegisterDeviceTokenHandler> logger)
     : IRequestHandler<RegisterDeviceTokenCommand, DeviceTokenResponse>
 {
     public async Task<DeviceTokenResponse> Handle(RegisterDeviceTokenCommand request, CancellationToken cancellationToken)
@@ -27,6 +29,12 @@ public sealed class RegisterDeviceTokenHandler(
                 Token = request.Token
             };
             await repository.AddAsync(deviceToken, cancellationToken);
+            logger.LogInformation(
+                "Creating device token. UserId: {UserId}, DeviceTokenId: {DeviceTokenId}, DeviceId: {DeviceId}, Platform: {Platform}.",
+                request.UserId,
+                deviceToken.Id,
+                normalizedDeviceId,
+                request.Platform);
         }
         else if (normalizedDeviceId is not null)
         {
@@ -36,7 +44,23 @@ public sealed class RegisterDeviceTokenHandler(
                 existingDevice.DeviceId = null;
                 existingDevice.IsActive = false;
                 existingDevice.LastSeenAt = now;
+                logger.LogInformation(
+                    "Deactivated previous token for same device id. UserId: {UserId}, PreviousDeviceTokenId: {PreviousDeviceTokenId}, DeviceId: {DeviceId}.",
+                    existingDevice.UserId,
+                    existingDevice.Id,
+                    normalizedDeviceId);
             }
+        }
+
+        if (deviceToken.Id != Guid.Empty)
+        {
+            logger.LogInformation(
+                "Upserting device token. UserId: {UserId}, DeviceTokenId: {DeviceTokenId}, DeviceId: {DeviceId}, Platform: {Platform}, IsActive: {IsActive}.",
+                request.UserId,
+                deviceToken.Id,
+                normalizedDeviceId,
+                request.Platform,
+                true);
         }
 
         deviceToken.UserId = request.UserId;
@@ -55,7 +79,8 @@ public sealed class RegisterDeviceTokenHandler(
 
 public sealed class UnregisterDeviceTokenHandler(
     IDeviceTokenRepository repository,
-    FluentValidation.IValidator<UnregisterDeviceTokenCommand> validator)
+    FluentValidation.IValidator<UnregisterDeviceTokenCommand> validator,
+    ILogger<UnregisterDeviceTokenHandler> logger)
     : IRequestHandler<UnregisterDeviceTokenCommand, DeviceTokenResponse>
 {
     public async Task<DeviceTokenResponse> Handle(UnregisterDeviceTokenCommand request, CancellationToken cancellationToken)
@@ -77,6 +102,10 @@ public sealed class UnregisterDeviceTokenHandler(
             deviceToken.IsActive = false;
             deviceToken.LastSeenAt = DateTime.UtcNow;
             await repository.SaveChangesAsync(cancellationToken);
+            logger.LogInformation(
+                "Device token unregistered. UserId: {UserId}, DeviceTokenId: {DeviceTokenId}.",
+                request.UserId,
+                deviceToken.Id);
         }
 
         return new DeviceTokenResponse(true, false, "Device token unregistered.");

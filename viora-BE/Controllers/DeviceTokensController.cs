@@ -33,12 +33,24 @@ public sealed class DeviceTokensController(
         {
             return BadRequest(new DeviceTokenResponse(false, false, "Platform must be 0, 1, 2, 3, Android, Ios, Web, or Other."));
         }
+        if (string.IsNullOrWhiteSpace(request.Token))
+        {
+            return BadRequest(new DeviceTokenResponse(false, false, "Token must not be empty."));
+        }
+        var token = request.Token;
 
         try
         {
+            logger.LogInformation(
+                "Register device token request received. UserId: {UserId}, DeviceId: {DeviceId}, Platform: {Platform}, TokenLength: {TokenLength}.",
+                currentUserId,
+                request.DeviceId,
+                platform,
+                token.Length);
+
             var response = await mediator.Send(new RegisterDeviceTokenCommand(
                 currentUserId,
-                request.Token,
+                token,
                 request.DeviceId,
                 request.DeviceName,
                 platform,
@@ -72,11 +84,21 @@ public sealed class DeviceTokensController(
         {
             return Unauthorized(new DeviceTokenResponse(false, false, "Access token is missing user_id claim."));
         }
+        if (string.IsNullOrWhiteSpace(request.Token))
+        {
+            return BadRequest(new DeviceTokenResponse(false, false, "Token must not be empty."));
+        }
+        var token = request.Token;
 
         try
         {
+            logger.LogInformation(
+                "Unregister device token request received. UserId: {UserId}, TokenLength: {TokenLength}.",
+                currentUserId,
+                token.Length);
+
             var response = await mediator.Send(
-                new UnregisterDeviceTokenCommand(currentUserId, request.Token),
+                new UnregisterDeviceTokenCommand(currentUserId, token),
                 cancellationToken);
 
             return response.Success ? Ok(response) : BadRequest(response);
