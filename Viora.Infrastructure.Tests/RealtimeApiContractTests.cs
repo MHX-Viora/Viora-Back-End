@@ -69,7 +69,13 @@ public sealed class RealtimeApiContractTests
             "Success",
             "TokenSuffix",
             "UserId");
-        AssertProperties<DevPushPingResponse>("EnvironmentName", "FirebaseProjectId", "IsEnabled", "Timestamp");
+        AssertProperties<DevPushPingResponse>(
+            "EnvironmentName",
+            "ErrorMessage",
+            "FirebaseProjectId",
+            "IsEnabled",
+            "IsFirebaseConfigured",
+            "Timestamp");
         Assert.Equal("ping", typeof(DevPushDiagnosticsController)
             .GetMethod(nameof(DevPushDiagnosticsController.Ping))!
             .GetCustomAttribute<HttpGetAttribute>()!.Template);

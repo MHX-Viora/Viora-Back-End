@@ -163,22 +163,25 @@ public sealed class DevPushDiagnosticsController(
     {
         try
         {
+            var client = firebaseMessagingClientFactory.CreateClient();
             return Ok(new DevPushPingResponse(
                 environment.EnvironmentName,
                 configuration.GetValue<bool>("Diagnostics:EnablePushTest"),
+                client is not null,
                 firebaseMessagingClientFactory.ProjectId,
+                null,
                 DateTimeOffset.UtcNow));
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Dev push ping failed.");
-            return StatusCode(
-                StatusCodes.Status500InternalServerError,
-                new
-                {
-                    success = false,
-                    message = exception.Message
-                });
+            return Ok(new DevPushPingResponse(
+                environment.EnvironmentName,
+                configuration.GetValue<bool>("Diagnostics:EnablePushTest"),
+                false,
+                firebaseMessagingClientFactory.ProjectId,
+                exception.Message,
+                DateTimeOffset.UtcNow));
         }
     }
 
@@ -341,7 +344,9 @@ public sealed record DevPushTestRequest(
 public sealed record DevPushPingResponse(
     string EnvironmentName,
     bool IsEnabled,
+    bool IsFirebaseConfigured,
     string? FirebaseProjectId,
+    string? ErrorMessage,
     DateTimeOffset Timestamp);
 
 public sealed record DevPushTestResponse(
