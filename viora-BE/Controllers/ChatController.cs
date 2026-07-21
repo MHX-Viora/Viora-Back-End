@@ -360,6 +360,20 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
         return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : ToGroupActionResult(result);
     }
 
+    [HttpPost("groups/join")]
+    [ProducesResponseType<JoinGroupResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> JoinGroup(JoinGroupRequest request, CancellationToken cancellationToken)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new JoinGroupCommand(userId, request.InviteCode), cancellationToken);
+        return ToGroupActionResult(result);
+    }
+
     [HttpGet("groups/{conversationId:guid}")]
     public async Task<IActionResult> GetGroup(Guid conversationId, CancellationToken token) => await WithUser(id => groupChatService.GetAsync(id, conversationId, token));
 
@@ -555,6 +569,7 @@ public sealed class ChatAttachmentUploadRequest
 public sealed record SetConversationPinRequest(bool IsPinned);
 public sealed record SetConversationMuteRequest(bool IsMuted);
 public sealed record SetConversationBlockRequest(bool IsBlocked);
+public sealed record JoinGroupRequest(string InviteCode);
 
 public sealed class CreateGroupForm
 {

@@ -41,6 +41,24 @@ public sealed class SignalRRealtimeService(
         }
     }
 
+    public async Task AddUsersToGroupAsync(
+        IEnumerable<Guid> userIds,
+        string groupName,
+        CancellationToken cancellationToken)
+    {
+        foreach (var connectionId in userIds.Distinct().SelectMany(connections.GetConnections).Distinct())
+        {
+            try
+            {
+                await hubContext.Groups.AddToGroupAsync(connectionId, groupName, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Failed to add connection {ConnectionId} to group {GroupName}.", connectionId, groupName);
+            }
+        }
+    }
+
     public async Task RemoveUsersFromGroupAsync(
         IEnumerable<Guid> userIds,
         string groupName,

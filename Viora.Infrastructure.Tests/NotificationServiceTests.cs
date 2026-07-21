@@ -81,6 +81,9 @@ public sealed class NotificationServiceTests
         public Task SendToGroupAsync(string groupName, string eventName, object payload, CancellationToken cancellationToken) =>
             Task.CompletedTask;
 
+        public Task AddUsersToGroupAsync(IEnumerable<Guid> userIds, string groupName, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
         public Task RemoveUsersFromGroupAsync(IEnumerable<Guid> userIds, string groupName, CancellationToken cancellationToken) =>
             Task.CompletedTask;
     }

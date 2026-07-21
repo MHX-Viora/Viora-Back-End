@@ -19,6 +19,7 @@ public static class GroupChatRoleMessages
 public static class GroupChatSystemMessages
 {
     public static string Created(string actorName) => $"{actorName} đã tạo nhóm.";
+    public static string Joined(string actorName) => $"{actorName} đã tham gia nhóm.";
     public static string Renamed(string actorName, string groupName) => $"{actorName} đã đổi tên nhóm thành \"{groupName}\".";
     public static string AvatarChanged(string actorName) => $"{actorName} đã đổi ảnh nhóm.";
     public static string MembersAdded(string actorName, IEnumerable<string> memberNames) => $"{actorName} đã thêm {string.Join(", ", memberNames)} vào nhóm.";
@@ -88,6 +89,14 @@ public sealed record GroupPreviewResponse(Guid Id, string Name, string? AvatarUr
 public sealed record GroupMemberListResponse(int Page, int PageSize, int TotalItems, int TotalPages, IReadOnlyList<GroupMemberResponse> Items);
 public sealed record GroupMemberResponse(Guid Id, string DisplayName, string? AvatarUrl, bool IsVerified, ConversationMemberRole Role, bool IsOnline, DateTime JoinedAt);
 public sealed record GroupMutationResponse(Guid ConversationId, string Action, DateTime UpdatedAt);
+public sealed record JoinGroupCommand(Guid CurrentUserId, string InviteCode)
+    : MediatR.IRequest<GroupChatResult<JoinGroupResponse>>;
+public sealed record JoinGroupResponse(Guid ConversationId, bool Joined);
+public sealed record JoinGroupRepositoryResult(
+    JoinGroupResponse Response,
+    IReadOnlyList<Guid> Recipients,
+    ChatRealtimeMessageResponse SystemMessage,
+    object MemberPayload);
 public sealed record ChangeGroupPermissionResponse(Guid ConversationId, ConversationSendPermission CanSendMessage, DateTime UpdatedAt);
 public sealed record RenameGroupResponse(Guid ConversationId, string Name, DateTime UpdatedAt);
 public sealed record ChangeGroupAvatarResponse(Guid ConversationId, string AvatarUrl, DateTime UpdatedAt);
@@ -112,6 +121,20 @@ public sealed class CreateGroupValidator : AbstractValidator<CreateGroupCommand>
     private static bool IsValidAvatar(CreatePostFile file) =>
         file.Length is > 0 and <= 5 * 1024 * 1024 &&
         file.ContentType is "image/jpeg" or "image/png" or "image/webp";
+}
+
+public sealed class JoinGroupValidator : AbstractValidator<JoinGroupCommand>
+{
+    public JoinGroupValidator()
+    {
+        RuleFor(x => x.CurrentUserId).NotEmpty();
+        RuleFor(x => x.InviteCode).Must(x => !string.IsNullOrWhiteSpace(x)).WithMessage("Mã mời không hợp lệ.").MaximumLength(20);
+    }
+}
+
+public interface IJoinGroupRepository
+{
+    Task<GroupChatResult<JoinGroupRepositoryResult>> JoinByInviteCodeAsync(JoinGroupCommand command, CancellationToken token);
 }
 
 public interface IGroupChatService

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.EntityFrameworkCore;
 using Viora.Application.Chat;
+using Viora.Application.Realtime;
 using Viora.Domain.Entities;
 using viora_BE.Controllers;
 using Viora.Infrastructure.Persistence;
@@ -21,6 +22,7 @@ public sealed class GroupChatApiContractTests
         Assert.Equal("selectable", Method<FriendsController>(nameof(FriendsController.Selectable)).GetCustomAttribute<HttpGetAttribute>()!.Template);
 
         AssertRoute<HttpPostAttribute>(nameof(ChatController.CreateGroup), "groups");
+        AssertRoute<HttpPostAttribute>(nameof(ChatController.JoinGroup), "groups/join");
         AssertRoute<HttpGetAttribute>(nameof(ChatController.GetGroup), "groups/{conversationId:guid}");
         AssertRoute<HttpGetAttribute>(nameof(ChatController.PreviewGroup), "groups/preview/{conversationId:guid}");
         AssertRoute<HttpGetAttribute>(nameof(ChatController.PreviewGroupByInviteCode), "groups/preview");
@@ -71,6 +73,8 @@ public sealed class GroupChatApiContractTests
         AssertProperties<SelectableFriendListResponse>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
         AssertProperties<SelectableFriendResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified", "IsOnline", "LastActiveAt");
         AssertProperties<CreateGroupResponse>("Id", "Name", "AvatarUrl", "MemberCount", "CreatedAt");
+        AssertProperties<JoinGroupRequest>("InviteCode");
+        AssertProperties<JoinGroupResponse>("ConversationId", "Joined");
         AssertProperties<GroupDetailsResponse>("Id", "Name", "AvatarUrl", "MemberCount", "MyRole", "CanSendMessage", "CreatedBy", "MembersPreview");
         AssertProperties<GroupPreviewResponse>("Id", "Name", "AvatarUrl", "MemberCount", "IsJoined", "CreatedAt", "Members");
         AssertProperties<GroupPreviewMemberResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified", "IsFriend");
@@ -139,6 +143,22 @@ public sealed class GroupChatApiContractTests
         Assert.Empty(payload.Attachments);
         Assert.Empty(payload.Reactions);
         Assert.Null(payload.Reply);
+    }
+
+    [Fact]
+    public async Task Join_group_validator_rejects_blank_invite_code()
+    {
+        var validator = new JoinGroupValidator();
+        var result = await validator.ValidateAsync(new JoinGroupCommand(Guid.NewGuid(), " "));
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public void Realtime_service_can_add_joined_users_to_conversation_groups()
+    {
+        Assert.Contains(
+            typeof(IRealtimeService).GetMethods(),
+            method => method.Name == nameof(IRealtimeService.AddUsersToGroupAsync));
     }
 
     [Fact]

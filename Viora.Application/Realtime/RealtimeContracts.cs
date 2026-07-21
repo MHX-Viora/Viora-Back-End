@@ -66,6 +66,7 @@ public interface IRealtimeService
     Task SendToUserAsync(Guid userId, string eventName, object payload, CancellationToken cancellationToken);
     Task SendToUsersAsync(IEnumerable<Guid> userIds, string eventName, object payload, CancellationToken cancellationToken);
     Task SendToGroupAsync(string groupName, string eventName, object payload, CancellationToken cancellationToken);
+    Task AddUsersToGroupAsync(IEnumerable<Guid> userIds, string groupName, CancellationToken cancellationToken);
     Task RemoveUsersFromGroupAsync(IEnumerable<Guid> userIds, string groupName, CancellationToken cancellationToken);
 }
 

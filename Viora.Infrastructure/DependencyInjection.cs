@@ -105,6 +105,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<SendChatMessageCommand>, SendChatMessageValidator>();
         services.AddScoped<IValidator<ForwardChatMessageCommand>, ForwardChatMessageValidator>();
         services.AddScoped<IValidator<CreatePrivateConversationCommand>, CreatePrivateConversationValidator>();
+        services.AddScoped<IValidator<JoinGroupCommand>, JoinGroupValidator>();
         services.AddScoped<ChatMessageDeliveryService>();
         services.AddScoped<IValidator<GetShortVideosQuery>, GetShortVideosValidator>();
         services.AddScoped<IValidator<ToggleVideoReactionCommand>, ToggleVideoReactionValidator>();
@@ -133,6 +134,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IChatConversationRepository, ChatConversationRepository>();
         services.AddScoped<IGroupChatService, GroupChatService>();
+        services.AddScoped<IJoinGroupRepository, JoinGroupRepository>();
         services.AddScoped<IShareLinkService, ShareLinkService>();
         services.Configure<FirebaseOptions>(configuration.GetSection("Firebase"));
         services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
