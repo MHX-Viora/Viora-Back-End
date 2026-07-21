@@ -13,6 +13,8 @@ public sealed record GetChatConversationsQuery(
     int PageSize,
     string? Keyword) : IRequest<ChatConversationListResponse>;
 
+public sealed record GetChatUnreadSummaryQuery(Guid UserId) : IRequest<ChatUnreadSummaryResponse>;
+
 public sealed record CreatePrivateConversationCommand(Guid CurrentUserId, Guid UserId)
     : IRequest<ChatResult<CreatePrivateConversationResponse>>;
 
@@ -123,6 +125,8 @@ public sealed record ChatConversationListResponse(
     int TotalPages,
     IReadOnlyList<ChatConversationItemResponse> Items);
 
+public sealed record ChatUnreadSummaryResponse(int TotalUnreadCount);
+
 public sealed record ChatConversationItemResponse(
     Guid Id,
     ConversationType ConversationType,
@@ -134,7 +138,8 @@ public sealed record ChatConversationItemResponse(
     int UnreadCount,
     bool IsMuted,
     bool IsPinned,
-    DateTime? LastMessageAt);
+    DateTime? LastMessageAt,
+    DateTime UpdatedAt);
 
 public sealed record ChatLastMessageResponse(
     Guid Id,
@@ -388,6 +393,10 @@ public interface IChatConversationRepository
 
     Task<ChatConversationListResponse> GetConversationsAsync(
         GetChatConversationsQuery query,
+        CancellationToken cancellationToken);
+
+    Task<ChatUnreadSummaryResponse> GetUnreadSummaryAsync(
+        GetChatUnreadSummaryQuery query,
         CancellationToken cancellationToken);
 
     Task<ChatResult<ChatMessageListResponse>> GetMessagesAsync(

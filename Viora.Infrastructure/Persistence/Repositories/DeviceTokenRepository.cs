@@ -33,6 +33,13 @@ public sealed class DeviceTokenRepository(AppDbContext dbContext) : IDeviceToken
                 deviceToken.IsActive)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<DeviceToken>> GetActiveByTokenSuffixAsync(string tokenSuffix, CancellationToken cancellationToken) =>
+        await dbContext.DeviceTokens
+            .Where(deviceToken =>
+                deviceToken.IsActive &&
+                deviceToken.Token.EndsWith(tokenSuffix))
+            .ToListAsync(cancellationToken);
+
     public Task AddAsync(DeviceToken deviceToken, CancellationToken cancellationToken) =>
         dbContext.DeviceTokens.AddAsync(deviceToken, cancellationToken).AsTask();
 

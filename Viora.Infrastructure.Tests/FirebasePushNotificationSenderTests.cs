@@ -40,6 +40,21 @@ public sealed class FirebasePushNotificationSenderTests
     }
 
     [Fact]
+    public async Task SendAsync_with_multiple_active_tokens_sends_all()
+    {
+        var userId = Guid.NewGuid();
+        var repository = new FakeDeviceTokenRepository(
+            new DeviceToken { UserId = userId, Token = "fcm-token-1", IsActive = true },
+            new DeviceToken { UserId = userId, Token = "fcm-token-2", IsActive = true });
+        var client = new FakeFirebaseMessagingClient();
+        var sender = CreateSender(repository, client);
+
+        await sender.SendAsync(CreateMessage(userId), CancellationToken.None);
+
+        Assert.Equal(["fcm-token-1", "fcm-token-2"], client.SentTokens);
+    }
+
+    [Fact]
     public async Task SendAsync_with_blank_active_token_skips_it()
     {
         var userId = Guid.NewGuid();
@@ -67,6 +82,22 @@ public sealed class FirebasePushNotificationSenderTests
 
         Assert.False(token.IsActive);
         Assert.Contains("dead-token", repository.DeactivatedTokens);
+    }
+
+    [Fact]
+    public async Task SendAsync_invalid_token_does_not_stop_other_tokens()
+    {
+        var userId = Guid.NewGuid();
+        var deadToken = new DeviceToken { UserId = userId, Token = "dead-token", IsActive = true };
+        var liveToken = new DeviceToken { UserId = userId, Token = "live-token", IsActive = true };
+        var repository = new FakeDeviceTokenRepository(deadToken, liveToken);
+        var client = new FakeFirebaseMessagingClient { InvalidToken = "dead-token" };
+        var sender = CreateSender(repository, client);
+
+        await sender.SendAsync(CreateMessage(userId), CancellationToken.None);
+
+        Assert.False(deadToken.IsActive);
+        Assert.Equal(["live-token"], client.SentTokens);
     }
 
     [Fact]
@@ -114,6 +145,8 @@ public sealed class FirebasePushNotificationSenderTests
     private sealed class FakeFirebaseMessagingClientFactory(IFirebaseMessagingClient? client)
         : IFirebaseMessagingClientFactory
     {
+        public string? ProjectId => "com-quyentrinh-viora";
+
         public IFirebaseMessagingClient? CreateClient() => client;
     }
 
@@ -159,6 +192,11 @@ public sealed class FirebasePushNotificationSenderTests
         public Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<DeviceToken>>(tokens
                 .Where(deviceToken => deviceToken.UserId == userId && deviceToken.IsActive)
+                .ToArray());
+
+        public Task<IReadOnlyList<DeviceToken>> GetActiveByTokenSuffixAsync(string tokenSuffix, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DeviceToken>>(tokens
+                .Where(deviceToken => deviceToken.IsActive && deviceToken.Token.EndsWith(tokenSuffix))
                 .ToArray());
 
         public Task AddAsync(DeviceToken deviceToken, CancellationToken cancellationToken)

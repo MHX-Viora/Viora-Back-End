@@ -64,6 +64,17 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
         return Ok(response);
     }
 
+    [HttpGet("unread-summary")]
+    [ProducesResponseType<ChatUnreadSummaryResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<ChatUnreadSummaryResponse>> UnreadSummary(
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+
+        return Ok(await mediator.Send(new GetChatUnreadSummaryQuery(userId), cancellationToken));
+    }
+
     [HttpGet("conversations/{conversationId:guid}/messages")]
     [ProducesResponseType<ChatMessageListResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

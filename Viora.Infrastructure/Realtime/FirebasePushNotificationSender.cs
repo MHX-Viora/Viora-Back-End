@@ -17,11 +17,21 @@ public sealed class FirebasePushNotificationSender(
         var client = firebaseMessagingClientFactory.CreateClient();
         if (client is null)
         {
-            logger.LogWarning("Firebase app is not configured. Push skipped for user {UserId}.", message.UserId);
+            logger.LogWarning(
+                "Firebase app is not configured. Push skipped for user {UserId}. NotificationType: {NotificationType}.",
+                message.UserId,
+                GetNotificationType(message));
             return;
         }
 
         var tokens = await deviceTokenRepository.GetActiveByUserIdAsync(message.UserId, cancellationToken);
+        logger.LogInformation(
+            "Dispatching Firebase push. UserId: {UserId}, NotificationType: {NotificationType}, ActiveTokenCount: {ActiveTokenCount}, FirebaseProjectId: {FirebaseProjectId}.",
+            message.UserId,
+            GetNotificationType(message),
+            tokens.Count,
+            firebaseMessagingClientFactory.ProjectId ?? "unknown");
+
         var validTokens = tokens
             .Where(deviceToken => !string.IsNullOrWhiteSpace(deviceToken.Token))
             .ToArray();
@@ -135,6 +145,7 @@ public sealed class FirebasePushNotificationSender(
 
 public interface IFirebaseMessagingClientFactory
 {
+    string? ProjectId { get; }
     IFirebaseMessagingClient? CreateClient();
 }
 
@@ -145,6 +156,8 @@ public interface IFirebaseMessagingClient
 
 public sealed class FirebaseMessagingClientFactory(IFirebaseInitializer firebaseInitializer) : IFirebaseMessagingClientFactory
 {
+    public string? ProjectId => firebaseInitializer.ProjectId;
+
     public IFirebaseMessagingClient? CreateClient()
     {
         var app = firebaseInitializer.GetApp();

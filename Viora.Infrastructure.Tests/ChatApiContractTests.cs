@@ -34,6 +34,19 @@ public sealed class ChatApiContractTests
     }
 
     [Fact]
+    public void Chat_controller_exposes_unread_summary_route()
+    {
+        var action = typeof(ChatController).GetMethod(nameof(ChatController.UnreadSummary))!;
+
+        Assert.Equal("unread-summary", action.GetCustomAttribute<HttpGetAttribute>()!.Template);
+        Assert.Contains(
+            action.GetCustomAttributes<ProducesResponseTypeAttribute>(),
+            attribute => attribute.StatusCode == StatusCodes.Status200OK &&
+                         attribute.Type == typeof(ChatUnreadSummaryResponse));
+        AssertProperties<ChatUnreadSummaryResponse>("TotalUnreadCount");
+    }
+
+    [Fact]
     public void Chat_controller_exposes_create_private_conversation_route()
     {
         var action = typeof(ChatController).GetMethod(nameof(ChatController.CreatePrivateConversation))!;
@@ -215,7 +228,8 @@ public sealed class ChatApiContractTests
             "UnreadCount",
             "IsMuted",
             "IsPinned",
-            "LastMessageAt");
+            "LastMessageAt",
+            "UpdatedAt");
         AssertProperties<ChatLastMessageResponse>(
             "Id",
             "SenderId",

@@ -2,12 +2,15 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Viora.Application.Chat;
 using Viora.Domain.Entities;
 
 namespace Viora.Infrastructure.Persistence.Repositories;
 
-public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatConversationRepository
+public sealed class ChatConversationRepository(
+    AppDbContext dbContext,
+    ILogger<ChatConversationRepository> logger) : IChatConversationRepository
 {
     private static readonly Regex UrlRegex = new(
         @"https?://[^\s<>""]+",
@@ -141,6 +144,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 GroupAvatarUrl = member.Conversation.AvatarUrl,
                 SortAt = member.Conversation.LastMessageAt ?? member.Conversation.CreatedAt,
                 LastMessageAt = member.Conversation.LastMessageAt,
+                UpdatedAt = member.Conversation.UpdatedAt,
                 OtherMember = member.Conversation.Members
                     .Where(other =>
                         member.Conversation.ConversationType == ConversationType.Private &&
@@ -245,12 +249,31 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 conversation.UnreadCount,
                 conversation.IsMuted,
                 conversation.IsPinned,
-                conversation.LastMessageAt))
+                conversation.LastMessageAt,
+                conversation.UpdatedAt))
             .ToListAsync(cancellationToken);
 
         await PopulateLastMessageAttachmentsAsync(items, cancellationToken);
 
         return new ChatConversationListResponse(page, pageSize, totalItems, totalPages, items);
+    }
+
+    public async Task<ChatUnreadSummaryResponse> GetUnreadSummaryAsync(
+        GetChatUnreadSummaryQuery query,
+        CancellationToken cancellationToken)
+    {
+        var totalUnread = await dbContext.ConversationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.UserId == query.UserId &&
+                member.Status == ConversationMemberStatus.Active)
+            .Select(member => member.Conversation.Messages.Count(message =>
+                message.SenderUserId != query.UserId &&
+                (member.LastReadMessageId == null ||
+                 message.CreatedAt > member.LastReadMessage!.CreatedAt)))
+            .SumAsync(cancellationToken);
+
+        return new ChatUnreadSummaryResponse(totalUnread);
     }
 
     public async Task<ChatResult<ChatMessageListResponse>> GetMessagesAsync(
@@ -470,6 +493,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 GroupName = member.Conversation.Name,
                 GroupAvatarUrl = member.Conversation.AvatarUrl,
                 LastMessageAt = member.Conversation.LastMessageAt,
+                UpdatedAt = member.Conversation.UpdatedAt,
                 OtherMember = member.Conversation.Members
                     .Where(other =>
                         member.Conversation.ConversationType == ConversationType.Private &&
@@ -546,7 +570,8 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
                 conversation.UnreadCount,
                 conversation.IsMuted,
                 conversation.IsPinned,
-                conversation.LastMessageAt))
+                conversation.LastMessageAt,
+                conversation.UpdatedAt))
             .FirstOrDefaultAsync(cancellationToken);
 
         if (item is not null)
@@ -687,6 +712,7 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
 
         conversation.LastMessageId = message.Id;
         conversation.LastMessageAt = now;
+        conversation.UpdatedAt = now;
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -719,6 +745,16 @@ public sealed class ChatConversationRepository(AppDbContext dbContext) : IChatCo
             message.CreatedAt);
 
         var recipients = await BuildRecipientStatesAsync(command.ConversationId, cancellationToken);
+        foreach (var recipient in recipients)
+        {
+            logger.LogInformation(
+                "Chat message persisted and committed. MessageId: {MessageId}, ConversationId: {ConversationId}, SenderId: {SenderId}, RecipientId: {RecipientId}, RecipientUnreadCount: {UnreadCount}.",
+                message.Id,
+                message.ConversationId,
+                message.SenderUserId,
+                recipient.UserId,
+                recipient.UnreadCount);
+        }
 
         return ChatResult<SendChatMessageRepositoryResult>.Success(
             new SendChatMessageRepositoryResult(response, recipients));

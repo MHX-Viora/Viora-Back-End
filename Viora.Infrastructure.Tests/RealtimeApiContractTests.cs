@@ -38,6 +38,19 @@ public sealed class RealtimeApiContractTests
     }
 
     [Fact]
+    public void Dev_push_diagnostics_controller_exposes_authenticated_route()
+    {
+        Assert.NotNull(typeof(DevPushDiagnosticsController).GetCustomAttribute<AuthorizeAttribute>());
+        Assert.Equal("api/dev/push-test", typeof(DevPushDiagnosticsController).GetCustomAttribute<RouteAttribute>()!.Template);
+
+        var method = typeof(DevPushDiagnosticsController).GetMethod(nameof(DevPushDiagnosticsController.Send))!;
+        Assert.Null(method.GetCustomAttribute<HttpPostAttribute>()!.Template);
+        AssertProperties<DevPushTestRequest>("Body", "Title", "TokenSuffix", "UserId");
+        AssertProperties<DevPushTestResponse>("ActiveTokenCount", "FirebaseProjectId", "Results", "ValidTokenCount");
+        AssertProperties<DevPushTestTokenResult>("Deactivated", "FirebaseMessageId", "MessagingErrorCode", "Success", "TokenSuffix", "UserId");
+    }
+
+    [Fact]
     public void Realtime_hub_requires_authorization()
     {
         Assert.NotNull(typeof(RealtimeHub).GetCustomAttribute<AuthorizeAttribute>());

@@ -9,6 +9,7 @@ namespace Viora.Infrastructure.Realtime;
 
 public interface IFirebaseInitializer
 {
+    string? ProjectId { get; }
     FirebaseApp? GetApp();
 }
 
@@ -20,6 +21,9 @@ public sealed class FirebaseInitializer(
     private readonly object syncRoot = new();
     private FirebaseApp? app;
     private bool initialized;
+    private string? projectId;
+
+    public string? ProjectId => projectId;
 
     public FirebaseApp? GetApp()
     {
@@ -49,7 +53,8 @@ public sealed class FirebaseInitializer(
         if (!string.IsNullOrWhiteSpace(firebaseOptions.ServiceAccountJson))
         {
             credential = GoogleCredential.FromJson(firebaseOptions.ServiceAccountJson);
-            LogProjectId(firebaseOptions.ServiceAccountJson);
+            projectId = ReadProjectId(firebaseOptions.ServiceAccountJson);
+            LogProjectId(projectId);
         }
         else if (!string.IsNullOrWhiteSpace(firebaseOptions.ServiceAccountPath))
         {
@@ -66,7 +71,8 @@ public sealed class FirebaseInitializer(
 
             credential = GoogleCredential.FromFile(serviceAccountPath);
             logger.LogInformation("Firebase service account loaded from {ServiceAccountPath}.", serviceAccountPath);
-            LogProjectId(File.ReadAllText(serviceAccountPath));
+            projectId = ReadProjectId(File.ReadAllText(serviceAccountPath));
+            LogProjectId(projectId);
         }
 
         if (credential is null)
@@ -99,21 +105,31 @@ public sealed class FirebaseInitializer(
         return candidates.FirstOrDefault(File.Exists);
     }
 
-    private void LogProjectId(string serviceAccountJson)
+    private static string? ReadProjectId(string serviceAccountJson)
     {
         try
         {
             using var document = JsonDocument.Parse(serviceAccountJson);
-            if (document.RootElement.TryGetProperty("project_id", out var projectId))
-            {
-                logger.LogInformation(
-                    "Firebase service account project_id: {ProjectId}. Confirm it matches android google-services.json.",
-                    projectId.GetString());
-            }
+            return document.RootElement.TryGetProperty("project_id", out var projectId)
+                ? projectId.GetString()
+                : null;
         }
-        catch (JsonException exception)
+        catch (JsonException)
         {
-            logger.LogWarning(exception, "Could not parse Firebase service account project_id for diagnostics.");
+            return null;
         }
+    }
+
+    private void LogProjectId(string? firebaseProjectId)
+    {
+        if (string.IsNullOrWhiteSpace(firebaseProjectId))
+        {
+            logger.LogWarning("Could not parse Firebase service account project_id for diagnostics.");
+            return;
+        }
+
+        logger.LogInformation(
+            "Firebase service account project_id: {ProjectId}. Confirm it matches android google-services.json.",
+            firebaseProjectId);
     }
 }

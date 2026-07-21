@@ -192,6 +192,10 @@ public sealed class DeviceTokenHandlerTests
             Task.FromResult<IReadOnlyList<DeviceToken>>(
                 DeviceTokens.Where(deviceToken => deviceToken.UserId == userId && deviceToken.IsActive).ToList());
 
+        public Task<IReadOnlyList<DeviceToken>> GetActiveByTokenSuffixAsync(string tokenSuffix, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DeviceToken>>(
+                DeviceTokens.Where(deviceToken => deviceToken.IsActive && deviceToken.Token.EndsWith(tokenSuffix)).ToList());
+
         public Task AddAsync(DeviceToken deviceToken, CancellationToken cancellationToken)
         {
             DeviceTokens.Add(deviceToken);

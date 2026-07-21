@@ -86,6 +86,7 @@ public interface IDeviceTokenRepository
     Task<DeviceToken?> GetByDeviceIdAsync(string deviceId, CancellationToken cancellationToken);
     Task<DeviceToken?> GetByTokenOrDeviceIdAsync(string token, string? deviceId, CancellationToken cancellationToken);
     Task<IReadOnlyList<DeviceToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<DeviceToken>> GetActiveByTokenSuffixAsync(string tokenSuffix, CancellationToken cancellationToken);
     Task AddAsync(DeviceToken deviceToken, CancellationToken cancellationToken);
     Task DeactivateAsync(string token, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);

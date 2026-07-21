@@ -43,6 +43,15 @@ public sealed class GetChatConversationsHandler(IChatConversationRepository repo
             cancellationToken);
 }
 
+public sealed class GetChatUnreadSummaryHandler(IChatConversationRepository repository)
+    : IRequestHandler<GetChatUnreadSummaryQuery, ChatUnreadSummaryResponse>
+{
+    public Task<ChatUnreadSummaryResponse> Handle(
+        GetChatUnreadSummaryQuery request,
+        CancellationToken cancellationToken) =>
+        repository.GetUnreadSummaryAsync(request, cancellationToken);
+}
+
 public sealed class GetChatConversationMessagesHandler(IChatConversationRepository repository)
     : IRequestHandler<GetChatConversationMessagesQuery, ChatResult<ChatMessageListResponse>>
 {
@@ -219,7 +228,8 @@ public sealed class ChatMessageDeliveryService(
                     result.Message.Content,
                     new Dictionary<string, string>
                     {
-                        ["type"] = "message",
+                        ["type"] = "chat",
+                        ["eventType"] = "message",
                         ["conversationId"] = result.Message.ConversationId.ToString(),
                         ["messageId"] = result.Message.Id.ToString()
                     }),

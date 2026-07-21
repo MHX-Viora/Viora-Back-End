@@ -28,6 +28,13 @@ public sealed class NotificationService(
 
         await repository.AddAsync(notification, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
+        logger.LogInformation(
+            "Notification created. NotificationId: {NotificationId}, RecipientUserId: {RecipientUserId}, NotificationType: {NotificationType}, ReferenceId: {ReferenceId}, ReferenceType: {ReferenceType}.",
+            notification.Id,
+            notification.UserId,
+            notification.NotificationType,
+            notification.ReferenceId,
+            notification.ReferenceType);
 
         await PublishAsync(notification, cancellationToken);
         return notification;
@@ -36,6 +43,11 @@ public sealed class NotificationService(
     public async Task PublishAsync(Notification notification, CancellationToken cancellationToken)
     {
         var payload = MapNotificationResponse(notification);
+        logger.LogInformation(
+            "Notification dispatch started. NotificationId: {NotificationId}, RecipientUserId: {RecipientUserId}, NotificationType: {NotificationType}.",
+            notification.Id,
+            notification.UserId,
+            notification.NotificationType);
 
         await realtimeService.SendToUserAsync(
             notification.UserId,
