@@ -236,9 +236,17 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                 item.Post.ShareCount,
                 item.Post.SaveCount,
                 item.Post.ViewCount,
+                viewerUserId.HasValue && item.Post.UserId == viewerUserId.Value,
                 item.IsReacted,
                 item.ReactionType,
                 item.IsSaved,
+                dbContext.PostHashtags
+                    .Where(postHashtag => postHashtag.PostId == item.Post.Id)
+                    .OrderBy(postHashtag => postHashtag.Hashtag.Name)
+                    .Select(postHashtag => new PostDetailHashtagResponse(
+                        postHashtag.Hashtag.Id,
+                        postHashtag.Hashtag.Name))
+                    .ToList(),
                 item.Post.OriginalPost == null
                     ? null
                     : new PostFeedOriginalPostResponse(

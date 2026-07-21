@@ -35,9 +35,11 @@ public sealed record PostFeedItemResponse(
     int ShareCount,
     int SaveCount,
     int ViewCount,
+    bool IsMine,
     bool IsReacted,
     ReactionType? ReactionType,
     bool IsSaved,
+    IReadOnlyList<PostDetailHashtagResponse> Hashtags,
     PostFeedOriginalPostResponse? OriginalPost);
 
 public sealed record PostFeedOriginalPostResponse(

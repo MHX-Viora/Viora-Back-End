@@ -84,9 +84,11 @@ public sealed class PostFeedApiContractTests
             "ShareCount",
             "SaveCount",
             "ViewCount",
+            "IsMine",
             "IsReacted",
             "ReactionType",
             "IsSaved",
+            "Hashtags",
             "OriginalPost");
         AssertProperties<PostFeedOriginalPostResponse>(
             "Id",

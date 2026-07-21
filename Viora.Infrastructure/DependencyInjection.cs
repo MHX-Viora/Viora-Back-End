@@ -85,6 +85,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<ReportPostCommand>, ReportPostValidator>();
         services.AddScoped<IValidator<GetPostCommentsQuery>, GetPostCommentsValidator>();
         services.AddScoped<IValidator<GetCommentRepliesQuery>, GetCommentRepliesValidator>();
+        services.AddScoped<IValidator<GetProfileFeedQuery>, GetProfileFeedValidator>();
         services.AddScoped<IValidator<CreateHashtagCommand>, CreateHashtagValidator>();
         services.AddScoped<IValidator<SearchHashtagsQuery>, SearchHashtagsValidator>();
         services.AddScoped<IValidator<ToggleFollowCommand>, ToggleFollowValidator>();
@@ -97,6 +98,8 @@ public static class DependencyInjection
         services.AddScoped<IValidator<GetRelationshipQuery>, GetRelationshipValidator>();
         services.AddScoped<IValidator<GetMyStatisticsQuery>, GetMyStatisticsValidator>();
         services.AddScoped<IValidator<GetUserProfileQuery>, GetUserProfileValidator>();
+        services.AddScoped<IValidator<GetUserSettingsQuery>, GetUserSettingsValidator>();
+        services.AddScoped<IValidator<UpdateUserSettingsCommand>, UpdateUserSettingsValidator>();
         services.AddScoped<IValidator<RegisterDeviceTokenCommand>, RegisterDeviceTokenValidator>();
         services.AddScoped<IValidator<UnregisterDeviceTokenCommand>, UnregisterDeviceTokenValidator>();
         services.AddScoped<IValidator<SendChatMessageCommand>, SendChatMessageValidator>();
@@ -117,7 +120,9 @@ public static class DependencyInjection
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IUserProfileService, UserProfileService>();
+        services.AddScoped<IUserSettingsRepository, UserSettingsRepository>();
         services.AddScoped<IPostFeedRepository, PostFeedRepository>();
+        services.AddScoped<IProfileFeedRepository, ProfileFeedRepository>();
         services.AddScoped<IVideoFeedRepository, VideoFeedRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
         services.AddScoped<IHashtagRepository, HashtagRepository>();
