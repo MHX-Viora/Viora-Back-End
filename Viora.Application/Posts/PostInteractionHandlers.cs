@@ -206,7 +206,7 @@ public sealed class ReplyCommentHandler(
                     parent.UserId,
                     NotificationType.CommentReply,
                     user,
-                    parent.Id,
+                    parent.PostId,
                     NotificationReferenceType.Comment,
                     parent.Post.PostType);
                 await repository.AddNotificationAsync(notification, token);

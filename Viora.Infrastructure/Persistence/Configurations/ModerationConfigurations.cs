@@ -29,3 +29,18 @@ internal sealed class ReportConfiguration : IEntityTypeConfiguration<Report>
         builder.HasOne(x => x.Reviewer).WithMany().HasForeignKey(x => x.ReviewedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class AdminLogConfiguration : IEntityTypeConfiguration<AdminLog>
+{
+    public void Configure(EntityTypeBuilder<AdminLog> builder)
+    {
+        builder.ToTable("AdminLogs");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Action).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.TargetType).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.Description).HasMaxLength(1000);
+        builder.HasIndex(x => x.AdminId);
+        builder.HasIndex(x => x.CreatedAt);
+        builder.HasOne(x => x.Admin).WithMany().HasForeignKey(x => x.AdminId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

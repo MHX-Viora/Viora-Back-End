@@ -28,3 +28,13 @@ public sealed class Report : CreatedEntity
     public User ReporterUser { get; set; } = null!;
     public User? Reviewer { get; set; }
 }
+
+public sealed class AdminLog : CreatedEntity
+{
+    public Guid AdminId { get; set; }
+    public string Action { get; set; } = null!;
+    public string TargetType { get; set; } = null!;
+    public Guid? TargetId { get; set; }
+    public string? Description { get; set; }
+    public User Admin { get; set; } = null!;
+}
