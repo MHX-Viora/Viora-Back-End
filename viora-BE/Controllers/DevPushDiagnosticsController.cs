@@ -333,13 +333,18 @@ public sealed class DevPushDiagnosticsController(
     private sealed record FirebaseErrorDiagnostics(string? MessagingErrorCode, string? ErrorCode, string Message);
 }
 
-public sealed record DevPushTestRequest(
-    Guid? UserId,
-    [property: StringLength(4096, MinimumLength = 4)] string? TokenSuffix,
-    string? Title,
-    string? Body,
-    Guid? ConversationId,
-    Guid? MessageId);
+public sealed class DevPushTestRequest
+{
+    public Guid? UserId { get; init; }
+
+    [StringLength(4096, MinimumLength = 4)]
+    public string? TokenSuffix { get; init; }
+
+    public string? Title { get; init; }
+    public string? Body { get; init; }
+    public Guid? ConversationId { get; init; }
+    public Guid? MessageId { get; init; }
+}
 
 public sealed record DevPushPingResponse(
     string EnvironmentName,
