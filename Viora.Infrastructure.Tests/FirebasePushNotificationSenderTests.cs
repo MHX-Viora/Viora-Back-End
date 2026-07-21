@@ -40,6 +40,21 @@ public sealed class FirebasePushNotificationSenderTests
     }
 
     [Fact]
+    public async Task SendAsync_with_blank_active_token_skips_it()
+    {
+        var userId = Guid.NewGuid();
+        var blankToken = new DeviceToken { UserId = userId, Token = " ", IsActive = true };
+        var validToken = new DeviceToken { UserId = userId, Token = "fcm-token", IsActive = true };
+        var repository = new FakeDeviceTokenRepository(blankToken, validToken);
+        var client = new FakeFirebaseMessagingClient();
+        var sender = CreateSender(repository, client);
+
+        await sender.SendAsync(CreateMessage(userId), CancellationToken.None);
+
+        Assert.Equal(["fcm-token"], client.SentTokens);
+    }
+
+    [Fact]
     public async Task SendAsync_deactivates_invalid_token()
     {
         var userId = Guid.NewGuid();
@@ -55,7 +70,7 @@ public sealed class FirebasePushNotificationSenderTests
     }
 
     [Fact]
-    public void BuildFirebaseMessage_includes_android_notification_payload()
+    public void BuildFirebaseMessage_includes_android_and_apns_notification_payloads()
     {
         var message = CreateMessage();
 
@@ -68,9 +83,14 @@ public sealed class FirebasePushNotificationSenderTests
         Assert.Equal(message.Data["id"], firebaseMessage.Data["id"]);
         Assert.NotNull(firebaseMessage.Android);
         Assert.Equal(FirebaseAdmin.Messaging.Priority.High, firebaseMessage.Android.Priority);
+        Assert.Equal(TimeSpan.FromHours(4), firebaseMessage.Android.TimeToLive);
         Assert.NotNull(firebaseMessage.Android.Notification);
         Assert.Equal("default", firebaseMessage.Android.Notification.ChannelId);
         Assert.Equal("default", firebaseMessage.Android.Notification.Sound);
+        Assert.NotNull(firebaseMessage.Apns);
+        Assert.Equal("10", firebaseMessage.Apns.Headers["apns-priority"]);
+        Assert.NotNull(firebaseMessage.Apns.Aps);
+        Assert.Equal("default", firebaseMessage.Apns.Aps.Sound);
     }
 
     private static FirebasePushNotificationSender CreateSender(

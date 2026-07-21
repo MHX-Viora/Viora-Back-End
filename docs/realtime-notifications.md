@@ -406,8 +406,22 @@ Android config used by backend:
 ```json
 {
   "priority": "high",
+  "ttl": "4h",
   "notification": {
     "channelId": "default",
+    "sound": "default"
+  }
+}
+```
+
+APNS config used by backend:
+
+```json
+{
+  "headers": {
+    "apns-priority": "10"
+  },
+  "aps": {
     "sound": "default"
   }
 }
@@ -490,6 +504,37 @@ On logout:
 2. Stop SignalR.
 3. Clear local notification/message cache if desired.
 4. Clear auth tokens.
+
+## Killed / Background App Checklist
+
+React Native Firebase should wire all lifecycle handlers:
+
+```ts
+messaging().onMessage(async remoteMessage => {
+  // Foreground: render local notification or in-app banner.
+});
+
+messaging().setBackgroundMessageHandler(async remoteMessage => {
+  // Background/killed Android data handler.
+});
+
+messaging().onNotificationOpenedApp(remoteMessage => {
+  handleNotificationPress(remoteMessage.data ?? {});
+});
+
+const initialNotification = await messaging().getInitialNotification();
+if (initialNotification) {
+  handleNotificationPress(initialNotification.data ?? {});
+}
+
+messaging().onTokenRefresh(token => {
+  registerDeviceToken(apiUrl, accessToken, token);
+});
+```
+
+Android must have notification permission for Android 13+, Firebase messaging service metadata from the Firebase package, `google-services.json`, and a notification channel with id `default`. iOS must request notification permission, upload APNS credentials to Firebase, enable background modes when needed, and register the refreshed FCM token after login.
+
+Backend logs each Firebase send before and after calling Firebase Admin SDK. Search by `UserId`, `NotificationType`, `FirebaseMessageId`, `FirebaseError`, `TokenSuffix`, or `DeviceTokenHash`. Invalid or unregistered FCM tokens are automatically marked inactive by backend.
 
 ## Error Handling
 
