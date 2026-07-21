@@ -5,6 +5,9 @@ namespace Viora.Infrastructure.Persistence;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    private const string InviteCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static readonly Random SharedRandom = Random.Shared;
+
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<User> Users => Set<User>();
@@ -74,6 +77,20 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
+    public async Task<string> CreateUniqueInviteCodeAsync(CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var code = CreateInviteCode();
+            if (!await Conversations.AnyAsync(conversation => conversation.InviteCode == code, cancellationToken))
+            {
+                return code;
+            }
+        }
+
+        return Guid.NewGuid().ToString("N")[..20].ToUpperInvariant();
+    }
+
     private void StampUtcTimestamps()
     {
         var now = DateTime.UtcNow;
@@ -88,6 +105,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             {
                 entry.Property("UpdatedAt").CurrentValue = now;
             }
+
+            if (entry.State == EntityState.Added &&
+                entry.Entity is Conversation conversation &&
+                string.IsNullOrWhiteSpace(conversation.InviteCode))
+            {
+                conversation.InviteCode = CreateInviteCode();
+            }
         }
+    }
+
+    private static string CreateInviteCode()
+    {
+        Span<char> chars = stackalloc char[6];
+        for (var index = 0; index < chars.Length; index++)
+        {
+            chars[index] = InviteCodeAlphabet[SharedRandom.Next(InviteCodeAlphabet.Length)];
+        }
+
+        return new string(chars);
     }
 }

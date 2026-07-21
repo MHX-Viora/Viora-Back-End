@@ -62,7 +62,7 @@ public sealed class GroupChatService(
         var actor = await db.Users.SingleOrDefaultAsync(x => x.Id == command.CurrentUserId && x.Account.Status == AccountStatus.Active && x.Account.DeletedAt == null, token);
         if (actor is null) return Fail<CreateGroupResponse>(GroupChatError.Forbidden, "Tài khoản không còn hoạt động.");
         var now = DateTime.UtcNow;
-        var group = new Conversation { ConversationType = ConversationType.Group, Name = command.Name.Trim(), AvatarUrl = avatarUrl, CreatedBy = command.CurrentUserId, CanSendMessage = ConversationSendPermission.Everyone, CreatedAt = now, UpdatedAt = now };
+        var group = new Conversation { ConversationType = ConversationType.Group, Name = command.Name.Trim(), AvatarUrl = avatarUrl, InviteCode = await db.CreateUniqueInviteCodeAsync(token), CreatedBy = command.CurrentUserId, CanSendMessage = ConversationSendPermission.Everyone, CreatedAt = now, UpdatedAt = now };
         group.Members.Add(Member(group, command.CurrentUserId, ConversationMemberRole.Owner, command.CurrentUserId, now));
         foreach (var id in ids) group.Members.Add(Member(group, id, ConversationMemberRole.Member, command.CurrentUserId, now));
         var message = SystemMessage(group, command.CurrentUserId, GroupChatSystemMessages.Created(actor.DisplayName), now);

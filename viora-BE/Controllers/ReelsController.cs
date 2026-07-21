@@ -5,13 +5,15 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Viora.Application.Posts;
+using Viora.Application.Sharing;
+using Viora.Domain.Entities;
 
 namespace viora_BE.Controllers;
 
 [ApiController]
 [Route("api/reels")]
 [Authorize]
-public sealed class ReelsController(IMediator mediator, ILogger<ReelsController> logger) : ControllerBase
+public sealed class ReelsController(IMediator mediator, ILogger<ReelsController> logger, IShareLinkService shareLinkService) : ControllerBase
 {
     private const long ReelRequestLimit = CreateReelValidator.MaxVideoBytes + (128 * 1024);
 
@@ -119,6 +121,33 @@ public sealed class ReelsController(IMediator mediator, ILogger<ReelsController>
         problem.Extensions["code"] = result.Error?.ToString();
 
         return new ObjectResult(problem) { StatusCode = StatusCodes.Status400BadRequest };
+    }
+
+    [HttpGet("{reelId:guid}")]
+    [ProducesResponseType<PostDetailResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Detail(Guid reelId, CancellationToken cancellationToken)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await mediator.Send(new GetPostDetailQuery(userId, reelId), cancellationToken);
+        if (result.IsSuccess && result.Value?.PostType == PostType.ShortVideo) return Ok(result.Value);
+        if (result.IsSuccess) return ProblemResponse(StatusCodes.Status404NotFound, "NotFound", "Reel not found", "Khong tim thay video.");
+        var status = result.Error == PostInteractionError.Forbidden ? StatusCodes.Status403Forbidden : StatusCodes.Status404NotFound;
+        return ProblemResponse(status, result.Error?.ToString() ?? "NotFound", "Reel request failed", result.Message ?? "Khong tim thay video.");
+    }
+
+    [HttpGet("{reelId:guid}/share")]
+    [ProducesResponseType<ShareLinkResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetShareLink(Guid reelId, CancellationToken cancellationToken)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        var result = await shareLinkService.GetReelShareLinkAsync(userId, reelId, cancellationToken);
+        if (result.IsSuccess) return Ok(result.Value);
+        var status = result.Error == ShareLinkError.Forbidden ? StatusCodes.Status403Forbidden : StatusCodes.Status404NotFound;
+        return ProblemResponse(status, result.Error?.ToString() ?? "NotFound", "Share link request failed", result.Message ?? "Khong tim thay video.");
     }
 
     private bool TryGetViewerUserId(out Guid userId)

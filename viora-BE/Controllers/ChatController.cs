@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Viora.Application.Chat;
 using Viora.Application.Posts;
+using Viora.Application.Sharing;
 using Viora.Domain.Entities;
 
 namespace viora_BE.Controllers;
@@ -11,7 +12,7 @@ namespace viora_BE.Controllers;
 [ApiController]
 [Route("api/chat")]
 [Authorize]
-public sealed class ChatController(IMediator mediator, IGroupChatService groupChatService) : ControllerBase
+public sealed class ChatController(IMediator mediator, IGroupChatService groupChatService, IShareLinkService shareLinkService) : ControllerBase
 {
     [HttpPost("conversations/private")]
     [ProducesResponseType<CreatePrivateConversationResponse>(StatusCodes.Status200OK)]
@@ -362,6 +363,17 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
     [HttpGet("groups/{conversationId:guid}")]
     public async Task<IActionResult> GetGroup(Guid conversationId, CancellationToken token) => await WithUser(id => groupChatService.GetAsync(id, conversationId, token));
 
+    [HttpGet("groups/{conversationId:guid}/share")]
+    [ProducesResponseType<GroupShareLinkResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status410Gone)]
+    public async Task<IActionResult> GetGroupShareLink(Guid conversationId, CancellationToken token)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        return ToShareActionResult(await shareLinkService.GetGroupShareLinkAsync(userId, conversationId, token));
+    }
+
     [HttpGet("groups/preview/{conversationId:guid}")]
     [ProducesResponseType<GroupPreviewResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -433,6 +445,16 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
         var problem = new ProblemDetails { Status = status, Title = "Group chat request failed", Detail = result.Message };
         problem.Extensions["code"] = result.Error?.ToString();
         if (result.Error == GroupChatError.Dissolved) problem.Extensions["message"] = result.Message;
+        return new ObjectResult(problem) { StatusCode = status };
+    }
+
+    private IActionResult ToShareActionResult<T>(ShareLinkResult<T> result)
+    {
+        if (result.IsSuccess) return Ok(result.Value);
+        var status = result.Error switch { ShareLinkError.Dissolved => 410, ShareLinkError.Forbidden => 403, ShareLinkError.NotFound => 404, _ => 400 };
+        var problem = new ProblemDetails { Status = status, Title = "Share link request failed", Detail = result.Message };
+        problem.Extensions["code"] = result.Error?.ToString();
+        if (result.Error == ShareLinkError.Dissolved) problem.Extensions["message"] = result.Message;
         return new ObjectResult(problem) { StatusCode = status };
     }
 

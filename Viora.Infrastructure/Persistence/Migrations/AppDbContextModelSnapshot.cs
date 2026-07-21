@@ -188,8 +188,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("InviteCode")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("LastMessageAt")
                         .HasColumnType("timestamp with time zone");
@@ -209,8 +210,7 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("InviteCode")
-                        .IsUnique()
-                        .HasFilter("\"InviteCode\" IS NOT NULL");
+                        .IsUnique();
 
                     b.HasIndex("LastMessageId");
 

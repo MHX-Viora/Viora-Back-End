@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Viora.Application.Posts;
+using Viora.Application.Sharing;
 using Viora.Domain.Entities;
 
 namespace viora_BE.Controllers;
@@ -11,7 +12,7 @@ namespace viora_BE.Controllers;
 [ApiController]
 [Route("api/posts")]
 [Authorize]
-public sealed class PostsController(IMediator mediator) : ControllerBase
+public sealed class PostsController(IMediator mediator, IShareLinkService shareLinkService) : ControllerBase
 {
     [HttpGet("{postId:guid}")]
     [ProducesResponseType<PostDetailResponse>(StatusCodes.Status200OK)]
@@ -112,6 +113,16 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
         return ToActionResult(result, StatusCodes.Status201Created);
     }
 
+    [HttpGet("{postId:guid}/share")]
+    [ProducesResponseType<ShareLinkResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetShareLink(Guid postId, CancellationToken cancellationToken)
+    {
+        if (!TryGetViewerUserId(out var userId)) return Unauthorized();
+        return ToShareActionResult(await shareLinkService.GetPostShareLinkAsync(userId, postId, cancellationToken));
+    }
+
     [HttpDelete("{postId:guid}")]
     [ProducesResponseType<DeletePostResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<MessageResponse>(StatusCodes.Status400BadRequest)]
@@ -191,6 +202,15 @@ public sealed class PostsController(IMediator mediator) : ControllerBase
         };
 
         return StatusCode(status, new MessageResponse(result.Message ?? "Thao tác thất bại."));
+    }
+
+    private IActionResult ToShareActionResult<T>(ShareLinkResult<T> result)
+    {
+        if (result.IsSuccess) return Ok(result.Value);
+        var status = result.Error == ShareLinkError.Forbidden ? StatusCodes.Status403Forbidden : StatusCodes.Status404NotFound;
+        var problem = new ProblemDetails { Status = status, Title = "Share link request failed", Detail = result.Message };
+        problem.Extensions["code"] = result.Error?.ToString();
+        return new ObjectResult(problem) { StatusCode = status };
     }
 }
 

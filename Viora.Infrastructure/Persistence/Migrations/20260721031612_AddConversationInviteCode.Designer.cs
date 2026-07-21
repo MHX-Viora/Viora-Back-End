@@ -12,7 +12,7 @@ using Viora.Infrastructure.Persistence;
 namespace Viora.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260721025928_AddConversationInviteCode")]
+    [Migration("20260721031612_AddConversationInviteCode")]
     partial class AddConversationInviteCode
     {
         /// <inheritdoc />
@@ -191,8 +191,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("InviteCode")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("LastMessageAt")
                         .HasColumnType("timestamp with time zone");
@@ -212,8 +213,7 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("InviteCode")
-                        .IsUnique()
-                        .HasFilter("\"InviteCode\" IS NOT NULL");
+                        .IsUnique();
 
                     b.HasIndex("LastMessageId");
 

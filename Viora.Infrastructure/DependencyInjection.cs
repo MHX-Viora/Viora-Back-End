@@ -18,6 +18,8 @@ using Viora.Application.Realtime;
 using Viora.Application.Chat;
 using Viora.Infrastructure.Realtime;
 using Microsoft.AspNetCore.SignalR;
+using Viora.Application.Sharing;
+using Viora.Infrastructure.Sharing;
 
 namespace Viora.Infrastructure;
 
@@ -126,6 +128,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IChatConversationRepository, ChatConversationRepository>();
         services.AddScoped<IGroupChatService, GroupChatService>();
+        services.AddScoped<IShareLinkService, ShareLinkService>();
         services.Configure<FirebaseOptions>(configuration.GetSection("Firebase"));
         services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
         services.AddSingleton<ConnectionRegistry>();

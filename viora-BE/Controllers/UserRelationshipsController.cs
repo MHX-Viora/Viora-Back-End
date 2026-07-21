@@ -3,13 +3,14 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Viora.Application.Social;
+using Viora.Application.Sharing;
 
 namespace viora_BE.Controllers;
 
 [ApiController]
 [Route("api/users")]
 [Authorize]
-public sealed class UserRelationshipsController(IMediator mediator) : ControllerBase
+public sealed class UserRelationshipsController(IMediator mediator, IShareLinkService shareLinkService) : ControllerBase
 {
     [HttpGet("me/statistics")]
     [ProducesResponseType<UserStatisticsResponse>(StatusCodes.Status200OK)]
@@ -40,6 +41,21 @@ public sealed class UserRelationshipsController(IMediator mediator) : Controller
         if (!TryGetCurrentUserId(out var currentUserId)) return Unauthorized();
         var result = await mediator.Send(new GetUserProfileQuery(currentUserId, userId), cancellationToken);
         return ToActionResult(result);
+    }
+
+    [HttpGet("{userId:guid}")]
+    [ProducesResponseType<UserProfileSummaryResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUser(Guid userId, CancellationToken cancellationToken) =>
+        await GetUserProfile(userId, cancellationToken);
+
+    [HttpGet("{userId:guid}/share")]
+    [ProducesResponseType<ShareLinkResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUserShareLink(Guid userId, CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var currentUserId)) return Unauthorized();
+        return ToShareActionResult(await shareLinkService.GetUserShareLinkAsync(currentUserId, userId, cancellationToken));
     }
 
     [HttpGet("{userId:guid}/relationship")]
@@ -80,6 +96,15 @@ public sealed class UserRelationshipsController(IMediator mediator) : Controller
             Title = "Social request failed",
             Detail = result.Message
         };
+        problem.Extensions["code"] = result.Error?.ToString();
+        return new ObjectResult(problem) { StatusCode = status };
+    }
+
+    private IActionResult ToShareActionResult<T>(ShareLinkResult<T> result)
+    {
+        if (result.IsSuccess) return Ok(result.Value);
+        var status = result.Error == ShareLinkError.Forbidden ? StatusCodes.Status403Forbidden : StatusCodes.Status404NotFound;
+        var problem = new ProblemDetails { Status = status, Title = "Share link request failed", Detail = result.Message };
         problem.Extensions["code"] = result.Error?.ToString();
         return new ObjectResult(problem) { StatusCode = status };
     }
