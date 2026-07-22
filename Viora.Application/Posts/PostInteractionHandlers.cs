@@ -281,7 +281,7 @@ public sealed class ToggleCommentLikeHandler(
                         Title = "Có người đã thích bình luận của bạn.",
                         Content = $"{user.DisplayName} đã thích bình luận của bạn.",
                         ReferenceType = NotificationReferenceType.Comment,
-                        ReferenceId = comment.Id,
+                        ReferenceId = comment.PostId,
                         CreatedAt = DateTime.UtcNow
                     };
                     await repository.AddNotificationAsync(notification, token);
