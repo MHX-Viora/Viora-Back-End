@@ -244,7 +244,9 @@ public sealed class AccountCrudTests
 
         Assert.Equal(RefreshTokenOutcome.Active, first.Outcome);
         Assert.Equal(new AccountTokens("access-token", "refresh-token"), first.Tokens);
-        Assert.NotNull(current.RevokedAt);
+        Assert.Single(repository.RefreshTokens);
+        Assert.Equal("refresh-token-hash", current.TokenHash);
+        Assert.Null(current.RevokedAt);
         Assert.Equal(RefreshTokenOutcome.Invalid, reused.Outcome);
         Assert.Null(reused.Tokens);
     }
@@ -396,10 +398,10 @@ public sealed class AccountCrudTests
                 return Task.FromResult(false);
             }
 
-            current.RevokedAt = revokedAt;
-            current.ReplacedByTokenHash = replacement.TokenHash;
-            replacement.Account = Accounts.Single(x => x.Id == replacement.AccountId);
-            RefreshTokens.Add(replacement);
+            current.TokenHash = replacement.TokenHash;
+            current.ExpiresAt = replacement.ExpiresAt;
+            current.RevokedAt = null;
+            current.ReplacedByTokenHash = null;
             return Task.FromResult(true);
         }
 
