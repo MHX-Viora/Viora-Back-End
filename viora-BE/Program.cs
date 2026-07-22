@@ -112,6 +112,25 @@ builder.Services.AddSwaggerGen(options =>
     options.OperationFilter<AuthorizeOperationFilter>();
 });
 
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Web", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "https://vioraadmin.vercel.app"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+
+app.UseCors("Web");
+
 var app = builder.Build();
 app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
 
