@@ -20,6 +20,17 @@ public sealed class AccountCrudTests
     }
 
     [Fact]
+    public void AspNet_identity_hasher_handles_legacy_or_invalid_hashes_without_throwing()
+    {
+        var hasher = new AspNetIdentityPasswordHasher();
+
+        Assert.False(hasher.Verify("Password123", "not-a-password-hash"));
+        Assert.True(hasher.Verify(
+            "Password123",
+            "pbkdf2-sha256$1$AQIDBAUGBwgJCgsMDQ4PEA==$UJbb6YpJwNkf0o2JQ0SuwjLkB+5QTjdcaaAJcM+RLDA="));
+    }
+
+    [Fact]
     public async Task Register_detects_email_normalizes_and_hashes_password()
     {
         var repository = new FakeAccountRepository();
