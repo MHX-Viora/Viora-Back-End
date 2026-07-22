@@ -58,6 +58,8 @@ public sealed class ReplyCommentNotificationTests
         public Task<Comment?> GetCommentForReplyAsync(Guid commentId, CancellationToken cancellationToken) =>
             Task.FromResult<Comment?>(commentId == parent.Id ? parent : null);
 
+        public Task<Comment?> GetCommentForLikeAsync(Guid commentId, CancellationToken cancellationToken) => Task.FromResult<Comment?>(null);
+
         public Task AddCommentAsync(Comment comment, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task AddNotificationAsync(Notification notification, CancellationToken cancellationToken)
@@ -76,10 +78,13 @@ public sealed class ReplyCommentNotificationTests
         public Task<Post?> GetPostWithOriginalAsync(Guid postId, CancellationToken cancellationToken) => Task.FromResult<Post?>(null);
         public Task<Comment?> GetCommentForDeleteAsync(Guid commentId, CancellationToken cancellationToken) => Task.FromResult<Comment?>(null);
         public Task<PostReaction?> GetReactionAsync(Guid postId, Guid userId, CancellationToken cancellationToken) => Task.FromResult<PostReaction?>(null);
+        public Task<CommentReaction?> GetCommentReactionAsync(Guid commentId, Guid userId, CancellationToken cancellationToken) => Task.FromResult<CommentReaction?>(null);
         public Task<SavedPost?> GetSavedPostAsync(Guid postId, Guid userId, CancellationToken cancellationToken) => Task.FromResult<SavedPost?>(null);
         public Task<bool> HasReportedPostAsync(Guid postId, Guid userId, CancellationToken cancellationToken) => Task.FromResult(false);
         public Task AddReactionAsync(PostReaction reaction, CancellationToken cancellationToken) => Task.CompletedTask;
         public void RemoveReaction(PostReaction reaction) { }
+        public Task AddCommentReactionAsync(CommentReaction reaction, CancellationToken cancellationToken) => Task.CompletedTask;
+        public void RemoveCommentReaction(CommentReaction reaction) { }
         public Task AddSavedPostAsync(SavedPost savedPost, CancellationToken cancellationToken) => Task.CompletedTask;
         public void RemoveSavedPost(SavedPost savedPost) { }
         public Task AddReportAsync(Report report, CancellationToken cancellationToken) => Task.CompletedTask;

@@ -35,6 +35,11 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
                 comment.DeletedAt == null,
                 cancellationToken);
 
+    public Task<Comment?> GetCommentForLikeAsync(Guid commentId, CancellationToken cancellationToken) =>
+        dbContext.Comments
+            .Include(comment => comment.User)
+            .SingleOrDefaultAsync(comment => comment.Id == commentId, cancellationToken);
+
     public Task<Comment?> GetCommentForDeleteAsync(Guid commentId, CancellationToken cancellationToken) =>
         dbContext.Comments
             .Include(comment => comment.Post)
@@ -49,6 +54,11 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
     public Task<PostReaction?> GetReactionAsync(Guid postId, Guid userId, CancellationToken cancellationToken) =>
         dbContext.PostReactions.SingleOrDefaultAsync(
             reaction => reaction.PostId == postId && reaction.UserId == userId,
+            cancellationToken);
+
+    public Task<CommentReaction?> GetCommentReactionAsync(Guid commentId, Guid userId, CancellationToken cancellationToken) =>
+        dbContext.CommentReactions.SingleOrDefaultAsync(
+            reaction => reaction.CommentId == commentId && reaction.UserId == userId,
             cancellationToken);
 
     public Task<SavedPost?> GetSavedPostAsync(Guid postId, Guid userId, CancellationToken cancellationToken) =>
@@ -67,6 +77,11 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
         dbContext.PostReactions.AddAsync(reaction, cancellationToken).AsTask();
 
     public void RemoveReaction(PostReaction reaction) => dbContext.PostReactions.Remove(reaction);
+
+    public Task AddCommentReactionAsync(CommentReaction reaction, CancellationToken cancellationToken) =>
+        dbContext.CommentReactions.AddAsync(reaction, cancellationToken).AsTask();
+
+    public void RemoveCommentReaction(CommentReaction reaction) => dbContext.CommentReactions.Remove(reaction);
 
     public Task AddCommentAsync(Comment comment, CancellationToken cancellationToken) =>
         dbContext.Comments.AddAsync(comment, cancellationToken).AsTask();

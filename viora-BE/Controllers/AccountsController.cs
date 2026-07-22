@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -11,7 +12,7 @@ namespace viora_BE.Controllers;
 
 [ApiController]
 [Route("api/accounts")]
-public sealed class AccountsController(IAccountService accountService) : ControllerBase
+public sealed class AccountsController(IAccountService accountService, ISender sender) : ControllerBase
 {
     private const string RefreshTokenCookieName = "refreshToken";
     private const string RefreshTokenCookiePath = "/api/accounts";
@@ -135,6 +136,38 @@ public sealed class AccountsController(IAccountService accountService) : Control
         return NoContent();
     }
 
+    [HttpPut("/api/account/change-password")]
+    [Authorize]
+    [ProducesResponseType<ChangePasswordMessageResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ChangePasswordMessageResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<LoginMessageResponse>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ChangePasswordMessageResponse>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ChangePasswordMessageResponse>> ChangePassword(
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetAccountId(out var accountId))
+        {
+            return Unauthorized(new LoginMessageResponse(null, "Token không hợp lệ."));
+        }
+
+        var result = await sender.Send(
+            new ChangePasswordRequestCommand(
+                accountId,
+                request.CurrentPassword ?? string.Empty,
+                request.NewPassword ?? string.Empty,
+                request.ConfirmPassword ?? string.Empty),
+            cancellationToken);
+
+        var response = new ChangePasswordMessageResponse(result.Message);
+        return result.Outcome switch
+        {
+            ChangePasswordOutcome.Success => Ok(response),
+            ChangePasswordOutcome.AccountNotFound => NotFound(response),
+            _ => BadRequest(response)
+        };
+    }
+
     [HttpPut("{id:guid}")]
     [ProducesResponseType<AccountResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -217,6 +250,13 @@ public sealed record LoginSuccessResponse(
 public sealed record RefreshTokenSuccessResponse(string AccessToken);
 
 public sealed record LoginMessageResponse(AccountStatus? Status, string Message);
+
+public sealed record ChangePasswordRequest(
+    string? CurrentPassword,
+    string? NewPassword,
+    string? ConfirmPassword);
+
+public sealed record ChangePasswordMessageResponse(string Message);
 
 public sealed record UpdateAccountRequest(
     [param: EmailAddress, MaxLength(255)] string? Email,

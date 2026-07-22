@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using MediatR;
 using System.Security.Claims;
 using Viora.Application.Accounts;
 using Viora.Domain.Entities;
@@ -80,7 +81,7 @@ public sealed class AccountAuthCookieTests
         Assert.Contains("expires=", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static AccountsController CreateController(IAccountService service) => new(service)
+    private static AccountsController CreateController(IAccountService service) => new(service, new FakeSender())
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
     };
@@ -122,6 +123,32 @@ public sealed class AccountAuthCookieTests
             throw new NotImplementedException();
 
         public Task DeleteAsync(Guid id, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
+
+        public Task<ChangePasswordResult> ChangePasswordAsync(ChangePasswordCommand command, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
+    }
+
+    private sealed class FakeSender : ISender
+    {
+        public Task Send<TRequest>(TRequest request, CancellationToken cancellationToken = default)
+            where TRequest : IRequest =>
+            throw new NotImplementedException();
+
+        public Task<TResponse> Send<TRequest, TResponse>(TRequest request, CancellationToken cancellationToken = default)
+            where TRequest : IRequest<TResponse> =>
+            throw new NotImplementedException();
+
+        public Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<object?> Send(object request, CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public IAsyncEnumerable<TResponse> CreateStream<TResponse>(IStreamRequest<TResponse> request, CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public IAsyncEnumerable<object?> CreateStream(object request, CancellationToken cancellationToken = default) =>
             throw new NotImplementedException();
     }
 }

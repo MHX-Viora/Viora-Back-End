@@ -8,9 +8,9 @@ namespace Viora.Infrastructure.Tests;
 public sealed class AccountCrudTests
 {
     [Fact]
-    public void Pbkdf2_hasher_never_stores_plaintext_and_can_verify()
+    public void AspNet_identity_hasher_never_stores_plaintext_and_can_verify()
     {
-        var hasher = new Pbkdf2PasswordHasher();
+        var hasher = new AspNetIdentityPasswordHasher();
 
         var hash = hasher.Hash("Password123");
 
@@ -322,6 +322,68 @@ public sealed class AccountCrudTests
         Assert.Null(otherToken.RevokedAt);
     }
 
+    [Fact]
+    public async Task Change_password_updates_hash_and_revokes_refresh_tokens()
+    {
+        var account = new Account { Email = "user@example.com", PasswordHash = "hashed:Current123" };
+        var refreshToken = new RefreshToken
+        {
+            AccountId = account.Id,
+            Account = account,
+            TokenHash = "hash:refresh-token",
+            ExpiresAt = DateTime.UtcNow.AddDays(1)
+        };
+        var repository = new FakeAccountRepository { Accounts = { account }, RefreshTokens = { refreshToken } };
+        var service = new AccountService(repository, new FakePasswordHasher(), null, new ChangePasswordValidator());
+
+        var result = await service.ChangePasswordAsync(
+            new ChangePasswordCommand(account.Id, "Current123", "NewPassword1", "NewPassword1"),
+            CancellationToken.None);
+
+        Assert.Equal(ChangePasswordOutcome.Success, result.Outcome);
+        Assert.Equal("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.", result.Message);
+        Assert.Equal("hashed:NewPassword1", account.PasswordHash);
+        Assert.True(account.UpdatedAt > DateTime.MinValue);
+        Assert.NotNull(refreshToken.RevokedAt);
+    }
+
+    [Fact]
+    public async Task Change_password_rejects_wrong_current_password()
+    {
+        var account = new Account { Email = "user@example.com", PasswordHash = "hashed:Current123" };
+        var repository = new FakeAccountRepository { Accounts = { account } };
+        var service = new AccountService(repository, new FakePasswordHasher(), null, new ChangePasswordValidator());
+
+        var result = await service.ChangePasswordAsync(
+            new ChangePasswordCommand(account.Id, "Wrong123", "NewPassword1", "NewPassword1"),
+            CancellationToken.None);
+
+        Assert.Equal(ChangePasswordOutcome.InvalidCurrentPassword, result.Outcome);
+        Assert.Equal("Mật khẩu hiện tại không đúng.", result.Message);
+        Assert.Equal("hashed:Current123", account.PasswordHash);
+    }
+
+    [Fact]
+    public void Change_password_validator_enforces_confirmation_and_complexity()
+    {
+        var validator = new ChangePasswordValidator();
+
+        var mismatch = validator.Validate(new ChangePasswordCommand(
+            Guid.NewGuid(),
+            "Current123",
+            "NewPassword1",
+            "Different1"));
+        var weak = validator.Validate(new ChangePasswordCommand(
+            Guid.NewGuid(),
+            "Current123",
+            "newpassword",
+            "newpassword"));
+
+        Assert.Contains(mismatch.Errors, error => error.ErrorMessage == "Xác nhận mật khẩu không khớp.");
+        Assert.Contains(weak.Errors, error => error.ErrorMessage == "Mật khẩu mới phải chứa ít nhất 1 chữ hoa.");
+        Assert.Contains(weak.Errors, error => error.ErrorMessage == "Mật khẩu mới phải chứa ít nhất 1 số.");
+    }
+
     private static AccountService CreateLoginService(FakeAccountRepository repository) =>
         new(repository, new FakePasswordHasher(), new FakeTokenService());
 
@@ -424,6 +486,22 @@ public sealed class AccountCrudTests
                 x.ExpiresAt > revokedAt))
             {
                 token.RevokedAt = revokedAt;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ChangePasswordAndRevokeRefreshTokensAsync(Account account, string passwordHash, DateTime changedAt, CancellationToken cancellationToken)
+        {
+            account.PasswordHash = passwordHash;
+            account.UpdatedAt = changedAt;
+            foreach (var token in RefreshTokens.Where(x =>
+                x.AccountId == account.Id &&
+                x.RevokedAt is null &&
+                x.ExpiresAt > changedAt))
+            {
+                token.RevokedAt = changedAt;
+                token.UpdatedAt = changedAt;
             }
 
             return Task.CompletedTask;

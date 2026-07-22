@@ -105,6 +105,30 @@ public sealed class AccountRepository(AppDbContext dbContext) : IAccountReposito
                     .SetProperty(token => token.UpdatedAt, revokedAt),
                 cancellationToken);
 
+    public async Task ChangePasswordAndRevokeRefreshTokensAsync(
+        Account account,
+        string passwordHash,
+        DateTime changedAt,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        account.PasswordHash = passwordHash;
+        account.UpdatedAt = changedAt;
+
+        await dbContext.RefreshTokens
+            .Where(token => token.AccountId == account.Id &&
+                token.RevokedAt == null &&
+                token.ExpiresAt > changedAt)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(token => token.RevokedAt, changedAt)
+                    .SetProperty(token => token.UpdatedAt, changedAt),
+                cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         try

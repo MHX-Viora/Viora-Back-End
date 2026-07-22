@@ -93,6 +93,35 @@ public sealed class PostsController(IMediator mediator, IShareLinkService shareL
         return ToActionResult(result);
     }
 
+    [HttpPost("/api/comments/{commentId:guid}/like")]
+    [ProducesResponseType<CommentLikeApiResponse<CommentLikeResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<CommentLikeApiResponse<object>>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<CommentLikeApiResponse<object>>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<CommentLikeApiResponse<object>>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CommentLikeApiResponse<CommentLikeResponse>>> ToggleCommentLike(
+        Guid commentId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetViewerUserId(out var userId))
+        {
+            return Unauthorized(new CommentLikeApiResponse<object>(false, "Unauthorized.", null));
+        }
+
+        var result = await mediator.Send(new ToggleCommentLikeCommand(userId, commentId), cancellationToken);
+        if (result.IsSuccess)
+        {
+            return Ok(new CommentLikeApiResponse<CommentLikeResponse>(true, "Thao tác thành công.", result.Value));
+        }
+
+        var message = result.Error == PostInteractionError.NotFound
+            ? "Không tìm thấy bình luận."
+            : "Không thể thích bình luận này.";
+        var response = new CommentLikeApiResponse<object>(false, message, null);
+        return result.Error == PostInteractionError.NotFound
+            ? NotFound(response)
+            : BadRequest(response);
+    }
+
     [HttpPost("{postId:guid}/save")]
     [ProducesResponseType<SavePostResponse>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Save(Guid postId, CancellationToken cancellationToken)
@@ -219,6 +248,7 @@ public sealed record CommentPostRequest([param: Required, MaxLength(5000)] strin
 public sealed record ReplyCommentRequest([param: Required, MaxLength(5000)] string Content);
 public sealed record ReportPostRequest(ReportReason Reason, [param: MaxLength(1000)] string? Description);
 public sealed record MessageResponse(string Message);
+public sealed record CommentLikeApiResponse<T>(bool Success, string Message, T? Data);
 
 public sealed class CreatePostFormRequest
 {

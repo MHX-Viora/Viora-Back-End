@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<ReactPostCommand>, ReactPostValidator>();
         services.AddScoped<IValidator<CreateCommentCommand>, CreateCommentValidator>();
         services.AddScoped<IValidator<ReplyCommentCommand>, ReplyCommentValidator>();
+        services.AddScoped<IValidator<ToggleCommentLikeCommand>, ToggleCommentLikeValidator>();
         services.AddScoped<IValidator<ReportPostCommand>, ReportPostValidator>();
         services.AddScoped<IValidator<GetPostCommentsQuery>, GetPostCommentsValidator>();
         services.AddScoped<IValidator<GetCommentRepliesQuery>, GetCommentRepliesValidator>();
@@ -103,6 +104,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<UpdateUserSettingsCommand>, UpdateUserSettingsValidator>();
         services.AddScoped<IValidator<RegisterDeviceTokenCommand>, RegisterDeviceTokenValidator>();
         services.AddScoped<IValidator<UnregisterDeviceTokenCommand>, UnregisterDeviceTokenValidator>();
+        services.AddScoped<IValidator<ChangePasswordCommand>, ChangePasswordValidator>();
         services.AddScoped<IValidator<SendChatMessageCommand>, SendChatMessageValidator>();
         services.AddScoped<IValidator<ForwardChatMessageCommand>, ForwardChatMessageValidator>();
         services.AddScoped<IValidator<CreatePrivateConversationCommand>, CreatePrivateConversationValidator>();
@@ -118,7 +120,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<GetVideoRepliesQuery>, GetVideoRepliesValidator>();
         services.AddScoped<IValidator<DeleteVideoCommentCommand>, DeleteVideoCommentValidator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
-        services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddScoped<IPasswordHasher, AspNetIdentityPasswordHasher>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IUserProfileService, UserProfileService>();

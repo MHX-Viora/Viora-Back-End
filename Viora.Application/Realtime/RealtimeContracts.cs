@@ -38,9 +38,11 @@ public static class RealtimeEvents
     public const string MemberAdded = nameof(MemberAdded);
     public const string MemberRemoved = nameof(MemberRemoved);
     public const string MemberLeft = nameof(MemberLeft);
+    public const string ReceiveCommentLike = nameof(ReceiveCommentLike);
 }
 
 public sealed record ConversationDissolvedPayload(Guid ConversationId);
+public sealed record CommentLikeRealtimePayload(Guid CommentId, int LikeCount, bool IsLiked, Guid UserId);
 
 public sealed record RegisterDeviceTokenCommand(
     Guid UserId,

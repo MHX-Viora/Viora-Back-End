@@ -1,3 +1,4 @@
+using FluentValidation;
 using Viora.Domain.Entities;
 using Viora.Application.Users;
 
@@ -7,6 +8,7 @@ public sealed record RegisterAccountCommand(string Identifier, string Password);
 public sealed record LoginAccountCommand(string Identifier, string Password);
 public sealed record RefreshAccountTokenCommand(string RefreshToken);
 public sealed record LogoutAccountCommand(string? RefreshToken, Guid AccountId);
+public sealed record ChangePasswordCommand(Guid AccountId, string CurrentPassword, string NewPassword, string ConfirmPassword);
 
 public enum LoginOutcome { InvalidCredentials, Banned, Active, Deleted }
 
@@ -17,11 +19,16 @@ public sealed record IssuedAccountTokens(
     DateTime RefreshTokenExpiresAt);
 
 public enum RefreshTokenOutcome { Active, Invalid }
+public enum ChangePasswordOutcome { Success, AccountNotFound, InvalidCurrentPassword, SamePassword, ValidationFailed }
 
 public sealed record RefreshAccountTokenResult(
     RefreshTokenOutcome Outcome,
     AccountTokens? Tokens,
     string? Message);
+
+public sealed record ChangePasswordResult(
+    ChangePasswordOutcome Outcome,
+    string Message);
 
 public sealed record LoginAccountResult(
     LoginOutcome Outcome,
@@ -59,6 +66,9 @@ public interface IAccountService
         RefreshAccountTokenCommand command,
         CancellationToken cancellationToken);
     Task LogoutAsync(LogoutAccountCommand command, CancellationToken cancellationToken);
+    Task<ChangePasswordResult> ChangePasswordAsync(
+        ChangePasswordCommand command,
+        CancellationToken cancellationToken);
     Task<AccountResponse?> UpdateAsync(Guid id, UpdateAccountCommand command, CancellationToken cancellationToken);
     Task DeleteAsync(Guid id, CancellationToken cancellationToken);
 }
@@ -80,6 +90,7 @@ public interface IAccountRepository
         CancellationToken cancellationToken);
     Task RevokeRefreshTokenAsync(string tokenHash, Guid accountId, DateTime revokedAt, CancellationToken cancellationToken);
     Task RevokeRefreshTokensForAccountAsync(Guid accountId, DateTime revokedAt, CancellationToken cancellationToken);
+    Task ChangePasswordAndRevokeRefreshTokensAsync(Account account, string passwordHash, DateTime changedAt, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
 
@@ -103,4 +114,28 @@ public sealed class AccountConflictException(string code, string message) : Exce
 public sealed class AccountValidationException(string code, string message) : Exception(message)
 {
     public string Code { get; } = code;
+}
+
+public sealed class ChangePasswordValidator : AbstractValidator<ChangePasswordCommand>
+{
+    public ChangePasswordValidator()
+    {
+        RuleFor(x => x.AccountId).NotEmpty();
+        RuleFor(x => x.CurrentPassword).NotEmpty().WithMessage("Mật khẩu hiện tại không được để trống.");
+        RuleFor(x => x.NewPassword)
+            .NotEmpty().WithMessage("Mật khẩu mới không được để trống.")
+            .Length(8, 100).WithMessage("Mật khẩu mới phải từ 8-100 ký tự.")
+            .Matches("[A-Z]").WithMessage("Mật khẩu mới phải chứa ít nhất 1 chữ hoa.")
+            .Matches("[a-z]").WithMessage("Mật khẩu mới phải chứa ít nhất 1 chữ thường.")
+            .Matches("[0-9]").WithMessage("Mật khẩu mới phải chứa ít nhất 1 số.");
+        RuleFor(x => x.ConfirmPassword).NotEmpty().WithMessage("Xác nhận mật khẩu không được để trống.");
+        RuleFor(x => x.ConfirmPassword)
+            .Equal(x => x.NewPassword)
+            .When(x => !string.IsNullOrWhiteSpace(x.ConfirmPassword) && !string.IsNullOrWhiteSpace(x.NewPassword))
+            .WithMessage("Xác nhận mật khẩu không khớp.");
+        RuleFor(x => x.NewPassword)
+            .NotEqual(x => x.CurrentPassword)
+            .When(x => !string.IsNullOrWhiteSpace(x.CurrentPassword) && !string.IsNullOrWhiteSpace(x.NewPassword))
+            .WithMessage("Mật khẩu mới không được trùng mật khẩu cũ.");
+    }
 }

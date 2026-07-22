@@ -101,7 +101,11 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         if (user is null) return false;
         user.Account.Status = status;
         if (status == AccountStatus.Deleted) user.Account.DeletedAt = DateTime.UtcNow;
-        AddLog(adminId, "UpdateUserStatus", "User", id, reason ?? $"Status={status}");
+        var adminUserId = await ResolveAdminUserIdAsync(adminId, cancellationToken);
+        if (adminUserId is not null)
+        {
+            AddLog(adminUserId.Value, "UpdateUserStatus", "User", id, reason ?? $"Status={status}");
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -111,7 +115,11 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         var user = await dbContext.Users.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (user is null) return false;
         user.IsVerified = isVerified;
-        AddLog(adminId, "UpdateUserVerify", "User", id, $"IsVerified={isVerified}");
+        var adminUserId = await ResolveAdminUserIdAsync(adminId, cancellationToken);
+        if (adminUserId is not null)
+        {
+            AddLog(adminUserId.Value, "UpdateUserVerify", "User", id, $"IsVerified={isVerified}");
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -416,6 +424,19 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
             TargetId = targetId,
             Description = description
         });
+    }
+
+    private async Task<Guid?> ResolveAdminUserIdAsync(Guid adminId, CancellationToken cancellationToken)
+    {
+        if (await dbContext.Users.AnyAsync(user => user.Id == adminId, cancellationToken))
+        {
+            return adminId;
+        }
+
+        return await dbContext.Users
+            .Where(user => user.AccountId == adminId)
+            .Select(user => (Guid?)user.Id)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     private static async Task<AdminPagedResponse<T>> PageAsync<T>(IQueryable<T> source, int page, int pageSize, CancellationToken cancellationToken)

@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Viora.Application.Notifications;
+using Viora.Application.Realtime;
 using Viora.Domain.Entities;
 
 namespace Viora.Application.Posts;
@@ -227,6 +228,85 @@ public sealed class ReplyCommentHandler(
             false,
             new CommentReplyToUserResponse(parent.User.Id, parent.User.DisplayName),
             new PostInteractionUserResponse(user.Id, user.DisplayName, user.AvatarUrl, user.IsVerified)));
+    }
+}
+
+public sealed class ToggleCommentLikeHandler(
+    IPostInteractionRepository repository,
+    IValidator<ToggleCommentLikeCommand> validator,
+    INotificationService notificationService,
+    IRealtimeService realtimeService)
+    : IRequestHandler<ToggleCommentLikeCommand, Result<CommentLikeResponse>>
+{
+    public async Task<Result<CommentLikeResponse>> Handle(ToggleCommentLikeCommand request, CancellationToken cancellationToken)
+    {
+        var validation = await validator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid) return Result<CommentLikeResponse>.Failure(PostInteractionError.Invalid, ReactPostHandler.FirstError(validation));
+
+        var user = await repository.GetActiveUserAsync(request.UserId, cancellationToken);
+        if (user is null) return Result<CommentLikeResponse>.Failure(PostInteractionError.NotFound, "Không tìm thấy người dùng.");
+
+        var comment = await repository.GetCommentForLikeAsync(request.CommentId, cancellationToken);
+        if (comment is null) return Result<CommentLikeResponse>.Failure(PostInteractionError.NotFound, "Không tìm thấy bình luận.");
+        if (comment.Status != CommentStatus.Published || comment.DeletedAt is not null)
+        {
+            return Result<CommentLikeResponse>.Failure(PostInteractionError.Invalid, "Không thể thích bình luận này.");
+        }
+
+        CommentLikeResponse response = null!;
+        Notification? notification = null;
+        await repository.ExecuteInTransactionAsync(async token =>
+        {
+            var reaction = await repository.GetCommentReactionAsync(request.CommentId, request.UserId, token);
+            if (reaction is null)
+            {
+                await repository.AddCommentReactionAsync(new CommentReaction
+                {
+                    CommentId = request.CommentId,
+                    UserId = request.UserId,
+                    ReactionType = ReactionType.Like,
+                    CreatedAt = DateTime.UtcNow
+                }, token);
+                comment.LikeCount++;
+                response = new CommentLikeResponse(comment.Id, true, comment.LikeCount);
+
+                if (comment.UserId != request.UserId)
+                {
+                    notification = new Notification
+                    {
+                        UserId = comment.UserId,
+                        SenderUserId = user.Id,
+                        SenderUser = user,
+                        NotificationType = NotificationType.CommentLike,
+                        Title = "Có người đã thích bình luận của bạn.",
+                        Content = $"{user.DisplayName} đã thích bình luận của bạn.",
+                        ReferenceType = NotificationReferenceType.Comment,
+                        ReferenceId = comment.Id,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await repository.AddNotificationAsync(notification, token);
+                }
+
+                return;
+            }
+
+            repository.RemoveCommentReaction(reaction);
+            comment.LikeCount = Math.Max(0, comment.LikeCount - 1);
+            response = new CommentLikeResponse(comment.Id, false, comment.LikeCount);
+        }, cancellationToken);
+
+        await realtimeService.SendToUsersAsync(
+            new[] { request.UserId, comment.UserId },
+            RealtimeEvents.ReceiveCommentLike,
+            new CommentLikeRealtimePayload(response.CommentId, response.LikeCount, response.IsLiked, request.UserId),
+            cancellationToken);
+
+        if (notification is not null)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
+
+        return Result<CommentLikeResponse>.Success(response);
     }
 }
 

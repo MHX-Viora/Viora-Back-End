@@ -75,4 +75,14 @@ public sealed class PostInteractionValidatorTests
 
         Assert.True(result.IsValid);
     }
+
+    [Fact]
+    public async Task Toggle_comment_like_validator_rejects_empty_ids()
+    {
+        var validator = new ToggleCommentLikeValidator();
+
+        var result = await validator.ValidateAsync(new ToggleCommentLikeCommand(Guid.Empty, Guid.Empty));
+
+        Assert.False(result.IsValid);
+    }
 }

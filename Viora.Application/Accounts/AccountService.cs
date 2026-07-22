@@ -1,4 +1,5 @@
 using Viora.Domain.Entities;
+using FluentValidation;
 using System.Net.Mail;
 using System.Text.RegularExpressions;
 using Viora.Application.Users;
@@ -8,7 +9,8 @@ namespace Viora.Application.Accounts;
 public sealed class AccountService(
     IAccountRepository repository,
     IPasswordHasher passwordHasher,
-    ITokenService? tokenService = null) : IAccountService
+    ITokenService? tokenService = null,
+    IValidator<ChangePasswordCommand>? changePasswordValidator = null) : IAccountService
 {
     public async Task<PagedAccountResponse> ListAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
@@ -169,6 +171,44 @@ public sealed class AccountService(
             command.AccountId,
             DateTime.UtcNow,
             cancellationToken);
+    }
+
+    public async Task<ChangePasswordResult> ChangePasswordAsync(
+        ChangePasswordCommand command,
+        CancellationToken cancellationToken)
+    {
+        var validation = await (changePasswordValidator ?? new ChangePasswordValidator())
+            .ValidateAsync(command, cancellationToken);
+        if (!validation.IsValid)
+        {
+            return new ChangePasswordResult(
+                ChangePasswordOutcome.ValidationFailed,
+                validation.Errors[0].ErrorMessage);
+        }
+
+        var account = await repository.GetAsync(command.AccountId, cancellationToken);
+        if (account is null || account.DeletedAt is not null)
+        {
+            return new ChangePasswordResult(ChangePasswordOutcome.AccountNotFound, "Không tìm thấy tài khoản.");
+        }
+
+        if (!passwordHasher.Verify(command.CurrentPassword, account.PasswordHash))
+        {
+            return new ChangePasswordResult(ChangePasswordOutcome.InvalidCurrentPassword, "Mật khẩu hiện tại không đúng.");
+        }
+
+        if (passwordHasher.Verify(command.NewPassword, account.PasswordHash))
+        {
+            return new ChangePasswordResult(ChangePasswordOutcome.SamePassword, "Mật khẩu mới không được trùng mật khẩu cũ.");
+        }
+
+        await repository.ChangePasswordAndRevokeRefreshTokensAsync(
+            account,
+            passwordHasher.Hash(command.NewPassword),
+            DateTime.UtcNow,
+            cancellationToken);
+
+        return new ChangePasswordResult(ChangePasswordOutcome.Success, "Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
     }
 
     public async Task<AccountResponse?> UpdateAsync(

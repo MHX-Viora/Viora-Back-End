@@ -29,6 +29,9 @@ public sealed record CreateCommentCommand(Guid UserId, Guid PostId, string Conte
 public sealed record ReplyCommentCommand(Guid UserId, Guid CommentId, string Content)
     : IRequest<Result<CommentReplyListItemResponse>>;
 
+public sealed record ToggleCommentLikeCommand(Guid UserId, Guid CommentId)
+    : IRequest<Result<CommentLikeResponse>>;
+
 public sealed record ToggleSavePostCommand(Guid UserId, Guid PostId)
     : IRequest<Result<SavePostResponse>>;
 
@@ -51,6 +54,7 @@ public sealed record PostReactionResponse(ReactionType? ReactionType, int Reacti
 public sealed record SavePostResponse(bool IsSaved, int SaveCount);
 public sealed record DeletePostResponse(string Message);
 public sealed record ReportPostResponse(Guid Id, string Message);
+public sealed record CommentLikeResponse(Guid CommentId, bool IsLiked, int LikeCount);
 
 public sealed record CommentResponse(
     Guid Id,
@@ -147,6 +151,15 @@ public sealed class ReportPostValidator : AbstractValidator<ReportPostCommand>
     }
 }
 
+public sealed class ToggleCommentLikeValidator : AbstractValidator<ToggleCommentLikeCommand>
+{
+    public ToggleCommentLikeValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.CommentId).NotEmpty();
+    }
+}
+
 public sealed class GetPostCommentsValidator : AbstractValidator<GetPostCommentsQuery>
 {
     public GetPostCommentsValidator()
@@ -175,12 +188,16 @@ public interface IPostInteractionRepository
     Task<Post?> GetPostForInteractionAsync(Guid postId, CancellationToken cancellationToken);
     Task<Post?> GetPostWithOriginalAsync(Guid postId, CancellationToken cancellationToken);
     Task<Comment?> GetCommentForReplyAsync(Guid commentId, CancellationToken cancellationToken);
+    Task<Comment?> GetCommentForLikeAsync(Guid commentId, CancellationToken cancellationToken);
     Task<Comment?> GetCommentForDeleteAsync(Guid commentId, CancellationToken cancellationToken);
     Task<PostReaction?> GetReactionAsync(Guid postId, Guid userId, CancellationToken cancellationToken);
+    Task<CommentReaction?> GetCommentReactionAsync(Guid commentId, Guid userId, CancellationToken cancellationToken);
     Task<SavedPost?> GetSavedPostAsync(Guid postId, Guid userId, CancellationToken cancellationToken);
     Task<bool> HasReportedPostAsync(Guid postId, Guid userId, CancellationToken cancellationToken);
     Task AddReactionAsync(PostReaction reaction, CancellationToken cancellationToken);
     void RemoveReaction(PostReaction reaction);
+    Task AddCommentReactionAsync(CommentReaction reaction, CancellationToken cancellationToken);
+    void RemoveCommentReaction(CommentReaction reaction);
     Task AddCommentAsync(Comment comment, CancellationToken cancellationToken);
     Task AddSavedPostAsync(SavedPost savedPost, CancellationToken cancellationToken);
     void RemoveSavedPost(SavedPost savedPost);
