@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Viora.Application.Admin;
 using viora_BE.Controllers;
 using Xunit;
@@ -21,9 +22,31 @@ public sealed class AdminApiContractTests
     [Fact]
     public void Admin_list_contracts_use_unified_paging_shape()
     {
+        AssertProperties<AdminApiResponse<AdminDashboardResponse>>("Success", "Message", "Data");
         AssertProperties<AdminPagedResponse<AdminUserSummaryResponse>>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
         AssertProperties<AdminPagedResponse<AdminPostSummaryResponse>>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
         AssertProperties<AdminPagedResponse<AdminLogSummaryResponse>>("Page", "PageSize", "TotalItems", "TotalPages", "Items");
+    }
+
+    [Fact]
+    public void Admin_controller_actions_return_wrapped_response_contracts()
+    {
+        var methods = typeof(AdminController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(AdminController))
+            .Where(method => method.GetCustomAttributes<HttpMethodAttribute>().Any())
+            .ToArray();
+
+        Assert.All(methods, method =>
+        {
+            var returnType = method.ReturnType;
+            Assert.True(returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>));
+
+            var actionResultType = returnType.GetGenericArguments()[0];
+            Assert.True(actionResultType.IsGenericType && actionResultType.GetGenericTypeDefinition() == typeof(ActionResult<>));
+
+            var responseType = actionResultType.GetGenericArguments()[0];
+            Assert.True(responseType.IsGenericType && responseType.GetGenericTypeDefinition() == typeof(AdminApiResponse<>));
+        });
     }
 
     [Fact]

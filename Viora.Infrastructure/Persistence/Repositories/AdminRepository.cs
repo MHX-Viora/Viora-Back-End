@@ -25,7 +25,9 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
 
     public async Task<AdminPagedResponse<AdminUserSummaryResponse>> GetUsersAsync(GetAdminUsersQuery query, CancellationToken cancellationToken)
     {
-        var source = dbContext.Users.AsNoTracking();
+        var source = dbContext.Users
+            .AsNoTracking()
+            .Where(x => x.Account.Role == AccountRole.User || x.Account.Role == AccountRole.Moderator);
         if (!string.IsNullOrWhiteSpace(query.Keyword))
         {
             var keyword = query.Keyword.Trim().ToLower();

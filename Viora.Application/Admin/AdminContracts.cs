@@ -5,6 +5,7 @@ using Viora.Domain.Entities;
 namespace Viora.Application.Admin;
 
 public sealed record AdminPagedResponse<T>(int Page, int PageSize, int TotalItems, int TotalPages, IReadOnlyList<T> Items);
+public sealed record AdminApiResponse<T>(bool Success, string Message, T? Data);
 
 public sealed record AdminDashboardResponse(
     int UserCount,
