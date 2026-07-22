@@ -101,6 +101,10 @@ public sealed class NotificationService(
 
     private static IReadOnlyDictionary<string, string> BuildPushData(NotificationItemResponse notification)
     {
+        var createdAt = notification.CreatedAt.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(notification.CreatedAt, DateTimeKind.Utc)
+            : notification.CreatedAt.ToUniversalTime();
+        var createdAtOffset = new DateTimeOffset(createdAt);
         var data = new Dictionary<string, string>
         {
             ["notificationId"] = notification.Id.ToString(),
@@ -111,8 +115,9 @@ public sealed class NotificationService(
             ["content"] = notification.Content ?? string.Empty,
             ["imageUrl"] = notification.ImageUrl ?? string.Empty,
             ["isRead"] = notification.IsRead.ToString().ToLowerInvariant(),
-            ["createdAt"] = notification.CreatedAt.ToUniversalTime().ToString("O"),
-            ["createdAtUnixMs"] = new DateTimeOffset(notification.CreatedAt.ToUniversalTime()).ToUnixTimeMilliseconds().ToString()
+            ["createdAt"] = createdAt.ToString("O"),
+            ["createdAtUnixSeconds"] = createdAtOffset.ToUnixTimeSeconds().ToString(),
+            ["createdAtUnixMs"] = createdAtOffset.ToUnixTimeMilliseconds().ToString()
         };
 
         if (notification.Sender is not null)
