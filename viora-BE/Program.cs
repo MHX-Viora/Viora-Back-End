@@ -129,8 +129,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-app.UseCors("Web");
-
 var app = builder.Build();
 app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
 
@@ -167,6 +165,7 @@ app.UseExceptionHandler(errorApp =>
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
+app.UseCors("Web");
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
