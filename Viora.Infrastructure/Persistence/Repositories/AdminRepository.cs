@@ -101,12 +101,8 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         if (user is null) return false;
         user.Account.Status = status;
         if (status == AccountStatus.Deleted) user.Account.DeletedAt = DateTime.UtcNow;
-        var adminUserId = await ResolveAdminUserIdAsync(adminId, cancellationToken);
-        if (adminUserId is not null)
-        {
-            AddLog(adminUserId.Value, "UpdateUserStatus", "User", id, reason ?? $"Status={status}");
-        }
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, "UpdateUserStatus", "User", id, reason ?? $"Status={status}", cancellationToken);
         return true;
     }
 
@@ -115,12 +111,8 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         var user = await dbContext.Users.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (user is null) return false;
         user.IsVerified = isVerified;
-        var adminUserId = await ResolveAdminUserIdAsync(adminId, cancellationToken);
-        if (adminUserId is not null)
-        {
-            AddLog(adminUserId.Value, "UpdateUserVerify", "User", id, $"IsVerified={isVerified}");
-        }
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, "UpdateUserVerify", "User", id, $"IsVerified={isVerified}", cancellationToken);
         return true;
     }
 
@@ -154,8 +146,8 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         identity.ReviewedAt = DateTime.UtcNow;
         identity.User.IdentityStatus = UserIdentityState.Verified;
         identity.User.IsVerified = true;
-        AddLog(adminId, "ApproveIdentity", "Identity", id, null);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, "ApproveIdentity", "Identity", id, null, cancellationToken);
         return true;
     }
 
@@ -168,8 +160,8 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         identity.ReviewedAt = DateTime.UtcNow;
         identity.RejectReason = reason;
         identity.User.IdentityStatus = UserIdentityState.Rejected;
-        AddLog(adminId, "RejectIdentity", "Identity", id, reason);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, "RejectIdentity", "Identity", id, reason, cancellationToken);
         return true;
     }
 
@@ -209,8 +201,9 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         if (post is null) return false;
         post.Status = status;
         post.DeletedAt = status == PostStatus.Deleted ? DateTime.UtcNow : null;
-        AddLog(adminId, action, post.PostType == PostType.ShortVideo ? "Video" : "Post", id, null);
+        var targetType = post.PostType == PostType.ShortVideo ? "Video" : "Post";
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, action, targetType, id, null, cancellationToken);
         return true;
     }
 
@@ -251,8 +244,8 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         report.ReviewedBy = adminId;
         report.ReviewedAt = DateTime.UtcNow;
         await ApplyReportActionAsync(report, action, cancellationToken);
-        AddLog(adminId, "ApproveReport", "Report", id, action);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, "ApproveReport", "Report", id, action, cancellationToken);
         return true;
     }
 
@@ -263,8 +256,8 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         report.Status = ReportStatus.Rejected;
         report.ReviewedBy = adminId;
         report.ReviewedAt = DateTime.UtcNow;
-        AddLog(adminId, "RejectReport", "Report", id, null);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, "RejectReport", "Report", id, null, cancellationToken);
         return true;
     }
 
@@ -289,8 +282,8 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         if (hashtag is null) return null;
         if (await dbContext.Hashtags.AnyAsync(x => x.Id != id && x.Name == normalized, cancellationToken)) return false;
         hashtag.Name = normalized;
-        AddLog(adminId, "RenameHashtag", "Hashtag", id, normalized);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, "RenameHashtag", "Hashtag", id, normalized, cancellationToken);
         return true;
     }
 
@@ -299,8 +292,8 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         var hashtag = await dbContext.Hashtags.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (hashtag is null) return false;
         dbContext.Hashtags.Remove(hashtag);
-        AddLog(adminId, "DeleteHashtag", "Hashtag", id, hashtag.Name);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, "DeleteHashtag", "Hashtag", id, hashtag.Name, cancellationToken);
         return true;
     }
 
@@ -323,8 +316,8 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         }).ToListAsync(cancellationToken);
 
         dbContext.Notifications.AddRange(notifications);
-        AddLog(adminId, "CreateAnnouncement", "Notification", null, $"SendTo={sendTo}; Count={notifications.Count}");
         await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(adminId, "CreateAnnouncement", "Notification", null, $"SendTo={sendTo}; Count={notifications.Count}", cancellationToken);
     }
 
     public async Task<AdminPagedResponse<AdminConversationSummaryResponse>> GetConversationsAsync(GetAdminConversationsQuery query, CancellationToken cancellationToken)
@@ -371,13 +364,20 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
 
     public async Task<AdminPagedResponse<AdminLogSummaryResponse>> GetLogsAsync(GetAdminLogsQuery query, CancellationToken cancellationToken)
     {
-        var source = dbContext.AdminLogs.AsNoTracking();
-        if (query.AdminId is not null) source = source.Where(x => x.AdminId == query.AdminId);
-        if (!string.IsNullOrWhiteSpace(query.Action)) source = source.Where(x => x.Action == query.Action);
-        if (query.From is not null) source = source.Where(x => x.CreatedAt >= query.From);
-        if (query.To is not null) source = source.Where(x => x.CreatedAt <= query.To);
-        source = SortAsc(query.SortDirection) ? source.OrderBy(x => x.CreatedAt) : source.OrderByDescending(x => x.CreatedAt);
-        return await PageAsync(source.Select(x => new AdminLogSummaryResponse(x.Id, x.AdminId, x.Admin.DisplayName, x.Action, x.TargetType, x.TargetId, x.Description, x.CreatedAt)), query.Page, query.PageSize, cancellationToken);
+        try
+        {
+            var source = dbContext.AdminLogs.AsNoTracking();
+            if (query.AdminId is not null) source = source.Where(x => x.AdminId == query.AdminId);
+            if (!string.IsNullOrWhiteSpace(query.Action)) source = source.Where(x => x.Action == query.Action);
+            if (query.From is not null) source = source.Where(x => x.CreatedAt >= query.From);
+            if (query.To is not null) source = source.Where(x => x.CreatedAt <= query.To);
+            source = SortAsc(query.SortDirection) ? source.OrderBy(x => x.CreatedAt) : source.OrderByDescending(x => x.CreatedAt);
+            return await PageAsync(source.Select(x => new AdminLogSummaryResponse(x.Id, x.AdminId, x.Admin.DisplayName, x.Action, x.TargetType, x.TargetId, x.Description, x.CreatedAt)), query.Page, query.PageSize, cancellationToken);
+        }
+        catch (Exception exception) when (IsAdminLogFailure(exception))
+        {
+            return new AdminPagedResponse<AdminLogSummaryResponse>(Math.Max(1, query.Page), Math.Clamp(query.PageSize <= 0 ? 20 : query.PageSize, 1, 100), 0, 0, []);
+        }
     }
 
     private async Task ApplyReportActionAsync(Report report, string? action, CancellationToken cancellationToken)
@@ -414,16 +414,45 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         post.DeletedAt = status == PostStatus.Deleted ? DateTime.UtcNow : post.DeletedAt;
     }
 
-    private void AddLog(Guid adminId, string action, string targetType, Guid? targetId, string? description)
+    private async Task TryAddLogAsync(Guid adminId, string action, string targetType, Guid? targetId, string? description, CancellationToken cancellationToken)
     {
+        var adminUserId = await ResolveAdminUserIdAsync(adminId, cancellationToken);
+        if (adminUserId is null) return;
+
         dbContext.AdminLogs.Add(new AdminLog
         {
-            AdminId = adminId,
+            AdminId = adminUserId.Value,
             Action = action,
             TargetType = targetType,
             TargetId = targetId,
             Description = description
         });
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception exception) when (IsAdminLogFailure(exception))
+        {
+            dbContext.ChangeTracker.Clear();
+        }
+    }
+
+    private static bool IsAdminLogFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException!)
+        {
+            var message = current.Message;
+            if (message.Contains("AdminLogs", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("adminlogs", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("42P01", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("FK_AdminLogs", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task<Guid?> ResolveAdminUserIdAsync(Guid adminId, CancellationToken cancellationToken)
