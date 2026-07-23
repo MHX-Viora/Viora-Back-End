@@ -34,7 +34,7 @@ public sealed class AccountAuthCookieTests
         Assert.Contains("refreshToken=refresh-token", cookie);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=none", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("path=/api/accounts", cookie, StringComparison.OrdinalIgnoreCase);
     }
 

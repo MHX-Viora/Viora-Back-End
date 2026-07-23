@@ -227,7 +227,7 @@ public sealed class AccountsController(IAccountService accountService, ISender s
     {
         HttpOnly = true,
         Secure = true,
-        SameSite = SameSiteMode.Strict,
+        SameSite = SameSiteMode.None,
         Path = RefreshTokenCookiePath
     };
 }
