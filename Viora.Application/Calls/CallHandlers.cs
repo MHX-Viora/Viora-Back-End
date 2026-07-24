@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Viora.Application.Chat;
 using Viora.Application.Realtime;
 
 namespace Viora.Application.Calls;
@@ -99,6 +100,7 @@ public sealed class GetCallByIdHandler(ICallRepository repository) : IRequestHan
 
 public sealed class CallDeliveryService(
     IRealtimeService realtimeService,
+    ICallHistoryMessageRepository historyMessageRepository,
     IPushNotificationSender pushNotificationSender,
     IOnlineUserRegistry onlineUserRegistry,
     ILogger<CallDeliveryService> logger)
@@ -139,6 +141,7 @@ public sealed class CallDeliveryService(
         logger.LogInformation("Call {EventName}. CallId: {CallId}, Duration: {Duration}.", eventName, call.Id, call.Duration);
         var payload = new CallEndedPayload(call.Id, call.ConversationId, call.Status, call.Duration);
         await realtimeService.SendToUsersAsync([call.Caller.Id, call.Receiver.Id], eventName, payload, cancellationToken);
+        await PublishHistoryMessageAsync(call, cancellationToken);
     }
 
     public async Task PublishMissedAsync(CallSessionResponse call, CancellationToken cancellationToken)
@@ -147,6 +150,7 @@ public sealed class CallDeliveryService(
         var payload = new CallEndedPayload(call.Id, call.ConversationId, call.Status, call.Duration);
         await realtimeService.SendToUserAsync(call.Caller.Id, "CallTimeout", payload, cancellationToken);
         await realtimeService.SendToUserAsync(call.Receiver.Id, "CallMissed", payload, cancellationToken);
+        await PublishHistoryMessageAsync(call, cancellationToken);
         await pushNotificationSender.SendAsync(new PushMessage(
             call.Receiver.Id,
             "Cuộc gọi nhỡ",
@@ -157,5 +161,34 @@ public sealed class CallDeliveryService(
                 ["callId"] = call.Id.ToString(),
                 ["conversationId"] = call.ConversationId.ToString()
             }), cancellationToken);
+    }
+
+    private async Task PublishHistoryMessageAsync(
+        CallSessionResponse call,
+        CancellationToken cancellationToken)
+    {
+        var message = await historyMessageRepository.CreateAsync(call, cancellationToken);
+        if (message is null) return;
+
+        var sender = new ChatMessageSenderResponse(
+            message.Sender.Id,
+            message.Sender.DisplayName,
+            message.Sender.AvatarUrl,
+            message.SenderIsVerified);
+        foreach (var userId in new[] { call.Caller.Id, call.Receiver.Id })
+        {
+            var payload = GroupChatRealtimeMessages.CreateSystemMessage(
+                message.Id,
+                message.ConversationId,
+                sender,
+                message.Content,
+                message.CreatedAt,
+                userId == message.Sender.Id);
+            await realtimeService.SendToUserAsync(
+                userId,
+                RealtimeEvents.ReceiveMessage,
+                payload,
+                cancellationToken);
+        }
     }
 }

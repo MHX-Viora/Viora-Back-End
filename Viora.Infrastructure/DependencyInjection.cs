@@ -141,6 +141,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IChatConversationRepository, ChatConversationRepository>();
         services.AddScoped<ICallRepository, CallRepository>();
+        services.AddScoped<ICallHistoryMessageRepository, CallHistoryMessageRepository>();
         services.AddScoped<IGroupChatService, GroupChatService>();
         services.AddScoped<IJoinGroupRepository, JoinGroupRepository>();
         services.AddScoped<IShareLinkService, ShareLinkService>();

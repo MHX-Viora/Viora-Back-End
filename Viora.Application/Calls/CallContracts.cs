@@ -38,6 +38,38 @@ public sealed record IceServerResponse(IReadOnlyList<string> Urls, string? Usern
 public sealed record IncomingCallPayload(Guid CallId, Guid ConversationId, CallParticipantResponse Caller, CallType CallType);
 public sealed record CallSignalPayload(Guid CallId, Guid ConversationId, Guid FromUserId, object Signal);
 public sealed record CallEndedPayload(Guid CallId, Guid ConversationId, CallStatus Status, int? Duration);
+public sealed record CallHistoryMessage(
+    Guid Id,
+    Guid ConversationId,
+    CallParticipantResponse Sender,
+    bool SenderIsVerified,
+    string Content,
+    DateTime CreatedAt);
+
+public static class CallHistoryMessages
+{
+    public static string Format(CallType callType, CallStatus status, int? duration)
+    {
+        var label = callType == CallType.Video ? "Cuộc gọi video" : "Cuộc gọi thoại";
+        return status switch
+        {
+            CallStatus.Ended => $"{label} • {FormatDuration(duration ?? 0)}",
+            CallStatus.Rejected => $"{label} bị từ chối",
+            CallStatus.Cancelled => $"{label} đã hủy",
+            CallStatus.Missed => $"{label} nhỡ",
+            _ => label
+        };
+    }
+
+    private static string FormatDuration(int duration)
+    {
+        var safeDuration = Math.Max(0, duration);
+        var value = TimeSpan.FromSeconds(safeDuration);
+        return safeDuration >= 3600
+            ? $"{(int)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00}"
+            : $"{value.Minutes:00}:{value.Seconds:00}";
+    }
+}
 
 public enum CallError
 {
@@ -73,6 +105,13 @@ public interface ICallRepository
 public interface IIceServerProvider
 {
     IceServersResponse Get();
+}
+
+public interface ICallHistoryMessageRepository
+{
+    Task<CallHistoryMessage?> CreateAsync(
+        CallSessionResponse call,
+        CancellationToken cancellationToken);
 }
 
 public sealed record CallParticipantRouting(Guid CallId, Guid ConversationId, Guid CallerId, Guid ReceiverId, Guid OtherUserId, CallStatus Status);
