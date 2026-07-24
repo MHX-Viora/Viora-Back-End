@@ -15,6 +15,7 @@ public sealed class Conversation : AuditableEntity
     public Message? LastMessage { get; set; }
     public ICollection<ConversationMember> Members { get; set; } = [];
     public ICollection<Message> Messages { get; set; } = [];
+    public ICollection<CallSession> CallSessions { get; set; } = [];
 }
 
 public sealed class ConversationMember
@@ -88,4 +89,19 @@ public sealed class ConversationBlock
     public DateTime CreatedAt { get; set; }
     public Conversation Conversation { get; set; } = null!;
     public User User { get; set; } = null!;
+}
+
+public sealed class CallSession : AuditableEntity
+{
+    public Guid ConversationId { get; set; }
+    public Guid CallerId { get; set; }
+    public Guid ReceiverId { get; set; }
+    public CallStatus Status { get; set; } = CallStatus.Calling;
+    public DateTime StartedAt { get; set; }
+    public DateTime? AnsweredAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+    public int? Duration { get; set; }
+    public Conversation Conversation { get; set; } = null!;
+    public User Caller { get; set; } = null!;
+    public User Receiver { get; set; } = null!;
 }

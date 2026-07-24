@@ -16,6 +16,7 @@ using FluentValidation;
 using Viora.Application.Notifications;
 using Viora.Application.Realtime;
 using Viora.Application.Chat;
+using Viora.Application.Calls;
 using Viora.Infrastructure.Realtime;
 using Microsoft.AspNetCore.SignalR;
 using Viora.Application.Sharing;
@@ -106,10 +107,13 @@ public static class DependencyInjection
         services.AddScoped<IValidator<UnregisterDeviceTokenCommand>, UnregisterDeviceTokenValidator>();
         services.AddScoped<IValidator<ChangePasswordCommand>, ChangePasswordValidator>();
         services.AddScoped<IValidator<SendChatMessageCommand>, SendChatMessageValidator>();
+        services.AddScoped<IValidator<CreateCallCommand>, CreateCallValidator>();
         services.AddScoped<IValidator<ForwardChatMessageCommand>, ForwardChatMessageValidator>();
         services.AddScoped<IValidator<CreatePrivateConversationCommand>, CreatePrivateConversationValidator>();
         services.AddScoped<IValidator<JoinGroupCommand>, JoinGroupValidator>();
         services.AddScoped<ChatMessageDeliveryService>();
+        services.AddScoped<CallDeliveryService>();
+        services.AddScoped<IIceServerProvider, IceServerProvider>();
         services.AddScoped<IValidator<GetShortVideosQuery>, GetShortVideosValidator>();
         services.AddScoped<IValidator<ToggleVideoReactionCommand>, ToggleVideoReactionValidator>();
         services.AddScoped<IValidator<ToggleVideoSaveCommand>, ToggleVideoSaveValidator>();
@@ -136,6 +140,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationDeliveryRepository, NotificationDeliveryRepository>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IChatConversationRepository, ChatConversationRepository>();
+        services.AddScoped<ICallRepository, CallRepository>();
         services.AddScoped<IGroupChatService, GroupChatService>();
         services.AddScoped<IJoinGroupRepository, JoinGroupRepository>();
         services.AddScoped<IShareLinkService, ShareLinkService>();
@@ -150,6 +155,7 @@ public static class DependencyInjection
         services.AddSingleton<IFirebaseMessagingClientFactory, FirebaseMessagingClientFactory>();
         services.AddScoped<IRealtimeService, SignalRRealtimeService>();
         services.AddScoped<IPushNotificationSender, FirebasePushNotificationSender>();
+        services.AddHostedService<CallTimeoutHostedService>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         return services;
     }

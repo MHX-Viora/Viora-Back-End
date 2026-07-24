@@ -99,3 +99,23 @@ internal sealed class ConversationBlockConfiguration : IEntityTypeConfiguration<
         builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class CallSessionConfiguration : IEntityTypeConfiguration<CallSession>
+{
+    public void Configure(EntityTypeBuilder<CallSession> builder)
+    {
+        builder.ToTable("CallSessions", table => table.HasCheckConstraint(
+            "CK_CallSessions_Duration_NonNegative",
+            "\"Duration\" IS NULL OR \"Duration\" >= 0"));
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Status).IsRequired();
+        builder.Property(x => x.StartedAt).IsRequired();
+        builder.HasIndex(x => x.ConversationId);
+        builder.HasIndex(x => x.CallerId);
+        builder.HasIndex(x => x.ReceiverId);
+        builder.HasIndex(x => new { x.ConversationId, x.CreatedAt });
+        builder.HasOne(x => x.Conversation).WithMany(x => x.CallSessions).HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Caller).WithMany().HasForeignKey(x => x.CallerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Receiver).WithMany().HasForeignKey(x => x.ReceiverId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

@@ -65,8 +65,8 @@ builder.Services
             {
                 var accessToken = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrWhiteSpace(accessToken) &&
-                    path.StartsWithSegments("/hubs/realtime"))
+if (!string.IsNullOrWhiteSpace(accessToken) &&
+                    (path.StartsWithSegments("/hubs/realtime") || path.StartsWithSegments("/hubs/calls")))
                 {
                     context.Token = accessToken;
                 }
@@ -189,5 +189,6 @@ app.MapGet("/health", () => Results.Ok(new
 
 app.MapControllers();
 app.MapHub<RealtimeHub>("/hubs/realtime");
+app.MapHub<CallHub>("/hubs/calls");
 
 app.Run();
