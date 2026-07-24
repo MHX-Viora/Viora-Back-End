@@ -26,12 +26,13 @@ public sealed class PersistenceModelTests
             .Where(name => name is not null)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(27, tables.Count);
+        Assert.Equal(28, tables.Count);
         Assert.Contains("Accounts", tables);
         Assert.Contains("RefreshTokens", tables);
         Assert.Contains("Users", tables);
         Assert.Contains("Posts", tables);
         Assert.Contains("Conversations", tables);
+        Assert.Contains("CallSessions", tables);
         Assert.Contains("DeviceTokens", tables);
         Assert.Contains("Reports", tables);
         Assert.Contains("AdminLogs", tables);

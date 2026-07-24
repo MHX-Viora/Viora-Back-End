@@ -17,7 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <ProjectReference Include="..\Viora.Infrastructure\Viora.Infrastructure.csproj" />
-    <ProjectReference Include="..\viora-BE\viora-BE.csproj" />
+    <ProjectReference Include="..\Viora.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\viora-BE\viora-BE.csproj" />
   </ItemGroup>
 </Project>

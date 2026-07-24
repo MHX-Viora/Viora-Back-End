@@ -196,6 +196,10 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
         {
             return CallResult<CallSessionResponse>.Success(Map(call));
         }
+        if (call.Status == nextStatus)
+        {
+            return CallResult<CallSessionResponse>.Success(Map(call));
+        }
         if (!allowedStatuses.Contains(call.Status))
         {
             return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Trạng thái cuộc gọi không hợp lệ.");
