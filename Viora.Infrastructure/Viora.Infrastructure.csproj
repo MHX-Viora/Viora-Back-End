@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Viora.Infrastructure.Tests\**" />
+    <EmbeddedResource Remove="Viora.Infrastructure.Tests\**" />
+    <None Remove="Viora.Infrastructure.Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="CloudinaryDotNet" Version="1.29.2" />
     <PackageReference Include="FirebaseAdmin" Version="3.1.0" />

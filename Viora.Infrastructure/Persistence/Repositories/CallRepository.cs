@@ -41,8 +41,34 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
     public Task<CallResult<CallSessionResponse>> CancelCallAsync(CancelCallCommand command, CancellationToken cancellationToken) =>
         TransitionAsync(command.CallId, command.UserId, [CallStatus.Calling], CallStatus.Cancelled, requireCaller: true, cancellationToken: cancellationToken);
 
-    public Task<CallResult<CallSessionResponse>> EndCallAsync(EndCallCommand command, CancellationToken cancellationToken) =>
-        TransitionAsync(command.CallId, command.UserId, [CallStatus.Accepted], CallStatus.Ended, cancellationToken: cancellationToken);
+    public async Task<CallResult<CallSessionResponse>> EndCallAsync(EndCallCommand command, CancellationToken cancellationToken)
+    {
+        var call = await dbContext.CallSessions
+            .Include(value => value.Caller)
+            .Include(value => value.Receiver)
+            .FirstOrDefaultAsync(value => value.Id == command.CallId, cancellationToken);
+        if (call is null) return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Khong tim thay cuoc goi.");
+        if (call.CallerId != command.UserId && call.ReceiverId != command.UserId)
+        {
+            return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Ban khong co quyen thao tac cuoc goi nay.");
+        }
+        if (IsTerminal(call.Status)) return CallResult<CallSessionResponse>.Success(Map(call));
+
+        var nextStatus = call.Status switch
+        {
+            CallStatus.Accepted => CallStatus.Ended,
+            CallStatus.Calling when call.CallerId == command.UserId => CallStatus.Cancelled,
+            CallStatus.Calling => CallStatus.Rejected,
+            _ => (CallStatus?)null
+        };
+        if (nextStatus is null)
+        {
+            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Trang thai cuoc goi khong hop le.");
+        }
+
+        await ApplyTransitionAsync(call, nextStatus.Value, cancellationToken);
+        return CallResult<CallSessionResponse>.Success(Map(call));
+    }
 
     public Task<CallResult<CallSessionResponse>> MarkMissedAsync(Guid callId, CancellationToken cancellationToken) =>
         TransitionAsync(callId, null, [CallStatus.Calling], CallStatus.Missed, cancellationToken: cancellationToken);
@@ -157,11 +183,21 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
                 return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Ban khong co quyen thao tac cuoc goi nay.");
             }
         }
+        if (IsTerminal(call.Status))
+        {
+            return CallResult<CallSessionResponse>.Success(Map(call));
+        }
         if (!allowedStatuses.Contains(call.Status))
         {
             return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Trang thai cuoc goi khong hop le.");
         }
 
+        await ApplyTransitionAsync(call, nextStatus, cancellationToken);
+        return CallResult<CallSessionResponse>.Success(Map(call));
+    }
+
+    private async Task ApplyTransitionAsync(CallSession call, CallStatus nextStatus, CancellationToken cancellationToken)
+    {
         var now = DateTime.UtcNow;
         call.Status = nextStatus;
         if (nextStatus == CallStatus.Accepted) call.AnsweredAt = now;
@@ -172,8 +208,10 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
         }
         call.UpdatedAt = now;
         await dbContext.SaveChangesAsync(cancellationToken);
-        return CallResult<CallSessionResponse>.Success(Map(call));
     }
+
+    private static bool IsTerminal(CallStatus status) =>
+        status is CallStatus.Rejected or CallStatus.Missed or CallStatus.Cancelled or CallStatus.Ended;
 
     private static CallSessionResponse Map(CallSession call) => new(
         call.Id,
