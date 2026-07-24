@@ -79,6 +79,7 @@ public sealed class CallsController(IMediator mediator, IIceServerProvider iceSe
             CallError.NotFound or CallError.ConversationNotFound => StatusCodes.Status404NotFound,
             CallError.ConversationDissolved => StatusCodes.Status410Gone,
             CallError.Forbidden or CallError.Blocked => StatusCodes.Status403Forbidden,
+            CallError.Busy => StatusCodes.Status409Conflict,
             CallError.InvalidState => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest
         };

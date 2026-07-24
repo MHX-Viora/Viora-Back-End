@@ -157,7 +157,15 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
         {
             return CallResult<CallableConversation>.Failure(CallError.Forbidden, "Nguoi dung khong kha dung.");
         }
-        return CallResult<CallableConversation>.Success(new(conversation.Members.Single(member => member.UserId != callerId).UserId));
+        var receiverId = conversation.Members.Single(member => member.UserId != callerId).UserId;
+        var busy = await dbContext.CallSessions
+            .AsNoTracking()
+            .AnyAsync(call =>
+                (call.CallerId == callerId || call.ReceiverId == callerId || call.CallerId == receiverId || call.ReceiverId == receiverId) &&
+                (call.Status == CallStatus.Calling || call.Status == CallStatus.Accepted),
+                cancellationToken);
+        if (busy) return CallResult<CallableConversation>.Failure(CallError.Busy, "Nguoi dung dang ban.");
+        return CallResult<CallableConversation>.Success(new(receiverId));
     }
 
     private async Task<CallResult<CallSessionResponse>> TransitionAsync(

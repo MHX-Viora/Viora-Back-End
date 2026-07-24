@@ -45,6 +45,7 @@ public enum CallError
     ConversationDissolved,
     Forbidden,
     Blocked,
+    Busy,
     InvalidState,
     Validation
 }
