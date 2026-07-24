@@ -108,6 +108,7 @@ internal sealed class CallSessionConfiguration : IEntityTypeConfiguration<CallSe
             "CK_CallSessions_Duration_NonNegative",
             "\"Duration\" IS NULL OR \"Duration\" >= 0"));
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.CallType).IsRequired();
         builder.Property(x => x.Status).IsRequired();
         builder.Property(x => x.StartedAt).IsRequired();
         builder.HasIndex(x => x.ConversationId);

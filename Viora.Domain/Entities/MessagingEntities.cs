@@ -96,6 +96,7 @@ public sealed class CallSession : AuditableEntity
     public Guid ConversationId { get; set; }
     public Guid CallerId { get; set; }
     public Guid ReceiverId { get; set; }
+    public CallType CallType { get; set; } = CallType.Audio;
     public CallStatus Status { get; set; } = CallStatus.Calling;
     public DateTime StartedAt { get; set; }
     public DateTime? AnsweredAt { get; set; }

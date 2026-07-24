@@ -22,7 +22,7 @@ public sealed class CreateCallHandler(
         var result = await repository.CreateCallAsync(request, cancellationToken);
         if (!result.IsSuccess || result.Value is null)
         {
-            return CallResult<CreateCallResponse>.Failure(result.Error ?? CallError.Validation, result.Message ?? "Khong the tao cuoc goi.");
+            return CallResult<CreateCallResponse>.Failure(result.Error ?? CallError.Validation, result.Message ?? "Không thể tạo cuộc gọi.");
         }
 
         await deliveryService.PublishIncomingAsync(result.Value, cancellationToken);
@@ -105,7 +105,7 @@ public sealed class CallDeliveryService(
 {
     public async Task PublishIncomingAsync(CallSessionResponse call, CancellationToken cancellationToken)
     {
-        var payload = new IncomingCallPayload(call.Id, call.ConversationId, call.Caller);
+        var payload = new IncomingCallPayload(call.Id, call.ConversationId, call.Caller, call.CallType);
         await realtimeService.SendToUserAsync(call.Receiver.Id, "IncomingCall", payload, cancellationToken);
         logger.LogInformation("Call Started. CallId: {CallId}, CallerId: {CallerId}, ReceiverId: {ReceiverId}.", call.Id, call.Caller.Id, call.Receiver.Id);
 
@@ -114,11 +114,12 @@ public sealed class CallDeliveryService(
             await pushNotificationSender.SendAsync(new PushMessage(
                 call.Receiver.Id,
                 call.Caller.DisplayName,
-                "Dang goi cho ban...",
+                "Đang gọi cho bạn...",
                 new Dictionary<string, string>
                 {
                     ["type"] = "IncomingCall",
                     ["callId"] = call.Id.ToString(),
+                    ["callType"] = ((short)call.CallType).ToString(),
                     ["conversationId"] = call.ConversationId.ToString(),
                     ["callerId"] = call.Caller.Id.ToString(),
                     ["callerDisplayName"] = call.Caller.DisplayName,
@@ -148,7 +149,7 @@ public sealed class CallDeliveryService(
         await realtimeService.SendToUserAsync(call.Receiver.Id, "CallMissed", payload, cancellationToken);
         await pushNotificationSender.SendAsync(new PushMessage(
             call.Receiver.Id,
-            "Cuoc goi nho",
+            "Cuộc gọi nhỡ",
             call.Caller.DisplayName,
             new Dictionary<string, string>
             {

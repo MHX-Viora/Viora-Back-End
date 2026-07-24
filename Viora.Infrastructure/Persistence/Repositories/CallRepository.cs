@@ -12,7 +12,7 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
         var validation = await ValidateCallableConversationAsync(command.ConversationId, command.CallerId, cancellationToken);
         if (!validation.IsSuccess || validation.Value is null)
         {
-            return CallResult<CallSessionResponse>.Failure(validation.Error ?? CallError.Validation, validation.Message ?? "Khong the goi.");
+            return CallResult<CallSessionResponse>.Failure(validation.Error ?? CallError.Validation, validation.Message ?? "Không thể gọi.");
         }
 
         var now = DateTime.UtcNow;
@@ -21,6 +21,7 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
             ConversationId = command.ConversationId,
             CallerId = command.CallerId,
             ReceiverId = validation.Value.ReceiverId,
+            CallType = command.CallType,
             Status = CallStatus.Calling,
             StartedAt = now,
             CreatedAt = now,
@@ -47,10 +48,10 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
             .Include(value => value.Caller)
             .Include(value => value.Receiver)
             .FirstOrDefaultAsync(value => value.Id == command.CallId, cancellationToken);
-        if (call is null) return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Khong tim thay cuoc goi.");
+        if (call is null) return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Không tìm thấy cuộc gọi.");
         if (call.CallerId != command.UserId && call.ReceiverId != command.UserId)
         {
-            return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Ban khong co quyen thao tac cuoc goi nay.");
+            return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Bạn không có quyền thao tác cuộc gọi này.");
         }
         if (IsTerminal(call.Status)) return CallResult<CallSessionResponse>.Success(Map(call));
 
@@ -63,7 +64,7 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
         };
         if (nextStatus is null)
         {
-            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Trang thai cuoc goi khong hop le.");
+            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Trạng thái cuộc gọi không hợp lệ.");
         }
 
         await ApplyTransitionAsync(call, nextStatus.Value, cancellationToken);
@@ -100,11 +101,11 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
             .FirstOrDefaultAsync(value => value.Id == callId, cancellationToken);
         if (call is null)
         {
-            return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Khong tim thay cuoc goi.");
+            return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Không tìm thấy cuộc gọi.");
         }
         if (call.CallerId != userId && call.ReceiverId != userId)
         {
-            return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Ban khong co quyen xem cuoc goi nay.");
+            return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Bạn không có quyền xem cuộc gọi này.");
         }
         return CallResult<CallSessionResponse>.Success(Map(call));
     }
@@ -145,17 +146,17 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
                 IsBlocked = dbContext.ConversationBlocks.Any(block => block.ConversationId == conversationId)
             })
             .FirstOrDefaultAsync(cancellationToken);
-        if (conversation is null) return CallResult<CallableConversation>.Failure(CallError.ConversationNotFound, "Khong tim thay cuoc tro chuyen.");
+        if (conversation is null) return CallResult<CallableConversation>.Failure(CallError.ConversationNotFound, "Không tìm thấy cuộc trò chuyện.");
         if (conversation.DeletedAt.HasValue) return CallResult<CallableConversation>.Failure(CallError.ConversationDissolved, "Conversation has been dissolved.");
-        if (conversation.ConversationType != ConversationType.Private) return CallResult<CallableConversation>.Failure(CallError.Validation, "Chi ho tro goi 1-1 trong phong chat rieng.");
-        if (conversation.IsBlocked) return CallResult<CallableConversation>.Failure(CallError.Blocked, "Cuoc tro chuyen dang bi chan.");
+        if (conversation.ConversationType != ConversationType.Private) return CallResult<CallableConversation>.Failure(CallError.Validation, "Chỉ hỗ trợ gọi 1-1 trong phòng chat riêng.");
+        if (conversation.IsBlocked) return CallResult<CallableConversation>.Failure(CallError.Blocked, "Cuộc trò chuyện đang bị chặn.");
         if (conversation.Members.Count != 2 || conversation.Members.All(member => member.UserId != callerId))
         {
-            return CallResult<CallableConversation>.Failure(CallError.Forbidden, "Ban khong phai thanh vien cuoc tro chuyen.");
+            return CallResult<CallableConversation>.Failure(CallError.Forbidden, "Bạn không phải thành viên cuộc trò chuyện.");
         }
         if (conversation.Members.Any(member => member.AccountStatus != AccountStatus.Active || member.DeletedAt.HasValue))
         {
-            return CallResult<CallableConversation>.Failure(CallError.Forbidden, "Nguoi dung khong kha dung.");
+            return CallResult<CallableConversation>.Failure(CallError.Forbidden, "Người dùng không khả dụng.");
         }
         var receiverId = conversation.Members.Single(member => member.UserId != callerId).UserId;
         var busy = await dbContext.CallSessions
@@ -164,7 +165,7 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
                 (call.CallerId == callerId || call.ReceiverId == callerId || call.CallerId == receiverId || call.ReceiverId == receiverId) &&
                 (call.Status == CallStatus.Calling || call.Status == CallStatus.Accepted),
                 cancellationToken);
-        if (busy) return CallResult<CallableConversation>.Failure(CallError.Busy, "Nguoi dung dang ban.");
+        if (busy) return CallResult<CallableConversation>.Failure(CallError.Busy, "Người dùng đang bận.");
         return CallResult<CallableConversation>.Success(new(receiverId));
     }
 
@@ -181,14 +182,14 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
             .Include(value => value.Caller)
             .Include(value => value.Receiver)
             .FirstOrDefaultAsync(value => value.Id == callId, cancellationToken);
-        if (call is null) return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Khong tim thay cuoc goi.");
+        if (call is null) return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Không tìm thấy cuộc gọi.");
         if (userId.HasValue)
         {
-            if (requireCaller && call.CallerId != userId.Value) return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Chi nguoi goi moi duoc huy.");
-            if (requireReceiver && call.ReceiverId != userId.Value) return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Chi nguoi nhan moi duoc thao tac.");
+            if (requireCaller && call.CallerId != userId.Value) return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Chỉ người gọi mới được hủy.");
+            if (requireReceiver && call.ReceiverId != userId.Value) return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Chỉ người nhận mới được thao tác.");
             if (!requireCaller && !requireReceiver && call.CallerId != userId.Value && call.ReceiverId != userId.Value)
             {
-                return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Ban khong co quyen thao tac cuoc goi nay.");
+                return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Bạn không có quyền thao tác cuộc gọi này.");
             }
         }
         if (IsTerminal(call.Status))
@@ -197,7 +198,7 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
         }
         if (!allowedStatuses.Contains(call.Status))
         {
-            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Trang thai cuoc goi khong hop le.");
+            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Trạng thái cuộc gọi không hợp lệ.");
         }
 
         await ApplyTransitionAsync(call, nextStatus, cancellationToken);
@@ -226,6 +227,7 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
         call.ConversationId,
         new CallParticipantResponse(call.CallerId, call.Caller.DisplayName, call.Caller.AvatarUrl),
         new CallParticipantResponse(call.ReceiverId, call.Receiver.DisplayName, call.Receiver.AvatarUrl),
+        call.CallType,
         call.Status,
         call.StartedAt,
         call.AnsweredAt,

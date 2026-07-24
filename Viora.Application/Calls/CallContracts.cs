@@ -4,7 +4,7 @@ using Viora.Domain.Entities;
 
 namespace Viora.Application.Calls;
 
-public sealed record CreateCallCommand(Guid CallerId, Guid ConversationId) : IRequest<CallResult<CreateCallResponse>>;
+public sealed record CreateCallCommand(Guid CallerId, Guid ConversationId, CallType CallType) : IRequest<CallResult<CreateCallResponse>>;
 public sealed record AcceptCallCommand(Guid UserId, Guid CallId) : IRequest<CallResult<CallSessionResponse>>;
 public sealed record RejectCallCommand(Guid UserId, Guid CallId) : IRequest<CallResult<CallSessionResponse>>;
 public sealed record CancelCallCommand(Guid UserId, Guid CallId) : IRequest<CallResult<CallSessionResponse>>;
@@ -13,7 +13,7 @@ public sealed record MarkMissedCallCommand(Guid CallId) : IRequest<CallResult<Ca
 public sealed record GetCallHistoryQuery(Guid UserId, int Page, int PageSize) : IRequest<CallHistoryResponse>;
 public sealed record GetCallByIdQuery(Guid UserId, Guid CallId) : IRequest<CallResult<CallSessionResponse>>;
 
-public sealed record CreateCallRequest(Guid ConversationId);
+public sealed record CreateCallRequest(Guid ConversationId, CallType CallType = CallType.Audio);
 public sealed record CreateCallResponse(Guid CallId);
 
 public sealed record CallHistoryResponse(int Page, int PageSize, int TotalItems, int TotalPages, IReadOnlyList<CallSessionResponse> Items);
@@ -23,6 +23,7 @@ public sealed record CallSessionResponse(
     Guid ConversationId,
     CallParticipantResponse Caller,
     CallParticipantResponse Receiver,
+    CallType CallType,
     CallStatus Status,
     DateTime StartedAt,
     DateTime? AnsweredAt,
@@ -34,7 +35,7 @@ public sealed record CallSessionResponse(
 public sealed record CallParticipantResponse(Guid Id, string DisplayName, string? AvatarUrl);
 public sealed record IceServersResponse(IReadOnlyList<IceServerResponse> IceServers);
 public sealed record IceServerResponse(IReadOnlyList<string> Urls, string? Username = null, string? Credential = null);
-public sealed record IncomingCallPayload(Guid CallId, Guid ConversationId, CallParticipantResponse Caller);
+public sealed record IncomingCallPayload(Guid CallId, Guid ConversationId, CallParticipantResponse Caller, CallType CallType);
 public sealed record CallSignalPayload(Guid CallId, Guid ConversationId, Guid FromUserId, object Signal);
 public sealed record CallEndedPayload(Guid CallId, Guid ConversationId, CallStatus Status, int? Duration);
 
@@ -82,5 +83,6 @@ public sealed class CreateCallValidator : AbstractValidator<CreateCallCommand>
     {
         RuleFor(command => command.CallerId).NotEmpty();
         RuleFor(command => command.ConversationId).NotEmpty();
+        RuleFor(command => command.CallType).IsInEnum();
     }
 }

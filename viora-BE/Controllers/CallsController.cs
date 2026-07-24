@@ -22,7 +22,7 @@ public sealed class CallsController(IMediator mediator, IIceServerProvider iceSe
     public async Task<IActionResult> Create([FromBody] CreateCallRequest request, CancellationToken cancellationToken)
     {
         if (!TryGetViewerUserId(out var userId)) return Unauthorized();
-        var result = await mediator.Send(new CreateCallCommand(userId, request.ConversationId), cancellationToken);
+        var result = await mediator.Send(new CreateCallCommand(userId, request.ConversationId, request.CallType), cancellationToken);
         return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : ToActionResult(result);
     }
 
