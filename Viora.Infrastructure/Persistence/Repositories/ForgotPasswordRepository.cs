@@ -25,6 +25,11 @@ public sealed class ForgotPasswordRepository(AppDbContext dbContext) : IForgotPa
                 account => account.Phone != null && phoneCandidates.Contains(account.Phone),
                 cancellationToken);
 
+    public Task<Account?> FindByEmailAsync(
+        string email,
+        CancellationToken cancellationToken) =>
+        ActiveAccounts().FirstOrDefaultAsync(account => account.Email == email, cancellationToken);
+
     public Task<Account?> GetAsync(Guid accountId, CancellationToken cancellationToken) =>
         ActiveAccounts().FirstOrDefaultAsync(account => account.Id == accountId, cancellationToken);
 
@@ -77,4 +82,3 @@ public sealed class ForgotPasswordRepository(AppDbContext dbContext) : IForgotPa
             account.DeletedAt == null &&
             account.Status == AccountStatus.Active);
 }
-

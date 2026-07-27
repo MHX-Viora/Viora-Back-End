@@ -49,7 +49,7 @@ public sealed class GetForgotPasswordStatusHandler(
 
 public sealed class SetForgotPasswordPhoneHandler(
     IForgotPasswordRepository repository,
-    IFirebasePhoneTokenVerifier firebaseTokenVerifier,
+    IFirebaseIdentityTokenVerifier firebaseTokenVerifier,
     IValidator<SetForgotPasswordPhoneCommand> validator)
     : IRequestHandler<SetForgotPasswordPhoneCommand, ForgotPasswordResult<ForgotPasswordMessageResponse>>
 {
@@ -73,9 +73,10 @@ public sealed class SetForgotPasswordPhoneHandler(
             return Invalid(exception.Message, exception.Code);
         }
 
-        var verifiedPhone = await firebaseTokenVerifier.VerifyPhoneNumberAsync(
+        var verifiedIdentity = await firebaseTokenVerifier.VerifyAsync(
             request.FirebaseToken,
             cancellationToken);
+        var verifiedPhone = verifiedIdentity?.PhoneNumber;
         if (verifiedPhone is null ||
             !string.Equals(
                 ForgotPasswordIdentifier.NormalizePhone(verifiedPhone),
@@ -127,7 +128,7 @@ public sealed class SetForgotPasswordPhoneHandler(
 
 public sealed class ResetForgottenPasswordHandler(
     IForgotPasswordRepository repository,
-    IFirebasePhoneTokenVerifier firebaseTokenVerifier,
+    IFirebaseIdentityTokenVerifier firebaseTokenVerifier,
     IPasswordHasher passwordVerifier,
     IPasswordResetHasher passwordHasher,
     IValidator<ResetForgottenPasswordCommand> validator)
@@ -145,20 +146,61 @@ public sealed class ResetForgottenPasswordHandler(
                 validation.Errors[0].ErrorMessage);
         }
 
-        var verifiedPhone = await firebaseTokenVerifier.VerifyPhoneNumberAsync(
+        var verifiedIdentity = await firebaseTokenVerifier.VerifyAsync(
             request.FirebaseToken,
             cancellationToken);
-        if (string.IsNullOrWhiteSpace(verifiedPhone))
+        if (verifiedIdentity is null)
         {
             return ForgotPasswordResult<ForgotPasswordMessageResponse>.Failure(
                 ForgotPasswordOutcome.Unauthorized,
                 "Firebase token không hợp lệ.");
         }
 
-        var normalizedPhone = ForgotPasswordIdentifier.NormalizePhone(verifiedPhone);
-        var account = await repository.FindByPhoneAsync(
-            ForgotPasswordIdentifier.PhoneCandidates(normalizedPhone),
-            cancellationToken);
+        Viora.Domain.Entities.Account? account;
+        try
+        {
+            var identifier = ForgotPasswordIdentifier.Parse(request.Identifier);
+            if (identifier.Email is not null)
+            {
+                if (!string.Equals(
+                    verifiedIdentity.Email,
+                    identifier.Email,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    return ForgotPasswordResult<ForgotPasswordMessageResponse>.Failure(
+                        ForgotPasswordOutcome.Unauthorized,
+                        "Firebase token không khớp thông tin đăng nhập.");
+                }
+
+                account = await repository.FindByEmailAsync(
+                    identifier.Email,
+                    cancellationToken);
+            }
+            else
+            {
+                var verifiedPhone = verifiedIdentity.PhoneNumber is null
+                    ? null
+                    : ForgotPasswordIdentifier.NormalizePhone(verifiedIdentity.PhoneNumber);
+                if (verifiedPhone is null ||
+                    !identifier.PhoneCandidates.Contains(verifiedPhone))
+                {
+                    return ForgotPasswordResult<ForgotPasswordMessageResponse>.Failure(
+                        ForgotPasswordOutcome.Unauthorized,
+                        "Firebase token không khớp thông tin đăng nhập.");
+                }
+
+                account = await repository.FindByPhoneAsync(
+                    identifier.PhoneCandidates,
+                    cancellationToken);
+            }
+        }
+        catch (AccountValidationException exception)
+        {
+            return ForgotPasswordResult<ForgotPasswordMessageResponse>.Failure(
+                ForgotPasswordOutcome.ValidationFailed,
+                exception.Message,
+                exception.Code);
+        }
         if (account is null)
         {
             return ForgotPasswordResult<ForgotPasswordMessageResponse>.Failure(
@@ -184,4 +226,3 @@ public sealed class ResetForgottenPasswordHandler(
             "Đổi mật khẩu thành công.");
     }
 }
-

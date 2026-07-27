@@ -131,7 +131,7 @@ public static class DependencyInjection
         services.AddScoped<IForgotPasswordRepository, ForgotPasswordRepository>();
         services.AddScoped<IPasswordHasher, AspNetIdentityPasswordHasher>();
         services.AddScoped<IPasswordResetHasher, BCryptPasswordResetHasher>();
-        services.AddScoped<IFirebasePhoneTokenVerifier, FirebasePhoneTokenVerifier>();
+        services.AddScoped<IFirebaseIdentityTokenVerifier, FirebaseIdentityTokenVerifier>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IUserProfileService, UserProfileService>();

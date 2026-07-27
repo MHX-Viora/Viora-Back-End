@@ -17,7 +17,8 @@ public sealed record SetForgotPasswordPhoneCommand(
 
 public sealed record ResetForgottenPasswordCommand(
     string FirebaseToken,
-    string NewPassword)
+    string NewPassword,
+    string Identifier)
     : IRequest<ForgotPasswordResult<ForgotPasswordMessageResponse>>;
 
 public sealed record ForgotPasswordStatusResponse(
@@ -64,6 +65,7 @@ public interface IForgotPasswordRepository
         IReadOnlyList<string> phoneCandidates,
         CancellationToken cancellationToken);
 
+    Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken);
     Task<Account?> GetAsync(Guid accountId, CancellationToken cancellationToken);
     Task<bool> PhoneExistsAsync(string phoneNumber, Guid excludingAccountId, CancellationToken cancellationToken);
     Task SavePhoneAsync(Account account, string phoneNumber, CancellationToken cancellationToken);
@@ -74,9 +76,13 @@ public interface IForgotPasswordRepository
         CancellationToken cancellationToken);
 }
 
-public interface IFirebasePhoneTokenVerifier
+public sealed record FirebaseVerifiedIdentity(string? Email, string? PhoneNumber);
+
+public interface IFirebaseIdentityTokenVerifier
 {
-    Task<string?> VerifyPhoneNumberAsync(string firebaseToken, CancellationToken cancellationToken);
+    Task<FirebaseVerifiedIdentity?> VerifyAsync(
+        string firebaseToken,
+        CancellationToken cancellationToken);
 }
 
 public interface IPasswordResetHasher
@@ -154,6 +160,7 @@ public sealed class ResetForgottenPasswordValidator : AbstractValidator<ResetFor
     public ResetForgottenPasswordValidator()
     {
         RuleFor(x => x.FirebaseToken).NotEmpty().MaximumLength(4096);
+        RuleFor(x => x.Identifier).NotEmpty().MaximumLength(255);
         RuleFor(x => x.NewPassword)
             .NotEmpty().WithMessage("Mật khẩu mới không được để trống.")
             .Length(8, 100).WithMessage("Mật khẩu mới phải từ 8-100 ký tự.")
@@ -162,4 +169,3 @@ public sealed class ResetForgottenPasswordValidator : AbstractValidator<ResetFor
             .Matches("[0-9]").WithMessage("Mật khẩu mới phải chứa ít nhất 1 số.");
     }
 }
-

@@ -66,7 +66,8 @@ public sealed class AuthController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(
             new ResetForgottenPasswordCommand(
                 request.FirebaseToken ?? string.Empty,
-                request.NewPassword ?? string.Empty),
+                request.NewPassword ?? string.Empty,
+                request.Identifier ?? string.Empty),
             cancellationToken);
         return result.Outcome == ForgotPasswordOutcome.Success
             ? Ok(result.Value)
@@ -95,7 +96,8 @@ public sealed record SetForgotPasswordPhoneRequest(
 
 public sealed record ResetForgottenPasswordRequest(
     [property: MaxLength(4096)] string? FirebaseToken,
-    [property: StringLength(100, MinimumLength = 8)] string? NewPassword);
+    [property: StringLength(100, MinimumLength = 8)] string? NewPassword,
+    [property: MaxLength(255)] string? Identifier);
 
 public sealed record ForgotPasswordErrorResponse(
     bool Success,

@@ -20,7 +20,7 @@ public sealed class ForgotPasswordTests
         var repository = new FakeRepository(account);
         var handler = new SetForgotPasswordPhoneHandler(
             repository,
-            new FakeFirebaseVerifier("+84909999999"),
+            new FakeFirebaseVerifier(phoneNumber: "+84909999999"),
             new SetForgotPasswordPhoneValidator());
 
         var result = await handler.Handle(
@@ -38,13 +38,13 @@ public sealed class ForgotPasswordTests
         var repository = new FakeRepository(account);
         var handler = new ResetForgottenPasswordHandler(
             repository,
-            new FakeFirebaseVerifier("+84901234567"),
+            new FakeFirebaseVerifier(phoneNumber: "+84901234567"),
             new FakePasswordHasher(),
             new FakeResetHasher(),
             new ResetForgottenPasswordValidator());
 
         var result = await handler.Handle(
-            new("firebase-token", "NewPassword1"),
+            new("firebase-token", "NewPassword1", "+84901234567"),
             CancellationToken.None);
 
         Assert.Equal(ForgotPasswordOutcome.Success, result.Outcome);
@@ -59,16 +59,57 @@ public sealed class ForgotPasswordTests
         var repository = new FakeRepository(account);
         var handler = new ResetForgottenPasswordHandler(
             repository,
-            new FakeFirebaseVerifier("+84901234567"),
+            new FakeFirebaseVerifier(phoneNumber: "+84901234567"),
             new FakePasswordHasher(),
             new FakeResetHasher(),
             new ResetForgottenPasswordValidator());
 
         var result = await handler.Handle(
-            new("firebase-token", "SamePassword1"),
+            new("firebase-token", "SamePassword1", "+84901234567"),
             CancellationToken.None);
 
         Assert.Equal(ForgotPasswordOutcome.SamePassword, result.Outcome);
+        Assert.False(repository.RefreshTokensRevoked);
+    }
+
+    [Fact]
+    public async Task Reset_finds_email_account_from_verified_firebase_identity()
+    {
+        var account = Account(passwordHash: "old-hash");
+        var repository = new FakeRepository(account);
+        var handler = new ResetForgottenPasswordHandler(
+            repository,
+            new FakeFirebaseVerifier(email: "user@example.com"),
+            new FakePasswordHasher(),
+            new FakeResetHasher(),
+            new ResetForgottenPasswordValidator());
+
+        var result = await handler.Handle(
+            new("firebase-token", "NewPassword1", "user@example.com"),
+            CancellationToken.None);
+
+        Assert.Equal(ForgotPasswordOutcome.Success, result.Outcome);
+        Assert.Equal("bcrypt:NewPassword1", account.PasswordHash);
+    }
+
+    [Fact]
+    public async Task Reset_rejects_identity_that_does_not_match_requested_email()
+    {
+        var account = Account(passwordHash: "old-hash");
+        var repository = new FakeRepository(account);
+        var handler = new ResetForgottenPasswordHandler(
+            repository,
+            new FakeFirebaseVerifier(email: "attacker@example.com"),
+            new FakePasswordHasher(),
+            new FakeResetHasher(),
+            new ResetForgottenPasswordValidator());
+
+        var result = await handler.Handle(
+            new("firebase-token", "NewPassword1", "user@example.com"),
+            CancellationToken.None);
+
+        Assert.Equal(ForgotPasswordOutcome.Unauthorized, result.Outcome);
+        Assert.Equal("old-hash", account.PasswordHash);
         Assert.False(repository.RefreshTokensRevoked);
     }
 
@@ -97,6 +138,14 @@ public sealed class ForgotPasswordTests
             CancellationToken cancellationToken) =>
             Task.FromResult<Account?>(
                 account.Phone is not null && phoneCandidates.Contains(account.Phone)
+                    ? account
+                    : null);
+
+        public Task<Account?> FindByEmailAsync(
+            string email,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<Account?>(
+                string.Equals(account.Email, email, StringComparison.Ordinal)
                     ? account
                     : null);
 
@@ -130,12 +179,15 @@ public sealed class ForgotPasswordTests
         }
     }
 
-    private sealed class FakeFirebaseVerifier(string? phoneNumber) : IFirebasePhoneTokenVerifier
+    private sealed class FakeFirebaseVerifier(
+        string? email = null,
+        string? phoneNumber = null) : IFirebaseIdentityTokenVerifier
     {
-        public Task<string?> VerifyPhoneNumberAsync(
+        public Task<FirebaseVerifiedIdentity?> VerifyAsync(
             string firebaseToken,
             CancellationToken cancellationToken) =>
-            Task.FromResult(phoneNumber);
+            Task.FromResult<FirebaseVerifiedIdentity?>(
+                new(email, phoneNumber));
     }
 
     private sealed class FakePasswordHasher : IPasswordHasher
@@ -150,4 +202,3 @@ public sealed class ForgotPasswordTests
         public string Hash(string password) => $"bcrypt:{password}";
     }
 }
-
