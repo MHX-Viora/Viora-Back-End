@@ -4,6 +4,7 @@ using FluentValidation;
 using Viora.Application.Realtime;
 using Viora.Application.Posts;
 using Viora.Domain.Entities;
+using Viora.Application.Mentions;
 
 namespace Viora.Application.Chat;
 
@@ -33,7 +34,8 @@ public sealed record SendChatMessageCommand(
     Guid? ReplyMessageId,
     MessageType MessageType,
     string? Content,
-    IReadOnlyList<SendChatMessageAttachmentRequest>? Attachments)
+    IReadOnlyList<SendChatMessageAttachmentRequest>? Attachments,
+    IReadOnlyList<Guid>? MentionUserIds = null)
     : IRequest<ChatResult<SendChatMessageResponse>>;
 
 public sealed record MarkConversationReadCommand(
@@ -180,7 +182,10 @@ public sealed record ChatMessageItemResponse(
     bool IsEdited,
     bool IsDeleted,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record SendChatMessageResponse(
     Guid Id,
@@ -193,7 +198,10 @@ public sealed record SendChatMessageResponse(
     bool IsMine,
     bool IsEdited,
     bool IsDeleted,
-    DateTime CreatedAt);
+    DateTime CreatedAt)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record ChatRealtimeMessageResponse(
     Guid Id,
@@ -207,7 +215,10 @@ public sealed record ChatRealtimeMessageResponse(
     bool IsMine,
     bool IsEdited,
     bool IsDeleted,
-    DateTime CreatedAt);
+    DateTime CreatedAt)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record NewMessageNotificationPayload(
     Guid ConversationId,

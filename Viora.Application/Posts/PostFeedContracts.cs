@@ -1,5 +1,6 @@
 using MediatR;
 using Viora.Domain.Entities;
+using Viora.Application.Mentions;
 
 namespace Viora.Application.Posts;
 
@@ -40,7 +41,10 @@ public sealed record PostFeedItemResponse(
     ReactionType? ReactionType,
     bool IsSaved,
     IReadOnlyList<PostDetailHashtagResponse> Hashtags,
-    PostFeedOriginalPostResponse? OriginalPost);
+    PostFeedOriginalPostResponse? OriginalPost)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record PostFeedOriginalPostResponse(
     Guid Id,
@@ -56,7 +60,10 @@ public sealed record PostFeedOriginalPostResponse(
     int CommentCount,
     int ShareCount,
     int SaveCount,
-    int ViewCount);
+    int ViewCount)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record PostFeedUserResponse(
     Guid Id,
@@ -93,7 +100,10 @@ public sealed record PostDetailResponse(
     bool IsOwner,
     PostDetailUserResponse User,
     IReadOnlyList<PostDetailMediaResponse> Media,
-    IReadOnlyList<PostDetailHashtagResponse> Hashtags);
+    IReadOnlyList<PostDetailHashtagResponse> Hashtags)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record PostDetailUserResponse(
     Guid Id,

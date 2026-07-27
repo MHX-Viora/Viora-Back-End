@@ -168,7 +168,20 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
                     comment.User.IsVerified)))
             .ToListAsync(cancellationToken);
 
-        return new PostCommentsResponse(page, pageSize, totalItems, totalPages, items);
+        var mentions = await MentionProjection.LoadAsync(
+            dbContext,
+            items.Select(item => item.Id).ToArray(),
+            [MentionTargetType.Comment],
+            cancellationToken);
+        return new PostCommentsResponse(
+            page,
+            pageSize,
+            totalItems,
+            totalPages,
+            items.Select(item => item with
+            {
+                Mentions = mentions.GetValueOrDefault(item.Id) ?? []
+            }).ToArray());
     }
 
     public async Task<CommentRepliesResponse> GetCommentRepliesAsync(
@@ -217,7 +230,20 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
                     comment.User.IsVerified)))
             .ToListAsync(cancellationToken);
 
-        return new CommentRepliesResponse(page, pageSize, totalItems, totalPages, items);
+        var mentions = await MentionProjection.LoadAsync(
+            dbContext,
+            items.Select(item => item.Id).ToArray(),
+            [MentionTargetType.Reply],
+            cancellationToken);
+        return new CommentRepliesResponse(
+            page,
+            pageSize,
+            totalItems,
+            totalPages,
+            items.Select(item => item with
+            {
+                Mentions = mentions.GetValueOrDefault(item.Id) ?? []
+            }).ToArray());
     }
 
     public async Task<VideoCommentsResponse> GetVideoCommentsAsync(

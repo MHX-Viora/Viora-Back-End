@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Viora.Domain.Entities;
+using Viora.Application.Mentions;
 
 namespace Viora.Application.Posts;
 
@@ -23,10 +24,10 @@ public sealed record EmptyResponse;
 public sealed record ReactPostCommand(Guid UserId, Guid PostId, ReactionType ReactionType)
     : IRequest<Result<PostReactionResponse>>;
 
-public sealed record CreateCommentCommand(Guid UserId, Guid PostId, string Content)
+public sealed record CreateCommentCommand(Guid UserId, Guid PostId, string Content, IReadOnlyList<Guid>? MentionUserIds = null)
     : IRequest<Result<CommentResponse>>;
 
-public sealed record ReplyCommentCommand(Guid UserId, Guid CommentId, string Content)
+public sealed record ReplyCommentCommand(Guid UserId, Guid CommentId, string Content, Guid? ReplyToUserId = null, IReadOnlyList<Guid>? MentionUserIds = null)
     : IRequest<Result<CommentReplyListItemResponse>>;
 
 public sealed record ToggleCommentLikeCommand(Guid UserId, Guid CommentId)
@@ -62,7 +63,10 @@ public sealed record CommentResponse(
     string Content,
     DateTime CreatedAt,
     int ReplyCount,
-    int LikeCount);
+    int LikeCount)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record SharePostResponse(bool IsShared, int ShareCount);
 
@@ -94,7 +98,10 @@ public sealed record PostCommentListItemResponse(
     int LikeCount,
     int ReplyCount,
     bool IsLiked,
-    PostInteractionUserResponse User);
+    PostInteractionUserResponse User)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record CommentReplyListItemResponse(
     Guid Id,
@@ -104,7 +111,10 @@ public sealed record CommentReplyListItemResponse(
     int LikeCount,
     bool IsLiked,
     CommentReplyToUserResponse? ReplyToUser,
-    PostInteractionUserResponse User);
+    PostInteractionUserResponse User)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record CommentReplyToUserResponse(
     Guid Id,

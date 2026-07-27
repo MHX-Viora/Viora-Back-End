@@ -1,5 +1,6 @@
 using MediatR;
 using Viora.Domain.Entities;
+using Viora.Application.Mentions;
 
 namespace Viora.Application.Posts;
 
@@ -11,7 +12,8 @@ public sealed record CreatePostCommand(
     double? Longitude,
     string? LocationName,
     string? Link,
-    IReadOnlyList<CreatePostFile> Files) : IRequest<CreatePostResponse>;
+    IReadOnlyList<CreatePostFile> Files,
+    IReadOnlyList<Guid>? MentionUserIds = null) : IRequest<CreatePostResponse>;
 
 public sealed record CreateReelCommand(
     Guid UserId,
@@ -51,7 +53,10 @@ public sealed record CreatePostResponse(
     int ShareCount,
     int SaveCount,
     int ViewCount,
-    DateTime CreatedAt);
+    DateTime CreatedAt)
+{
+    public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+}
 
 public sealed record CreatePostMediaResponse(
     Guid Id,

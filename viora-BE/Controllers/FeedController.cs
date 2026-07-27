@@ -68,7 +68,8 @@ public sealed class FeedController(IMediator mediator) : ControllerBase
                 body.Longitude,
                 body.LocationName,
                 body.Link,
-                files), cancellationToken);
+                files,
+                body.MentionUserIds ?? request.MentionUserIds), cancellationToken);
 
             return Created($"/api/feed/{response.Id}", response);
         }
@@ -106,19 +107,21 @@ public sealed class FeedController(IMediator mediator) : ControllerBase
                 request.Latitude,
                 request.Longitude,
                 request.LocationName,
-                request.Link);
+                request.Link,
+                request.MentionUserIds);
         }
 
         try
         {
             return JsonSerializer.Deserialize<CreatePostBody>(request.Post, JsonOptions) ??
-                new CreatePostBody(null, PostVisibility.Public, null, null, null, null);
+                new CreatePostBody(null, PostVisibility.Public, null, null, null, null, null);
         }
         catch (JsonException)
         {
             return new CreatePostBody(
                 request.Post,
                 PostVisibility.Public,
+                null,
                 null,
                 null,
                 null,

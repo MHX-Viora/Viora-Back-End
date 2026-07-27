@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Viora.Domain.Entities;
+using Viora.Application.Mentions;
 
 namespace Viora.Application.Posts;
 
@@ -8,7 +9,8 @@ public sealed class CreatePostCommandHandler(
     IPostRepository repository,
     IUnitOfWork unitOfWork,
     IMediaStorage mediaStorage,
-    IValidator<CreatePostCommand> validator)
+    IValidator<CreatePostCommand> validator,
+    IMentionService mentionService)
     : IRequestHandler<CreatePostCommand, CreatePostResponse>
 {
     public async Task<CreatePostResponse> Handle(
@@ -57,6 +59,13 @@ public sealed class CreatePostCommandHandler(
             await repository.AddAsync(post, token);
         }, cancellationToken);
 
+        var mentions = await mentionService.CreateAsync(
+            user.Id,
+            post.Id,
+            MentionTargetType.Post,
+            request.MentionUserIds,
+            cancellationToken);
+
         return new CreatePostResponse(
             post.Id,
             post.Content,
@@ -74,6 +83,9 @@ public sealed class CreatePostCommandHandler(
             post.ShareCount,
             post.SaveCount,
             post.ViewCount,
-            post.CreatedAt);
+            post.CreatedAt)
+        {
+            Mentions = mentions
+        };
     }
 }

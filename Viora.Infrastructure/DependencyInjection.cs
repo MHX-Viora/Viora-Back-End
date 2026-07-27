@@ -22,6 +22,7 @@ using Microsoft.AspNetCore.SignalR;
 using Viora.Application.Sharing;
 using Viora.Infrastructure.Sharing;
 using Viora.Application.Admin;
+using Viora.Application.Mentions;
 
 namespace Viora.Infrastructure;
 
@@ -139,6 +140,8 @@ public static class DependencyInjection
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationDeliveryRepository, NotificationDeliveryRepository>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IMentionRepository, MentionRepository>();
+        services.AddScoped<IMentionService, MentionService>();
         services.AddScoped<IChatConversationRepository, ChatConversationRepository>();
         services.AddScoped<ICallRepository, CallRepository>();
         services.AddScoped<ICallHistoryMessageRepository, CallHistoryMessageRepository>();

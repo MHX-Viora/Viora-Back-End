@@ -45,7 +45,7 @@ public sealed class PostsController(IMediator mediator, IShareLinkService shareL
         CancellationToken cancellationToken)
     {
         if (!TryGetViewerUserId(out var userId)) return Unauthorized();
-        var result = await mediator.Send(new CreateCommentCommand(userId, postId, request.Content), cancellationToken);
+        var result = await mediator.Send(new CreateCommentCommand(userId, postId, request.Content, request.MentionUserIds), cancellationToken);
         return ToActionResult(result, StatusCodes.Status201Created);
     }
 
@@ -73,7 +73,7 @@ public sealed class PostsController(IMediator mediator, IShareLinkService shareL
         CancellationToken cancellationToken)
     {
         if (!TryGetViewerUserId(out var userId)) return Unauthorized();
-        var result = await mediator.Send(new ReplyCommentCommand(userId, commentId, request.Content), cancellationToken);
+        var result = await mediator.Send(new ReplyCommentCommand(userId, commentId, request.Content, request.ReplyToUserId, request.MentionUserIds), cancellationToken);
         return ToActionResult(result, StatusCodes.Status201Created);
     }
 
@@ -244,8 +244,13 @@ public sealed class PostsController(IMediator mediator, IShareLinkService shareL
 }
 
 public sealed record ReactionPostRequest(ReactionType ReactionType);
-public sealed record CommentPostRequest([param: Required, MaxLength(5000)] string Content);
-public sealed record ReplyCommentRequest([param: Required, MaxLength(5000)] string Content);
+public sealed record CommentPostRequest(
+    [param: Required, MaxLength(5000)] string Content,
+    IReadOnlyList<Guid>? MentionUserIds = null);
+public sealed record ReplyCommentRequest(
+    [param: Required, MaxLength(5000)] string Content,
+    Guid? ReplyToUserId = null,
+    IReadOnlyList<Guid>? MentionUserIds = null);
 public sealed record ReportPostRequest(ReportReason Reason, [param: MaxLength(1000)] string? Description);
 public sealed record MessageResponse(string Message);
 public sealed record CommentLikeApiResponse<T>(bool Success, string Message, T? Data);
@@ -278,6 +283,9 @@ public sealed class CreatePostFormRequest
 
     [FromForm(Name = "files")]
     public List<IFormFile>? Files { get; init; }
+
+    [FromForm(Name = "mentionUserIds")]
+    public List<Guid>? MentionUserIds { get; init; }
 }
 
 public sealed record CreatePostBody(
@@ -286,4 +294,5 @@ public sealed record CreatePostBody(
     double? Latitude,
     double? Longitude,
     string? LocationName,
-    string? Link);
+    string? Link,
+    IReadOnlyList<Guid>? MentionUserIds = null);

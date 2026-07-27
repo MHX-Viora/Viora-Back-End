@@ -1,4 +1,5 @@
 using Viora.Application.Notifications;
+using Viora.Application.Mentions;
 using Viora.Application.Posts;
 using Viora.Domain.Entities;
 using Xunit;
@@ -28,7 +29,11 @@ public sealed class ReplyCommentNotificationTests
         };
         var repository = new ReplyNotificationRepository(replier, parent);
         var notificationService = new CaptureNotificationService();
-        var handler = new ReplyCommentHandler(repository, new ReplyCommentValidator(), notificationService);
+        var handler = new ReplyCommentHandler(
+            repository,
+            new ReplyCommentValidator(),
+            notificationService,
+            new NoOpMentionService());
 
         var result = await handler.Handle(new ReplyCommentCommand(replier.Id, parentCommentId, "reply"), CancellationToken.None);
 
@@ -93,5 +98,22 @@ public sealed class ReplyCommentNotificationTests
         public Task<CommentRepliesResponse> GetCommentRepliesAsync(GetCommentRepliesQuery query, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<VideoCommentsResponse> GetVideoCommentsAsync(GetVideoCommentsQuery query, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<VideoRepliesResponse> GetVideoRepliesAsync(GetVideoRepliesQuery query, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class NoOpMentionService : IMentionService
+    {
+        public Task<IReadOnlyList<MentionResponse>> CreateAsync(
+            Guid mentionedByUserId,
+            Guid targetId,
+            MentionTargetType targetType,
+            IReadOnlyList<Guid>? mentionedUserIds,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<MentionResponse>>([]);
+
+        public Task<IReadOnlyList<MentionSearchResponse>> SearchAsync(
+            Guid currentUserId,
+            string? keyword,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<MentionSearchResponse>>([]);
     }
 }

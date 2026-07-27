@@ -86,7 +86,12 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                     .ToList()))
             .SingleAsync(cancellationToken);
 
-        return Result<PostDetailResponse>.Success(response);
+        var mentions = await MentionProjection.LoadAsync(
+            dbContext, [response.Id], [MentionTargetType.Post], cancellationToken);
+        return Result<PostDetailResponse>.Success(response with
+        {
+            Mentions = mentions.GetValueOrDefault(response.Id) ?? []
+        });
     }
 
     public async Task<PostFeedResponse> GetCommunityPostsAsync(
@@ -276,7 +281,24 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                         item.Post.OriginalPost.ViewCount)))
             .ToListAsync(cancellationToken);
 
-        return new PostFeedResponse(page, pageSize, totalItems, totalPages, items);
+        var postIds = items
+            .SelectMany(item => item.OriginalPost is null ? [item.Id] : new[] { item.Id, item.OriginalPost.Id })
+            .Distinct()
+            .ToArray();
+        var mentions = await MentionProjection.LoadAsync(
+            dbContext, postIds, [MentionTargetType.Post], cancellationToken);
+        var mappedItems = items.Select(item => item with
+        {
+            Mentions = mentions.GetValueOrDefault(item.Id) ?? [],
+            OriginalPost = item.OriginalPost is null
+                ? null
+                : item.OriginalPost with
+                {
+                    Mentions = mentions.GetValueOrDefault(item.OriginalPost.Id) ?? []
+                }
+        }).ToArray();
+
+        return new PostFeedResponse(page, pageSize, totalItems, totalPages, mappedItems);
     }
 
     private async Task<bool> HasBehaviorAsync(Guid viewerUserId, CancellationToken cancellationToken) =>

@@ -17,6 +17,21 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
     }
 }
 
+internal sealed class MentionConfiguration : IEntityTypeConfiguration<Mention>
+{
+    public void Configure(EntityTypeBuilder<Mention> builder)
+    {
+        builder.ToTable("Mentions");
+        builder.HasKey(x => x.Id);
+        builder.HasIndex(x => x.MentionedUserId);
+        builder.HasIndex(x => x.TargetId);
+        builder.HasIndex(x => x.TargetType);
+        builder.HasIndex(x => new { x.TargetId, x.TargetType, x.MentionedUserId }).IsUnique();
+        builder.HasOne(x => x.MentionedUser).WithMany().HasForeignKey(x => x.MentionedUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.MentionedByUser).WithMany().HasForeignKey(x => x.MentionedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 internal sealed class ReportConfiguration : IEntityTypeConfiguration<Report>
 {
     public void Configure(EntityTypeBuilder<Report> builder)

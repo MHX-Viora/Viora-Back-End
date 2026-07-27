@@ -20,6 +20,8 @@ public sealed class NotificationService(
             command.ReferenceType,
             command.PostType,
             command.ImageUrl);
+        if (!string.IsNullOrWhiteSpace(command.Title)) notification.Title = command.Title.Trim();
+        if (!string.IsNullOrWhiteSpace(command.Content)) notification.Content = command.Content.Trim();
 
         if (notification.Id == Guid.Empty)
         {

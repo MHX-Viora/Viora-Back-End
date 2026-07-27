@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.Extensions.Logging;
 using Viora.Application.Posts;
 using Viora.Application.Realtime;
+using Viora.Application.Mentions;
 using Viora.Domain.Entities;
 
 namespace Viora.Application.Chat;
@@ -71,7 +72,8 @@ public sealed class GetChatConversationMessagesHandler(IChatConversationReposito
 public sealed class SendChatMessageHandler(
     IChatConversationRepository repository,
     ChatMessageDeliveryService deliveryService,
-    IValidator<SendChatMessageCommand> validator)
+    IValidator<SendChatMessageCommand> validator,
+    IMentionService mentionService)
     : IRequestHandler<SendChatMessageCommand, ChatResult<SendChatMessageResponse>>
 {
     public async Task<ChatResult<SendChatMessageResponse>> Handle(
@@ -100,9 +102,17 @@ public sealed class SendChatMessageHandler(
                 result.Message ?? "Khong the gui tin nhan.");
         }
 
-        await deliveryService.PublishAsync(request.SenderUserId, result.Value, cancellationToken);
+        var mentions = await mentionService.CreateAsync(
+            request.SenderUserId,
+            result.Value.Message.Id,
+            MentionTargetType.Message,
+            request.MentionUserIds,
+            cancellationToken);
+        var message = result.Value.Message with { Mentions = mentions };
+        var delivery = result.Value with { Message = message };
+        await deliveryService.PublishAsync(request.SenderUserId, delivery, cancellationToken);
 
-        return ChatResult<SendChatMessageResponse>.Success(result.Value.Message);
+        return ChatResult<SendChatMessageResponse>.Success(message);
     }
 }
 
@@ -253,7 +263,10 @@ public sealed class ChatMessageDeliveryService(
             isMine,
             message.IsEdited,
             message.IsDeleted,
-            message.CreatedAt);
+            message.CreatedAt)
+        {
+            Mentions = message.Mentions
+        };
 }
 
 public sealed class MarkConversationReadHandler(

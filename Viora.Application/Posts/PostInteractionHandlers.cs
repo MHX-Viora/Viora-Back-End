@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Viora.Application.Notifications;
+using Viora.Application.Mentions;
 using Viora.Application.Realtime;
 using Viora.Domain.Entities;
 
@@ -122,7 +123,8 @@ public sealed class ReactPostHandler(
 public sealed class CreateCommentHandler(
     IPostInteractionRepository repository,
     IValidator<CreateCommentCommand> validator,
-    INotificationService notificationService)
+    INotificationService notificationService,
+    IMentionService mentionService)
     : IRequestHandler<CreateCommentCommand, Result<CommentResponse>>
 {
     public async Task<Result<CommentResponse>> Handle(CreateCommentCommand request, CancellationToken cancellationToken)
@@ -156,14 +158,17 @@ public sealed class CreateCommentHandler(
             await notificationService.PublishAsync(notification, cancellationToken);
         }
 
-        return Result<CommentResponse>.Success(ReactPostHandler.MapComment(comment));
+        var mentions = await mentionService.CreateAsync(
+            request.UserId, comment.Id, MentionTargetType.Comment, request.MentionUserIds, cancellationToken);
+        return Result<CommentResponse>.Success(ReactPostHandler.MapComment(comment) with { Mentions = mentions });
     }
 }
 
 public sealed class ReplyCommentHandler(
     IPostInteractionRepository repository,
     IValidator<ReplyCommentCommand> validator,
-    INotificationService notificationService)
+    INotificationService notificationService,
+    IMentionService mentionService)
     : IRequestHandler<ReplyCommentCommand, Result<CommentReplyListItemResponse>>
 {
     public async Task<Result<CommentReplyListItemResponse>> Handle(ReplyCommentCommand request, CancellationToken cancellationToken)
@@ -219,6 +224,8 @@ public sealed class ReplyCommentHandler(
             await notificationService.PublishAsync(notification, cancellationToken);
         }
 
+        var mentions = await mentionService.CreateAsync(
+            request.UserId, reply.Id, MentionTargetType.Reply, request.MentionUserIds, cancellationToken);
         return Result<CommentReplyListItemResponse>.Success(new CommentReplyListItemResponse(
             reply.Id,
             reply.Content,
@@ -227,7 +234,10 @@ public sealed class ReplyCommentHandler(
             reply.LikeCount,
             false,
             new CommentReplyToUserResponse(parent.User.Id, parent.User.DisplayName),
-            new PostInteractionUserResponse(user.Id, user.DisplayName, user.AvatarUrl, user.IsVerified)));
+            new PostInteractionUserResponse(user.Id, user.DisplayName, user.AvatarUrl, user.IsVerified))
+        {
+            Mentions = mentions
+        });
     }
 }
 

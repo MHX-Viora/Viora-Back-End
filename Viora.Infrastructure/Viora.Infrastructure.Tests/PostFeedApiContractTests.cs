@@ -89,7 +89,8 @@ public sealed class PostFeedApiContractTests
             "ReactionType",
             "IsSaved",
             "Hashtags",
-            "OriginalPost");
+            "OriginalPost",
+            "Mentions");
         AssertProperties<PostFeedOriginalPostResponse>(
             "Id",
             "Content",
@@ -104,7 +105,8 @@ public sealed class PostFeedApiContractTests
             "CommentCount",
             "ShareCount",
             "SaveCount",
-            "ViewCount");
+            "ViewCount",
+            "Mentions");
         AssertProperties<PostFeedUserResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified");
         AssertProperties<PostFeedMediaResponse>("Id", "MediaUrl", "ThumbnailUrl");
     }
@@ -115,7 +117,7 @@ public sealed class PostFeedApiContractTests
         AssertProperties<PostDetailResponse>(
             "Id", "PostType", "Content", "Visibility", "Location", "CreatedAt", "UpdatedAt",
             "ReactionCount", "CommentCount", "ShareCount", "SaveCount", "ViewCount",
-            "MyReaction", "IsSaved", "IsOwner", "User", "Media", "Hashtags");
+            "MyReaction", "IsSaved", "IsOwner", "User", "Media", "Hashtags", "Mentions");
         AssertProperties<PostDetailUserResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified");
         AssertProperties<PostDetailMediaResponse>("Id", "MediaType", "MediaUrl", "ThumbnailUrl");
         AssertProperties<PostDetailHashtagResponse>("Id", "Name");
@@ -134,7 +136,8 @@ public sealed class PostFeedApiContractTests
             "LikeCount",
             "ReplyCount",
             "IsLiked",
-            "User");
+            "User",
+            "Mentions");
         AssertProperties<CommentReplyListItemResponse>(
             "Id",
             "Content",
@@ -143,7 +146,8 @@ public sealed class PostFeedApiContractTests
             "LikeCount",
             "IsLiked",
             "ReplyToUser",
-            "User");
+            "User",
+            "Mentions");
         AssertProperties<CommentReplyToUserResponse>("Id", "DisplayName");
     }
 

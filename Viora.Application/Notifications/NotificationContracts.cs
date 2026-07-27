@@ -67,7 +67,9 @@ public sealed record SendNotificationCommand(
     Guid? ReferenceId,
     NotificationReferenceType? ReferenceType,
     PostType? PostType = null,
-    string? ImageUrl = null);
+    string? ImageUrl = null,
+    string? Title = null,
+    string? Content = null);
 
 public interface INotificationService
 {

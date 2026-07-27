@@ -101,7 +101,8 @@ public sealed class ChatApiContractTests
             "ReplyMessageId",
             "MessageType",
             "Content",
-            "Attachments");
+            "Attachments",
+            "MentionUserIds");
         Assert.DoesNotContain(
             typeof(SendChatMessageRequest).GetProperties(),
             property => property.Name.Contains("Sender", StringComparison.OrdinalIgnoreCase));
@@ -265,7 +266,8 @@ public sealed class ChatApiContractTests
             "IsEdited",
             "IsDeleted",
             "CreatedAt",
-            "UpdatedAt");
+            "UpdatedAt",
+            "Mentions");
         AssertProperties<ChatMessageSenderResponse>("Id", "DisplayName", "AvatarUrl", "IsVerified");
         AssertProperties<ChatReplyMessageResponse>("Id", "Content", "MessageType", "SenderName");
         AssertProperties<ChatMessageAttachmentResponse>("Id", "FileUrl", "FileName", "MimeType", "ThumbnailUrl", "FileSize", "Duration");
@@ -296,7 +298,8 @@ public sealed class ChatApiContractTests
             "IsMine",
             "IsEdited",
             "IsDeleted",
-            "CreatedAt");
+            "CreatedAt",
+            "Mentions");
     }
 
     [Fact]
@@ -339,7 +342,8 @@ public sealed class ChatApiContractTests
             "IsMine",
             "IsEdited",
             "IsDeleted",
-            "CreatedAt");
+            "CreatedAt",
+            "Mentions");
         AssertProperties<NewMessageNotificationPayload>(
             "ConversationId",
             "ConversationType",

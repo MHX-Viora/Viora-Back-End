@@ -433,6 +433,11 @@ public sealed class ChatConversationRepository(
             .ToDictionary(
                 group => group.Key,
                 group => group.Select(reaction => reaction.Reaction).ToList());
+        var mentionsByMessage = await MentionProjection.LoadAsync(
+            dbContext,
+            messageIds,
+            [MentionTargetType.Message],
+            cancellationToken);
 
         var items = pageMessages
             .Select(message =>
@@ -463,7 +468,10 @@ public sealed class ChatConversationRepository(
                     message.IsEdited,
                     message.IsDeleted,
                     message.CreatedAt,
-                    message.UpdatedAt);
+                    message.UpdatedAt)
+                {
+                    Mentions = mentionsByMessage.GetValueOrDefault(message.Id) ?? []
+                };
             })
             .ToList();
 

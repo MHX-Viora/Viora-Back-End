@@ -15,6 +15,16 @@ public sealed class Notification : CreatedEntity
     public User? SenderUser { get; set; }
 }
 
+public sealed class Mention : CreatedEntity
+{
+    public Guid MentionedUserId { get; set; }
+    public Guid MentionedByUserId { get; set; }
+    public Guid TargetId { get; set; }
+    public MentionTargetType TargetType { get; set; }
+    public User MentionedUser { get; set; } = null!;
+    public User MentionedByUser { get; set; } = null!;
+}
+
 public sealed class Report : CreatedEntity
 {
     public Guid ReporterUserId { get; set; }
