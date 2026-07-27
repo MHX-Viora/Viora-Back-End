@@ -152,6 +152,33 @@ public sealed class FirebasePushNotificationSenderTests
         Assert.Equal("Hello", firebaseMessage.Data["body"]);
     }
 
+    [Fact]
+    public void BuildFirebaseMessage_android_incoming_call_is_short_lived_data_only()
+    {
+        var message = new PushMessage(
+            Guid.NewGuid(),
+            "Caller",
+            "Đang gọi cho bạn...",
+            new Dictionary<string, string>
+            {
+                ["type"] = "IncomingCall",
+                ["callId"] = Guid.NewGuid().ToString()
+            });
+
+        var firebaseMessage = FirebaseMessagingClient.BuildFirebaseMessage(
+            message,
+            "fcm-token",
+            DevicePlatform.Android);
+
+        Assert.Null(firebaseMessage.Notification);
+        Assert.NotNull(firebaseMessage.Android);
+        Assert.Null(firebaseMessage.Android.Notification);
+        Assert.Equal(FirebaseAdmin.Messaging.Priority.High, firebaseMessage.Android.Priority);
+        Assert.Equal(TimeSpan.FromSeconds(30), firebaseMessage.Android.TimeToLive);
+        Assert.Equal("Caller", firebaseMessage.Data["title"]);
+        Assert.Equal("Đang gọi cho bạn...", firebaseMessage.Data["body"]);
+    }
+
     private static FirebasePushNotificationSender CreateSender(
         FakeDeviceTokenRepository repository,
         FakeFirebaseMessagingClient? client) =>

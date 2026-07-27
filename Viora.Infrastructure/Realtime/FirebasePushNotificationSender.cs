@@ -214,8 +214,13 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
             platform == DevicePlatform.Android &&
             message.Data.TryGetValue("type", out var type) &&
             type == "chat";
+        var isAndroidIncomingCall =
+            platform == DevicePlatform.Android &&
+            message.Data.TryGetValue("type", out var messageType) &&
+            messageType == "IncomingCall";
+        var isAndroidDataOnly = isAndroidChat || isAndroidIncomingCall;
         var data = message.Data.ToDictionary(pair => pair.Key, pair => pair.Value);
-        if (isAndroidChat)
+        if (isAndroidDataOnly)
         {
             data["title"] = message.Title;
             data["body"] = message.Body ?? string.Empty;
@@ -224,7 +229,7 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
         return new Message
         {
             Token = token,
-            Notification = isAndroidChat
+            Notification = isAndroidDataOnly
                 ? null
                 : new Notification
                 {
@@ -235,8 +240,10 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
             Android = new AndroidConfig
             {
                 Priority = Priority.High,
-                TimeToLive = TimeSpan.FromHours(4),
-                Notification = isAndroidChat
+                TimeToLive = isAndroidIncomingCall
+                    ? TimeSpan.FromSeconds(30)
+                    : TimeSpan.FromHours(4),
+                Notification = isAndroidDataOnly
                     ? null
                     : new AndroidNotification
                     {
