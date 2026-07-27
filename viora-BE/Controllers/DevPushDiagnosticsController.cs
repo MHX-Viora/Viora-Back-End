@@ -202,12 +202,21 @@ public sealed class DevPushDiagnosticsController(
                 ["eventType"] = "message",
                 ["conversationId"] = (request.ConversationId ?? Guid.Empty).ToString(),
                 ["messageId"] = (request.MessageId ?? Guid.Empty).ToString(),
+                ["senderId"] = token.UserId.ToString(),
+                ["senderName"] = request.Title ?? "FCM diagnostic",
+                ["senderAvatarUrl"] = string.Empty,
+                ["messagePreview"] = request.Body ?? "Viora direct FCM test",
+                ["createdAt"] = DateTime.UtcNow.ToString("O"),
                 ["diagnostic"] = "true"
             });
 
         try
         {
-            var messageId = await client.SendAsync(message, token.Token, cancellationToken);
+            var messageId = await client.SendAsync(
+                message,
+                token.Token,
+                token.Platform,
+                cancellationToken);
             logger.LogInformation(
                 "Dev push test sent. UserId: {UserId}, DeviceId: {DeviceId}, Platform: {Platform}, TokenSuffix: {TokenSuffix}, FirebaseProjectId: {FirebaseProjectId}, FirebaseMessageId: {FirebaseMessageId}.",
                 token.UserId,

@@ -31,6 +31,11 @@ public sealed class ChatMessageDeliveryServiceTests
         Assert.Equal("message", message.Data["eventType"]);
         Assert.Equal(conversationId.ToString(), message.Data["conversationId"]);
         Assert.Equal(messageId.ToString(), message.Data["messageId"]);
+        Assert.Equal(senderId.ToString(), message.Data["senderId"]);
+        Assert.Equal("Sender", message.Data["senderName"]);
+        Assert.Equal("https://cdn.viora.app/sender.png", message.Data["senderAvatarUrl"]);
+        Assert.Equal("Hello", message.Data["messagePreview"]);
+        Assert.True(DateTimeOffset.TryParse(message.Data["createdAt"], out _));
         Assert.Equal("Sender", message.Title);
         Assert.Equal("Hello", message.Body);
     }
@@ -84,7 +89,11 @@ public sealed class ChatMessageDeliveryServiceTests
             new SendChatMessageResponse(
                 messageId,
                 conversationId,
-                new ChatMessageSenderResponse(senderId, "Sender", null, false),
+                new ChatMessageSenderResponse(
+                    senderId,
+                    "Sender",
+                    "https://cdn.viora.app/sender.png",
+                    false),
                 MessageType.Text,
                 "Hello",
                 null,

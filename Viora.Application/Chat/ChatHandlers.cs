@@ -222,7 +222,12 @@ public sealed class ChatMessageDeliveryService(
                         ["type"] = "chat",
                         ["eventType"] = "message",
                         ["conversationId"] = result.Message.ConversationId.ToString(),
-                        ["messageId"] = result.Message.Id.ToString()
+                        ["messageId"] = result.Message.Id.ToString(),
+                        ["senderId"] = result.Message.Sender.Id.ToString(),
+                        ["senderName"] = result.Message.Sender.DisplayName,
+                        ["senderAvatarUrl"] = result.Message.Sender.AvatarUrl ?? string.Empty,
+                        ["messagePreview"] = result.Message.Content ?? string.Empty,
+                        ["createdAt"] = result.Message.CreatedAt.ToUniversalTime().ToString("O")
                     }),
                 cancellationToken);
         }

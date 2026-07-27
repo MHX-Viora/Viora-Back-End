@@ -105,7 +105,10 @@ public sealed class FirebasePushNotificationSenderTests
     {
         var message = CreateMessage();
 
-        var firebaseMessage = FirebaseMessagingClient.BuildFirebaseMessage(message, "fcm-token");
+        var firebaseMessage = FirebaseMessagingClient.BuildFirebaseMessage(
+            message,
+            "fcm-token",
+            DevicePlatform.Ios);
 
         Assert.Equal("fcm-token", firebaseMessage.Token);
         Assert.NotNull(firebaseMessage.Notification);
@@ -122,6 +125,31 @@ public sealed class FirebasePushNotificationSenderTests
         Assert.Equal("10", firebaseMessage.Apns.Headers["apns-priority"]);
         Assert.NotNull(firebaseMessage.Apns.Aps);
         Assert.Equal("default", firebaseMessage.Apns.Aps.Sound);
+    }
+
+    [Fact]
+    public void BuildFirebaseMessage_android_chat_is_data_only()
+    {
+        var message = new PushMessage(
+            Guid.NewGuid(),
+            "Sender",
+            "Hello",
+            new Dictionary<string, string>
+            {
+                ["type"] = "chat",
+                ["conversationId"] = Guid.NewGuid().ToString()
+            });
+
+        var firebaseMessage = FirebaseMessagingClient.BuildFirebaseMessage(
+            message,
+            "fcm-token",
+            DevicePlatform.Android);
+
+        Assert.Null(firebaseMessage.Notification);
+        Assert.NotNull(firebaseMessage.Android);
+        Assert.Null(firebaseMessage.Android.Notification);
+        Assert.Equal("Sender", firebaseMessage.Data["title"]);
+        Assert.Equal("Hello", firebaseMessage.Data["body"]);
     }
 
     private static FirebasePushNotificationSender CreateSender(
@@ -156,7 +184,11 @@ public sealed class FirebasePushNotificationSenderTests
         public List<string> SentTokens { get; } = [];
         public List<PushMessage> SentMessages { get; } = [];
 
-        public Task<string> SendAsync(PushMessage message, string token, CancellationToken cancellationToken)
+        public Task<string> SendAsync(
+            PushMessage message,
+            string token,
+            DevicePlatform platform,
+            CancellationToken cancellationToken)
         {
             if (token == InvalidToken)
             {

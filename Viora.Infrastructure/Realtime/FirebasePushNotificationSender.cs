@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text;
 using Viora.Application.Realtime;
+using DevicePlatform = Viora.Domain.Entities.DevicePlatform;
 
 namespace Viora.Infrastructure.Realtime;
 
@@ -57,7 +58,13 @@ public sealed class FirebasePushNotificationSender(
 
         foreach (var deviceToken in validTokens)
         {
-            await SendToTokenAsync(client, message, deviceToken.Token, message.UserId, cancellationToken);
+            await SendToTokenAsync(
+                client,
+                message,
+                deviceToken.Token,
+                deviceToken.Platform,
+                message.UserId,
+                cancellationToken);
         }
     }
 
@@ -65,6 +72,7 @@ public sealed class FirebasePushNotificationSender(
         IFirebaseMessagingClient client,
         PushMessage message,
         string token,
+        DevicePlatform platform,
         Guid userId,
         CancellationToken cancellationToken)
     {
@@ -81,7 +89,7 @@ public sealed class FirebasePushNotificationSender(
                 tokenSuffix,
                 tokenHash);
 
-            var messageId = await client.SendAsync(message, token, cancellationToken);
+            var messageId = await client.SendAsync(message, token, platform, cancellationToken);
             logger.LogInformation(
                 "Firebase push sent successfully. UserId: {UserId}, NotificationType: {NotificationType}, FirebaseMessageId: {FirebaseMessageId}, TokenSuffix: {TokenSuffix}, DeviceTokenHash: {DeviceTokenHash}.",
                 userId,
@@ -156,7 +164,11 @@ public interface IFirebaseMessagingClientFactory
 
 public interface IFirebaseMessagingClient
 {
-    Task<string> SendAsync(PushMessage message, string token, CancellationToken cancellationToken);
+    Task<string> SendAsync(
+        PushMessage message,
+        string token,
+        DevicePlatform platform,
+        CancellationToken cancellationToken);
 }
 
 public sealed class FirebaseMessagingClientFactory(IFirebaseInitializer firebaseInitializer) : IFirebaseMessagingClientFactory
@@ -172,12 +184,16 @@ public sealed class FirebaseMessagingClientFactory(IFirebaseInitializer firebase
 
 public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagingClient
 {
-    public async Task<string> SendAsync(PushMessage message, string token, CancellationToken cancellationToken)
+    public async Task<string> SendAsync(
+        PushMessage message,
+        string token,
+        DevicePlatform platform,
+        CancellationToken cancellationToken)
     {
         try
         {
             var messageId = await FirebaseMessaging.GetMessaging(app).SendAsync(
-                BuildFirebaseMessage(message, token),
+                BuildFirebaseMessage(message, token, platform),
                 dryRun: false,
                 cancellationToken);
 
@@ -189,38 +205,59 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
         }
     }
 
-    public static Message BuildFirebaseMessage(PushMessage message, string token) => new()
+    public static Message BuildFirebaseMessage(
+        PushMessage message,
+        string token,
+        DevicePlatform platform)
     {
-        Token = token,
-        Notification = new Notification
+        var isAndroidChat =
+            platform == DevicePlatform.Android &&
+            message.Data.TryGetValue("type", out var type) &&
+            type == "chat";
+        var data = message.Data.ToDictionary(pair => pair.Key, pair => pair.Value);
+        if (isAndroidChat)
         {
-            Title = message.Title,
-            Body = message.Body
-        },
-        Data = message.Data.ToDictionary(pair => pair.Key, pair => pair.Value),
-        Android = new AndroidConfig
-        {
-            Priority = Priority.High,
-            TimeToLive = TimeSpan.FromHours(4),
-            Notification = new AndroidNotification
-            {
-                ChannelId = "default",
-                Sound = "default",
-                DefaultSound = true
-            }
-        },
-        Apns = new ApnsConfig
-        {
-            Headers = new Dictionary<string, string>
-            {
-                ["apns-priority"] = "10"
-            },
-            Aps = new Aps
-            {
-                Sound = "default"
-            }
+            data["title"] = message.Title;
+            data["body"] = message.Body ?? string.Empty;
         }
-    };
+
+        return new Message
+        {
+            Token = token,
+            Notification = isAndroidChat
+                ? null
+                : new Notification
+                {
+                    Title = message.Title,
+                    Body = message.Body
+                },
+            Data = data,
+            Android = new AndroidConfig
+            {
+                Priority = Priority.High,
+                TimeToLive = TimeSpan.FromHours(4),
+                Notification = isAndroidChat
+                    ? null
+                    : new AndroidNotification
+                    {
+                        ChannelId = "default",
+                        Sound = "default",
+                        DefaultSound = true
+                    }
+            },
+            Apns = new ApnsConfig
+            {
+                Headers = new Dictionary<string, string>
+                {
+                    ["apns-priority"] = "10"
+                },
+                Aps = new Aps
+                {
+                    Sound = "default"
+                }
+            }
+        };
+    }
 
     private static bool IsInvalidToken(FirebaseMessagingException exception) =>
         exception.MessagingErrorCode is MessagingErrorCode.InvalidArgument
