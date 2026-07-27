@@ -39,6 +39,36 @@ public sealed class MentionRepository(AppDbContext db) : IMentionRepository
     public Task SaveChangesAsync(CancellationToken cancellationToken) =>
         db.SaveChangesAsync(cancellationToken);
 
+    public async Task<MentionNotificationReference?> GetNotificationReferenceAsync(
+        Guid targetId,
+        MentionTargetType targetType,
+        CancellationToken cancellationToken)
+    {
+        if (targetType == MentionTargetType.Post)
+            return new MentionNotificationReference(targetId, NotificationReferenceType.Post);
+
+        if (targetType is MentionTargetType.Comment or MentionTargetType.Reply)
+        {
+            var postId = await db.Comments
+                .AsNoTracking()
+                .Where(comment => comment.Id == targetId)
+                .Select(comment => (Guid?)comment.PostId)
+                .SingleOrDefaultAsync(cancellationToken);
+            return postId.HasValue
+                ? new MentionNotificationReference(postId.Value, NotificationReferenceType.Post)
+                : null;
+        }
+
+        var conversationId = await db.Messages
+            .AsNoTracking()
+            .Where(message => message.Id == targetId)
+            .Select(message => (Guid?)message.ConversationId)
+            .SingleOrDefaultAsync(cancellationToken);
+        return conversationId.HasValue
+            ? new MentionNotificationReference(conversationId.Value, NotificationReferenceType.Conversation)
+            : null;
+    }
+
     public async Task<IReadOnlyList<MentionSearchResponse>> SearchAsync(
         Guid currentUserId,
         string keyword,

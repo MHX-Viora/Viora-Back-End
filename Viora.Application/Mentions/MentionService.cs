@@ -40,12 +40,8 @@ public sealed class MentionService(
         await repository.AddRangeAsync(mentions, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
 
-        var referenceType = targetType switch
-        {
-            MentionTargetType.Post => NotificationReferenceType.Post,
-            MentionTargetType.Comment or MentionTargetType.Reply => NotificationReferenceType.Comment,
-            _ => NotificationReferenceType.Message
-        };
+        var notificationReference = await repository.GetNotificationReferenceAsync(
+            targetId, targetType, cancellationToken);
         foreach (var user in users)
         {
             var targetLabel = targetType switch
@@ -61,9 +57,9 @@ public sealed class MentionService(
                     user.Id,
                     NotificationType.Mention,
                     sender,
-                    targetId,
-                    referenceType,
-                    ImageUrl: sender.AvatarUrl,
+                    notificationReference?.Id,
+                    notificationReference?.Type,
+                    ImageUrl: null,
                     Title: sender.DisplayName,
                     Content: $"đã nhắc đến bạn trong một {targetLabel}."), cancellationToken);
             }

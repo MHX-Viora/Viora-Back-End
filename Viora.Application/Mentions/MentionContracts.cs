@@ -4,6 +4,7 @@ namespace Viora.Application.Mentions;
 
 public sealed record MentionResponse(Guid UserId, string DisplayName);
 public sealed record MentionSearchResponse(Guid Id, string DisplayName, string? AvatarUrl, bool IsVerified);
+public sealed record MentionNotificationReference(Guid Id, NotificationReferenceType Type);
 
 public interface IMentionService
 {
@@ -29,6 +30,10 @@ public interface IMentionRepository
         CancellationToken cancellationToken);
     Task AddRangeAsync(IReadOnlyList<Mention> mentions, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);
+    Task<MentionNotificationReference?> GetNotificationReferenceAsync(
+        Guid targetId,
+        MentionTargetType targetType,
+        CancellationToken cancellationToken);
     Task<IReadOnlyList<MentionSearchResponse>> SearchAsync(
         Guid currentUserId,
         string keyword,
