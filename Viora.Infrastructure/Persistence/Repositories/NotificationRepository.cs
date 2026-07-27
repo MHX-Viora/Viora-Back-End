@@ -43,13 +43,17 @@ public sealed class NotificationRepository(AppDbContext dbContext) : INotificati
             .Take(pageSize)
             .Select(notification => new NotificationItemResponse(
                 notification.Id,
-                notification.NotificationType,
+                notification.NotificationType == NotificationType.AdminAnnouncement
+                    ? NotificationType.System
+                    : notification.NotificationType,
                 notification.Title,
                 notification.Content,
                 notification.ImageUrl,
                 notification.IsRead,
                 notification.CreatedAt,
-                notification.NotificationType == NotificationType.System || notification.SenderUser == null
+                notification.NotificationType == NotificationType.System ||
+                notification.NotificationType == NotificationType.AdminAnnouncement ||
+                notification.SenderUser == null
                     ? null
                     : new NotificationSenderResponse(
                         notification.SenderUser.Id,

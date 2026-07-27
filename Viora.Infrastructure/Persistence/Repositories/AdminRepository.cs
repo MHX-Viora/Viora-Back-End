@@ -303,17 +303,17 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         users = sendTo.Equals("Verified", StringComparison.OrdinalIgnoreCase) ? users.Where(x => x.IsVerified) :
             sendTo.Equals("Unverified", StringComparison.OrdinalIgnoreCase) ? users.Where(x => !x.IsVerified) : users;
 
-        var notifications = await users.Select(x => new Notification
-        {
-            UserId = x.Id,
-            SenderUserId = adminId,
-            NotificationType = NotificationType.AdminAnnouncement,
-            Title = title,
-            Content = content,
-            ImageUrl = imageUrl,
-            ReferenceType = NotificationReferenceType.User,
-            ReferenceId = adminId
-        }).ToListAsync(cancellationToken);
+        var recipientIds = await users
+            .Select(user => user.Id)
+            .ToListAsync(cancellationToken);
+        var notifications = recipientIds
+            .Select(recipientId =>
+                AdminAnnouncementNotificationFactory.Create(
+                    recipientId,
+                    title,
+                    content,
+                    imageUrl))
+            .ToList();
 
         dbContext.Notifications.AddRange(notifications);
         await dbContext.SaveChangesAsync(cancellationToken);

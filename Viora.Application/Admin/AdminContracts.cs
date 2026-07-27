@@ -7,6 +7,26 @@ namespace Viora.Application.Admin;
 public sealed record AdminPagedResponse<T>(int Page, int PageSize, int TotalItems, int TotalPages, IReadOnlyList<T> Items);
 public sealed record AdminApiResponse<T>(bool Success, string Message, T? Data);
 
+public static class AdminAnnouncementNotificationFactory
+{
+    public static Notification Create(
+        Guid recipientUserId,
+        string title,
+        string content,
+        string? imageUrl) =>
+        new()
+        {
+            UserId = recipientUserId,
+            SenderUserId = null,
+            NotificationType = NotificationType.System,
+            Title = title,
+            Content = content,
+            ImageUrl = imageUrl,
+            ReferenceType = null,
+            ReferenceId = null
+        };
+}
+
 public sealed record AdminDashboardResponse(
     int UserCount,
     int ActiveUserToday,
