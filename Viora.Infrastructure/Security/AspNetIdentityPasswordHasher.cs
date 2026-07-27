@@ -26,11 +26,13 @@ public sealed class AspNetIdentityPasswordHasher : IPasswordHasher
         try
         {
             return hasher.VerifyHashedPassword(User, passwordHash, password) != PasswordVerificationResult.Failed ||
-                VerifyLegacyPbkdf2(password, passwordHash);
+                VerifyLegacyPbkdf2(password, passwordHash) ||
+                VerifyBcrypt(password, passwordHash);
         }
         catch (FormatException)
         {
-            return VerifyLegacyPbkdf2(password, passwordHash);
+            return VerifyLegacyPbkdf2(password, passwordHash) ||
+                VerifyBcrypt(password, passwordHash);
         }
     }
 
@@ -57,6 +59,19 @@ public sealed class AspNetIdentityPasswordHasher : IPasswordHasher
             return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
         }
         catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool VerifyBcrypt(string password, string passwordHash)
+    {
+        try
+        {
+            return passwordHash.StartsWith("$2", StringComparison.Ordinal) &&
+                BCrypt.Net.BCrypt.Verify(password, passwordHash);
+        }
+        catch (BCrypt.Net.SaltParseException)
         {
             return false;
         }

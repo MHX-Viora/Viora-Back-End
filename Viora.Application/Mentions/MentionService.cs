@@ -40,6 +40,11 @@ public sealed class MentionService(
         await repository.AddRangeAsync(mentions, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
 
+        if (targetType == MentionTargetType.Message)
+        {
+            return users.Select(user => new MentionResponse(user.Id, user.DisplayName)).ToArray();
+        }
+
         var notificationReference = await repository.GetNotificationReferenceAsync(
             targetId, targetType, cancellationToken);
         foreach (var user in users)

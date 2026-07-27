@@ -107,6 +107,9 @@ public static class DependencyInjection
         services.AddScoped<IValidator<RegisterDeviceTokenCommand>, RegisterDeviceTokenValidator>();
         services.AddScoped<IValidator<UnregisterDeviceTokenCommand>, UnregisterDeviceTokenValidator>();
         services.AddScoped<IValidator<ChangePasswordCommand>, ChangePasswordValidator>();
+        services.AddScoped<IValidator<GetForgotPasswordStatusQuery>, GetForgotPasswordStatusValidator>();
+        services.AddScoped<IValidator<SetForgotPasswordPhoneCommand>, SetForgotPasswordPhoneValidator>();
+        services.AddScoped<IValidator<ResetForgottenPasswordCommand>, ResetForgottenPasswordValidator>();
         services.AddScoped<IValidator<SendChatMessageCommand>, SendChatMessageValidator>();
         services.AddScoped<IValidator<CreateCallCommand>, CreateCallValidator>();
         services.AddScoped<IValidator<ForwardChatMessageCommand>, ForwardChatMessageValidator>();
@@ -125,7 +128,10 @@ public static class DependencyInjection
         services.AddScoped<IValidator<GetVideoRepliesQuery>, GetVideoRepliesValidator>();
         services.AddScoped<IValidator<DeleteVideoCommentCommand>, DeleteVideoCommentValidator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IForgotPasswordRepository, ForgotPasswordRepository>();
         services.AddScoped<IPasswordHasher, AspNetIdentityPasswordHasher>();
+        services.AddScoped<IPasswordResetHasher, BCryptPasswordResetHasher>();
+        services.AddScoped<IFirebasePhoneTokenVerifier, FirebasePhoneTokenVerifier>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IUserProfileService, UserProfileService>();
