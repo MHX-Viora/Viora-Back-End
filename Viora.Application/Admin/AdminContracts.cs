@@ -233,7 +233,7 @@ public interface IAdminRepository
     Task<AdminPagedResponse<AdminHashtagSummaryResponse>> GetHashtagsAsync(GetAdminHashtagsQuery query, CancellationToken cancellationToken);
     Task<bool?> RenameHashtagAsync(Guid adminId, Guid id, string name, CancellationToken cancellationToken);
     Task<bool> DeleteHashtagAsync(Guid adminId, Guid id, CancellationToken cancellationToken);
-    Task CreateAnnouncementAsync(Guid adminId, string title, string content, string? imageUrl, string sendTo, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Notification>> CreateAnnouncementAsync(Guid adminId, string title, string content, string? imageUrl, string sendTo, CancellationToken cancellationToken);
     Task<AdminPagedResponse<AdminConversationSummaryResponse>> GetConversationsAsync(GetAdminConversationsQuery query, CancellationToken cancellationToken);
     Task<AdminConversationDetailResponse?> GetConversationDetailAsync(Guid id, CancellationToken cancellationToken);
     Task<AdminPagedResponse<AdminLogSummaryResponse>> GetLogsAsync(GetAdminLogsQuery query, CancellationToken cancellationToken);

@@ -31,6 +31,10 @@ public sealed class ChatMessageDeliveryServiceTests
         Assert.Equal("message", message.Data["eventType"]);
         Assert.Equal(conversationId.ToString(), message.Data["conversationId"]);
         Assert.Equal(messageId.ToString(), message.Data["messageId"]);
+        Assert.Equal(((short)ConversationType.Private).ToString(), message.Data["conversationType"]);
+        Assert.Equal(string.Empty, message.Data["conversationName"]);
+        Assert.Equal(string.Empty, message.Data["conversationAvatarUrl"]);
+        Assert.Equal(((short)MessageType.Text).ToString(), message.Data["messageType"]);
         Assert.Equal(senderId.ToString(), message.Data["senderId"]);
         Assert.Equal("Sender", message.Data["senderName"]);
         Assert.Equal("https://cdn.viora.app/sender.png", message.Data["senderAvatarUrl"]);

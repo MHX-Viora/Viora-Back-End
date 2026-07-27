@@ -297,7 +297,7 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         return true;
     }
 
-    public async Task CreateAnnouncementAsync(Guid adminId, string title, string content, string? imageUrl, string sendTo, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<Notification>> CreateAnnouncementAsync(Guid adminId, string title, string content, string? imageUrl, string sendTo, CancellationToken cancellationToken)
     {
         var users = dbContext.Users.AsNoTracking();
         users = sendTo.Equals("Verified", StringComparison.OrdinalIgnoreCase) ? users.Where(x => x.IsVerified) :
@@ -318,6 +318,7 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         dbContext.Notifications.AddRange(notifications);
         await dbContext.SaveChangesAsync(cancellationToken);
         await TryAddLogAsync(adminId, "CreateAnnouncement", "Notification", null, $"SendTo={sendTo}; Count={notifications.Count}", cancellationToken);
+        return notifications;
     }
 
     public async Task<AdminPagedResponse<AdminConversationSummaryResponse>> GetConversationsAsync(GetAdminConversationsQuery query, CancellationToken cancellationToken)

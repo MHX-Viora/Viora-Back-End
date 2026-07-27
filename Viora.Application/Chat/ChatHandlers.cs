@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.Extensions.Logging;
 using Viora.Application.Posts;
 using Viora.Application.Realtime;
+using Viora.Domain.Entities;
 
 namespace Viora.Application.Chat;
 
@@ -222,7 +223,11 @@ public sealed class ChatMessageDeliveryService(
                         ["type"] = "chat",
                         ["eventType"] = "message",
                         ["conversationId"] = result.Message.ConversationId.ToString(),
+                        ["conversationType"] = ((short)(conversationItem?.ConversationType ?? ConversationType.Private)).ToString(),
+                        ["conversationName"] = conversationItem?.Name ?? string.Empty,
+                        ["conversationAvatarUrl"] = conversationItem?.AvatarUrl ?? string.Empty,
                         ["messageId"] = result.Message.Id.ToString(),
+                        ["messageType"] = ((short)result.Message.MessageType).ToString(),
                         ["senderId"] = result.Message.Sender.Id.ToString(),
                         ["senderName"] = result.Message.Sender.DisplayName,
                         ["senderAvatarUrl"] = result.Message.Sender.AvatarUrl ?? string.Empty,

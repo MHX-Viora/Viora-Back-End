@@ -1,4 +1,5 @@
 using MediatR;
+using Viora.Application.Notifications;
 using Viora.Domain.Entities;
 
 namespace Viora.Application.Admin;
@@ -148,11 +149,25 @@ public sealed class DeleteAdminHashtagHandler(IAdminRepository repository) : IRe
             : null;
 }
 
-public sealed class CreateAdminAnnouncementHandler(IAdminRepository repository) : IRequestHandler<CreateAdminAnnouncementCommand, AdminMutationResponse>
+public sealed class CreateAdminAnnouncementHandler(
+    IAdminRepository repository,
+    INotificationService notificationService) : IRequestHandler<CreateAdminAnnouncementCommand, AdminMutationResponse>
 {
     public async Task<AdminMutationResponse> Handle(CreateAdminAnnouncementCommand request, CancellationToken cancellationToken)
     {
-        await repository.CreateAnnouncementAsync(request.AdminId, request.Title, request.Content, request.ImageUrl, request.SendTo, cancellationToken);
+        var notifications = await repository.CreateAnnouncementAsync(
+            request.AdminId,
+            request.Title,
+            request.Content,
+            request.ImageUrl,
+            request.SendTo,
+            cancellationToken);
+
+        foreach (var notification in notifications)
+        {
+            await notificationService.PublishAsync(notification, cancellationToken);
+        }
+
         return new AdminMutationResponse(true, "Announcement created.");
     }
 }
