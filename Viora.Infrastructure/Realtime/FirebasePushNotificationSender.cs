@@ -218,9 +218,13 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
             platform == DevicePlatform.Android &&
             message.Data.TryGetValue("type", out var messageType) &&
             messageType == "IncomingCall";
+        var isCallLifecycle =
+            message.Data.TryGetValue("type", out var lifecycleType) &&
+            lifecycleType is "CallRejected" or "CallCancelled" or "CallEnded" or "CallMissed" or "CallTimeout";
         var isAndroidDataOnly = isAndroidChat || isAndroidIncomingCall;
+        var isDataOnly = isAndroidDataOnly || isCallLifecycle;
         var data = message.Data.ToDictionary(pair => pair.Key, pair => pair.Value);
-        if (isAndroidDataOnly)
+        if (isDataOnly)
         {
             data["title"] = message.Title;
             data["body"] = message.Body ?? string.Empty;
@@ -229,7 +233,7 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
         return new Message
         {
             Token = token,
-            Notification = isAndroidDataOnly
+            Notification = isDataOnly
                 ? null
                 : new Notification
                 {
@@ -240,10 +244,10 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
             Android = new AndroidConfig
             {
                 Priority = Priority.High,
-                TimeToLive = isAndroidIncomingCall
+                TimeToLive = isAndroidIncomingCall || isCallLifecycle
                     ? TimeSpan.FromSeconds(30)
                     : TimeSpan.FromHours(4),
-                Notification = isAndroidDataOnly
+                Notification = isDataOnly
                     ? null
                     : new AndroidNotification
                     {
@@ -256,11 +260,12 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
             {
                 Headers = new Dictionary<string, string>
                 {
-                    ["apns-priority"] = "10"
+                    ["apns-priority"] = isCallLifecycle ? "5" : "10"
                 },
                 Aps = new Aps
                 {
-                    Sound = "default"
+                    ContentAvailable = isCallLifecycle,
+                    Sound = isCallLifecycle ? null : "default"
                 }
             }
         };

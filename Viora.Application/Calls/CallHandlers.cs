@@ -141,6 +141,8 @@ public sealed class CallDeliveryService(
         logger.LogInformation("Call {EventName}. CallId: {CallId}, Duration: {Duration}.", eventName, call.Id, call.Duration);
         var payload = new CallEndedPayload(call.Id, call.ConversationId, call.Status, call.Duration);
         await realtimeService.SendToUsersAsync([call.Caller.Id, call.Receiver.Id], eventName, payload, cancellationToken);
+        await PublishLifecyclePushAsync(call, call.Caller.Id, eventName, cancellationToken);
+        await PublishLifecyclePushAsync(call, call.Receiver.Id, eventName, cancellationToken);
         await PublishHistoryMessageAsync(call, cancellationToken);
     }
 
@@ -150,6 +152,8 @@ public sealed class CallDeliveryService(
         var payload = new CallEndedPayload(call.Id, call.ConversationId, call.Status, call.Duration);
         await realtimeService.SendToUserAsync(call.Caller.Id, "CallTimeout", payload, cancellationToken);
         await realtimeService.SendToUserAsync(call.Receiver.Id, "CallMissed", payload, cancellationToken);
+        await PublishLifecyclePushAsync(call, call.Caller.Id, "CallTimeout", cancellationToken);
+        await PublishLifecyclePushAsync(call, call.Receiver.Id, "CallMissed", cancellationToken);
         await PublishHistoryMessageAsync(call, cancellationToken);
         await pushNotificationSender.SendAsync(new PushMessage(
             call.Receiver.Id,
@@ -162,6 +166,25 @@ public sealed class CallDeliveryService(
                 ["conversationId"] = call.ConversationId.ToString()
             }), cancellationToken);
     }
+
+    private Task PublishLifecyclePushAsync(
+        CallSessionResponse call,
+        Guid userId,
+        string eventName,
+        CancellationToken cancellationToken) =>
+        pushNotificationSender.SendAsync(
+            new PushMessage(
+                userId,
+                "Call updated",
+                null,
+                new Dictionary<string, string>
+                {
+                    ["type"] = eventName,
+                    ["callId"] = call.Id.ToString(),
+                    ["conversationId"] = call.ConversationId.ToString(),
+                    ["status"] = ((short)call.Status).ToString()
+                }),
+            cancellationToken);
 
     private async Task PublishHistoryMessageAsync(
         CallSessionResponse call,
