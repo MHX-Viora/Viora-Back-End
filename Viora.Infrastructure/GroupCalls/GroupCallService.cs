@@ -237,11 +237,17 @@ public sealed class GroupCallService(
                         ["type"] = "GroupCall",
                         ["callId"] = call.Id.ToString(),
                         ["conversationId"] = call.ConversationId.ToString(),
-                        ["callType"] = ((short)call.CallType).ToString()
+                        ["callType"] = ((short)call.CallType).ToString(),
+                        ["isGroupCall"] = bool.TrueString.ToLowerInvariant(),
+                        ["callerId"] = call.StartedByUserId.ToString(),
+                        ["callerDisplayName"] = callerName,
+                        ["callerAvatarUrl"] = Avatar(call.StartedByUser)
                     }),
                 token);
         }
     }
+
+    private static string Avatar(User user) => user.AvatarUrl ?? string.Empty;
 
     private async Task NotifyEnded(GroupCallSession call, CancellationToken token)
     {

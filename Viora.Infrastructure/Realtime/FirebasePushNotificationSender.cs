@@ -217,10 +217,11 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
         var isAndroidIncomingCall =
             platform == DevicePlatform.Android &&
             message.Data.TryGetValue("type", out var messageType) &&
-            messageType == "IncomingCall";
+            messageType is "IncomingCall" or "GroupCall";
         var isCallLifecycle =
             message.Data.TryGetValue("type", out var lifecycleType) &&
-            lifecycleType is "CallRejected" or "CallCancelled" or "CallEnded" or "CallMissed" or "CallTimeout";
+            lifecycleType is "CallRejected" or "CallCancelled" or "CallEnded" or
+                "CallMissed" or "CallTimeout" or "GroupCallEnded";
         var isAndroidDataOnly = isAndroidChat || isAndroidIncomingCall;
         var isDataOnly = isAndroidDataOnly || isCallLifecycle;
         var data = message.Data.ToDictionary(pair => pair.Key, pair => pair.Value);

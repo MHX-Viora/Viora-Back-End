@@ -179,6 +179,31 @@ public sealed class FirebasePushNotificationSenderTests
         Assert.Equal("Đang gọi cho bạn...", firebaseMessage.Data["body"]);
     }
 
+    [Fact]
+    public void BuildFirebaseMessage_android_group_call_is_short_lived_data_only()
+    {
+        var message = new PushMessage(
+            Guid.NewGuid(),
+            "Caller",
+            "Group video call",
+            new Dictionary<string, string>
+            {
+                ["type"] = "GroupCall",
+                ["callId"] = Guid.NewGuid().ToString()
+            });
+
+        var firebaseMessage = FirebaseMessagingClient.BuildFirebaseMessage(
+            message,
+            "fcm-token",
+            DevicePlatform.Android);
+
+        Assert.Null(firebaseMessage.Notification);
+        Assert.Null(firebaseMessage.Android.Notification);
+        Assert.Equal(TimeSpan.FromSeconds(30), firebaseMessage.Android.TimeToLive);
+        Assert.Equal("Caller", firebaseMessage.Data["title"]);
+        Assert.Equal("Group video call", firebaseMessage.Data["body"]);
+    }
+
     private static FirebasePushNotificationSender CreateSender(
         FakeDeviceTokenRepository repository,
         FakeFirebaseMessagingClient? client) =>
