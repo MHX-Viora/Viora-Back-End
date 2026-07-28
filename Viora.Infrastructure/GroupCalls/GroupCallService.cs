@@ -34,6 +34,7 @@ public sealed class GroupCallService(
         if (call is null)
         {
             var now = DateTime.UtcNow;
+            db.Entry(access.Value).State = EntityState.Unchanged;
             call = new GroupCallSession
             {
                 Id = Guid.NewGuid(),
