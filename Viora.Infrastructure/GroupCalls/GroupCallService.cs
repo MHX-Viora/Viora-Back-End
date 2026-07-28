@@ -49,8 +49,8 @@ public sealed class GroupCallService(
             };
             db.GroupCallSessions.Add(call);
             await db.SaveChangesAsync(token);
-            await NotifyStarted(call, access.Value.DisplayName, token);
         }
+        await NotifyStarted(call, access.Value, token);
         return JoinResult(call, access.Value);
     }
 
@@ -214,13 +214,13 @@ public sealed class GroupCallService(
 
     private async Task NotifyStarted(
         GroupCallSession call,
-        string callerName,
+        User inviter,
         CancellationToken token)
     {
         var recipients = await db.ConversationMembers.AsNoTracking()
             .Where(x => x.ConversationId == call.ConversationId &&
                         x.Status == ConversationMemberStatus.Active &&
-                        x.UserId != call.StartedByUserId)
+                        x.UserId != inviter.Id)
             .Select(x => x.UserId)
             .ToListAsync(token);
         foreach (var recipient in recipients)
@@ -228,7 +228,7 @@ public sealed class GroupCallService(
             await pushNotificationSender.SendAsync(
                 new PushMessage(
                     recipient,
-                    callerName,
+                    inviter.DisplayName,
                     call.CallType == GroupCallType.Video
                         ? "Đang mời bạn tham gia cuộc gọi video nhóm"
                         : "Đang mời bạn tham gia cuộc gọi thoại nhóm",
@@ -239,9 +239,9 @@ public sealed class GroupCallService(
                         ["conversationId"] = call.ConversationId.ToString(),
                         ["callType"] = ((short)call.CallType).ToString(),
                         ["isGroupCall"] = bool.TrueString.ToLowerInvariant(),
-                        ["callerId"] = call.StartedByUserId.ToString(),
-                        ["callerDisplayName"] = callerName,
-                        ["callerAvatarUrl"] = Avatar(call.StartedByUser)
+                        ["callerId"] = inviter.Id.ToString(),
+                        ["callerDisplayName"] = inviter.DisplayName,
+                        ["callerAvatarUrl"] = Avatar(inviter)
                     }),
                 token);
         }
