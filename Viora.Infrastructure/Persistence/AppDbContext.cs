@@ -32,6 +32,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<MessageRead> MessageReads => Set<MessageRead>();
     public DbSet<ConversationBlock> ConversationBlocks => Set<ConversationBlock>();
     public DbSet<CallSession> CallSessions => Set<CallSession>();
+    public DbSet<GroupCallSession> GroupCallSessions => Set<GroupCallSession>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Mention> Mentions => Set<Mention>();
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();

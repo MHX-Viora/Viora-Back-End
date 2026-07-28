@@ -23,6 +23,8 @@ using Viora.Application.Sharing;
 using Viora.Infrastructure.Sharing;
 using Viora.Application.Admin;
 using Viora.Application.Mentions;
+using Viora.Application.GroupCalls;
+using Viora.Infrastructure.GroupCalls;
 
 namespace Viora.Infrastructure;
 
@@ -63,6 +65,14 @@ public static class DependencyInjection
         }
         services.AddSingleton(Options.Create(jwtOptions));
         services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSingleton(Options.Create(new LiveKitOptions
+        {
+            Url = configuration["LIVEKIT_URL"] ?? string.Empty,
+            ApiKey = configuration["LIVEKIT_API_KEY"] ?? string.Empty,
+            ApiSecret = configuration["LIVEKIT_API_SECRET"] ?? string.Empty
+        }));
+        services.AddSingleton<ILiveKitTokenIssuer, LiveKitTokenIssuer>();
+        services.AddScoped<IGroupCallService, GroupCallService>();
         var cloudinaryOptions = new CloudinaryOptions
         {
             CloudName = configuration["Cloudinary:CloudName"] ?? string.Empty,

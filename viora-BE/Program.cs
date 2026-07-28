@@ -10,6 +10,7 @@ using System.Threading.RateLimiting;
 using Viora.Application.Posts;
 using Viora.Infrastructure.Realtime;
 
+LoadDotEnv();
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,52 @@ if (!string.IsNullOrWhiteSpace(port))
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
+
+static void LoadDotEnv()
+{
+    var workingDirectory = Directory.GetCurrentDirectory();
+    var candidates = new[]
+    {
+        Path.Combine(workingDirectory, ".env"),
+        Path.Combine(workingDirectory, "..", ".env")
+    };
+    var envPath = candidates.FirstOrDefault(File.Exists);
+    if (envPath is null)
+    {
+        return;
+    }
+
+    foreach (var rawLine in File.ReadLines(envPath))
+    {
+        var line = rawLine.Trim();
+        if (line.Length == 0 || line.StartsWith('#'))
+        {
+            continue;
+        }
+
+        var separator = line.IndexOf('=');
+        if (separator <= 0)
+        {
+            continue;
+        }
+
+        var key = line[..separator].Trim();
+        if (Environment.GetEnvironmentVariable(key) is not null)
+        {
+            continue;
+        }
+
+        var value = line[(separator + 1)..].Trim();
+        if (value.Length >= 2 &&
+            ((value.StartsWith('"') && value.EndsWith('"')) ||
+             (value.StartsWith('\'') && value.EndsWith('\''))))
+        {
+            value = value[1..^1];
+        }
+
+        Environment.SetEnvironmentVariable(key, value);
+    }
+}
 
 // Add services to the container.
 
