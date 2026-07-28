@@ -28,6 +28,8 @@ public static class RealtimeEvents
     public const string TypingStopped = nameof(TypingStopped);
     public const string UserOnline = nameof(UserOnline);
     public const string UserOffline = nameof(UserOffline);
+    public const string GroupCallStarted = nameof(GroupCallStarted);
+    public const string GroupCallEnded = nameof(GroupCallEnded);
     public const string ConversationPinned = nameof(ConversationPinned);
     public const string ConversationPinnedChanged = nameof(ConversationPinnedChanged);
     public const string ConversationMuted = nameof(ConversationMuted);

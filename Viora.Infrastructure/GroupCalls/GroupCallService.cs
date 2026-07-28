@@ -9,7 +9,8 @@ namespace Viora.Infrastructure.GroupCalls;
 public sealed class GroupCallService(
     AppDbContext db,
     ILiveKitTokenIssuer tokenIssuer,
-    IPushNotificationSender pushNotificationSender) : IGroupCallService
+    IPushNotificationSender pushNotificationSender,
+    IRealtimeService realtimeService) : IGroupCallService
 {
     public const int MaximumParticipants = 25;
 
@@ -223,6 +224,22 @@ public sealed class GroupCallService(
                         x.UserId != inviter.Id)
             .Select(x => x.UserId)
             .ToListAsync(token);
+        var invitation = new Dictionary<string, string>
+        {
+            ["type"] = "GroupCall",
+            ["callId"] = call.Id.ToString(),
+            ["conversationId"] = call.ConversationId.ToString(),
+            ["callType"] = ((short)call.CallType).ToString(),
+            ["isGroupCall"] = bool.TrueString.ToLowerInvariant(),
+            ["callerId"] = inviter.Id.ToString(),
+            ["callerDisplayName"] = inviter.DisplayName,
+            ["callerAvatarUrl"] = Avatar(inviter)
+        };
+        await realtimeService.SendToUsersAsync(
+            recipients,
+            RealtimeEvents.GroupCallStarted,
+            invitation,
+            token);
         foreach (var recipient in recipients)
         {
             await pushNotificationSender.SendAsync(
@@ -232,17 +249,7 @@ public sealed class GroupCallService(
                     call.CallType == GroupCallType.Video
                         ? "Đang mời bạn tham gia cuộc gọi video nhóm"
                         : "Đang mời bạn tham gia cuộc gọi thoại nhóm",
-                    new Dictionary<string, string>
-                    {
-                        ["type"] = "GroupCall",
-                        ["callId"] = call.Id.ToString(),
-                        ["conversationId"] = call.ConversationId.ToString(),
-                        ["callType"] = ((short)call.CallType).ToString(),
-                        ["isGroupCall"] = bool.TrueString.ToLowerInvariant(),
-                        ["callerId"] = inviter.Id.ToString(),
-                        ["callerDisplayName"] = inviter.DisplayName,
-                        ["callerAvatarUrl"] = Avatar(inviter)
-                    }),
+                    invitation),
                 token);
         }
     }
@@ -256,6 +263,17 @@ public sealed class GroupCallService(
                         x.Status == ConversationMemberStatus.Active)
             .Select(x => x.UserId)
             .ToListAsync(token);
+        var ended = new Dictionary<string, string>
+        {
+            ["type"] = "GroupCallEnded",
+            ["callId"] = call.Id.ToString(),
+            ["conversationId"] = call.ConversationId.ToString()
+        };
+        await realtimeService.SendToUsersAsync(
+            recipients,
+            RealtimeEvents.GroupCallEnded,
+            ended,
+            token);
         foreach (var recipient in recipients)
         {
             await pushNotificationSender.SendAsync(
@@ -263,12 +281,7 @@ public sealed class GroupCallService(
                     recipient,
                     "Cuộc gọi nhóm đã kết thúc",
                     null,
-                    new Dictionary<string, string>
-                    {
-                        ["type"] = "GroupCallEnded",
-                        ["callId"] = call.Id.ToString(),
-                        ["conversationId"] = call.ConversationId.ToString()
-                    }),
+                    ended),
                 token);
         }
     }
