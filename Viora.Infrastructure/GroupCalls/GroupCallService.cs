@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Viora.Application.Chat;
 using Viora.Application.GroupCalls;
 using Viora.Application.Realtime;
 using Viora.Domain.Entities;
@@ -19,8 +20,8 @@ public sealed class GroupCallService(
         StartGroupCallRequest request,
         CancellationToken token)
     {
-        if (!Enum.IsDefined(request.CallType))
-            return JoinFailure(GroupCallError.InvalidConversation, "Loại cuộc gọi không hợp lệ.");
+        if (request.CallType != GroupCallType.Video)
+            return JoinFailure(GroupCallError.InvalidConversation, "Cuộc gọi nhóm chỉ hỗ trợ video.");
 
         var access = await Access(userId, request.ConversationId, token);
         if (!access.IsSuccess || access.Value is null)
@@ -49,6 +50,14 @@ public sealed class GroupCallService(
                 UpdatedAt = now
             };
             db.GroupCallSessions.Add(call);
+            await db.SaveChangesAsync(token);
+        }
+        else if (call.CallType != GroupCallType.Video)
+        {
+            // Upgrade active calls created by older clients so every participant
+            // receives a token that can publish their own camera.
+            call.CallType = GroupCallType.Video;
+            call.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(token);
         }
         await NotifyStarted(call, access.Value, token);
@@ -110,12 +119,10 @@ public sealed class GroupCallService(
             return GroupCallResult<GroupCallResponse>.Failure(GroupCallError.NotFound, "Không tìm thấy cuộc gọi nhóm.");
         var member = call.Conversation.Members.FirstOrDefault(
             x => x.UserId == userId && x.Status == ConversationMemberStatus.Active);
-        if (member is null ||
-            (call.StartedByUserId != userId &&
-             member.Role is not (ConversationMemberRole.Owner or ConversationMemberRole.Admin)))
+        if (member is null)
             return GroupCallResult<GroupCallResponse>.Failure(
                 GroupCallError.Forbidden,
-                "Chỉ người tạo hoặc quản trị viên được kết thúc cuộc gọi.");
+                "Bạn không còn là thành viên của nhóm.");
         if (call.Status == GroupCallStatus.Active)
         {
             var now = DateTime.UtcNow;
@@ -124,6 +131,7 @@ public sealed class GroupCallService(
             call.Duration = Math.Max(0, (int)(now - call.StartedAt).TotalSeconds);
             call.UpdatedAt = now;
             await db.SaveChangesAsync(token);
+            await PublishHistory(call, token);
             await NotifyEnded(call, token);
         }
         return GroupCallResult<GroupCallResponse>.Success(Map(call));
@@ -255,6 +263,62 @@ public sealed class GroupCallService(
     }
 
     private static string Avatar(User user) => user.AvatarUrl ?? string.Empty;
+
+    private async Task PublishHistory(
+        GroupCallSession call,
+        CancellationToken token)
+    {
+        if (await db.Messages.AsNoTracking().AnyAsync(
+                x => x.Id == call.Id,
+                token))
+        {
+            return;
+        }
+
+        var createdAt = call.EndedAt ?? DateTime.UtcNow;
+        var duration = TimeSpan.FromSeconds(Math.Max(0, call.Duration ?? 0));
+        var content =
+            $"Cuộc gọi video nhóm • {duration.Minutes:00}:{duration.Seconds:00}";
+        var message = new Message
+        {
+            Id = call.Id,
+            Conversation = call.Conversation,
+            ConversationId = call.ConversationId,
+            SenderUserId = call.StartedByUserId,
+            SenderUser = call.StartedByUser,
+            MessageType = MessageType.System,
+            Content = content,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+        db.Messages.Add(message);
+        call.Conversation.LastMessageId = message.Id;
+        call.Conversation.LastMessageAt = createdAt;
+        call.Conversation.UpdatedAt = createdAt;
+        await db.SaveChangesAsync(token);
+
+        var sender = new ChatMessageSenderResponse(
+            call.StartedByUserId,
+            call.StartedByUser.DisplayName,
+            call.StartedByUser.AvatarUrl,
+            call.StartedByUser.IsVerified);
+        foreach (var member in call.Conversation.Members.Where(
+                     x => x.Status == ConversationMemberStatus.Active))
+        {
+            var payload = GroupChatRealtimeMessages.CreateSystemMessage(
+                message.Id,
+                message.ConversationId,
+                sender,
+                content,
+                createdAt,
+                member.UserId == call.StartedByUserId);
+            await realtimeService.SendToUserAsync(
+                member.UserId,
+                RealtimeEvents.ReceiveMessage,
+                payload,
+                token);
+        }
+    }
 
     private async Task NotifyEnded(GroupCallSession call, CancellationToken token)
     {
