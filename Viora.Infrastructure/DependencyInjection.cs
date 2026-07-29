@@ -24,6 +24,7 @@ using Viora.Infrastructure.Sharing;
 using Viora.Application.Admin;
 using Viora.Application.Mentions;
 using Viora.Application.GroupCalls;
+using Viora.Application.Legal;
 using Viora.Infrastructure.GroupCalls;
 
 namespace Viora.Infrastructure;
@@ -165,6 +166,7 @@ public static class DependencyInjection
         services.AddScoped<IJoinGroupRepository, JoinGroupRepository>();
         services.AddScoped<IShareLinkService, ShareLinkService>();
         services.AddScoped<IAdminRepository, AdminRepository>();
+        services.AddScoped<ILegalDocumentRepository, LegalDocumentRepository>();
         services.Configure<FirebaseOptions>(configuration.GetSection("Firebase"));
         services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
         services.AddSingleton<ConnectionRegistry>();

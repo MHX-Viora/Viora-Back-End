@@ -33,4 +33,5 @@ public enum CallStatus : short { Calling = 0, Accepted = 1, Rejected = 2, Missed
 public enum CallType : short { Audio = 0, Video = 1 }
 public enum GroupCallType : short { Audio = 0, Video = 1 }
 public enum GroupCallStatus : short { Active = 0, Ended = 1 }
+public enum LegalDocumentType : short { TermsOfService = 0, PrivacyPolicy = 1, PermissionPolicy = 2, CommunityGuidelines = 3, Other = 4 }
 public enum MentionTargetType : short { Post = 0, Comment = 1, Reply = 2, Message = 3 }

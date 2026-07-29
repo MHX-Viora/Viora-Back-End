@@ -38,6 +38,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<AdminLog> AdminLogs => Set<AdminLog>();
+    public DbSet<LegalDocument> LegalDocuments => Set<LegalDocument>();
+    public DbSet<UserLegalAcceptance> UserLegalAcceptances => Set<UserLegalAcceptance>();
 
     [DbFunction("translate", IsBuiltIn = true)]
     public static string Translate(string value, string matching, string replacement) =>
