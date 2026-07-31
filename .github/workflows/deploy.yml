@@ -161,6 +161,7 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           WORKFLOW: ${{ github.workflow }}
+          RUN_NUMBER: ${{ github.run_number }}
           RUN_ID: ${{ github.run_id }}
 
           DEPLOY_START: ${{ needs.build.outputs.started_at }}
@@ -240,24 +241,25 @@ jobs:
           fi
 
           MESSAGE="$(printf '%s\n' \
-            "${TITLE}" \
-            "" \
-            "🌐 Môi trường: Production" \
-            "" \
-            "📦 Repository: ${REPOSITORY}" \
-            "🌿 Branch: ${BRANCH}" \
-            "" \
-            "🔖 Commit:" \
-            "${SHORT_SHA} - ${COMMIT_MESSAGE}" \
-            "" \
-            "👤 Người thực hiện: ${ACTOR}" \
-            "🚀 Workflow: ${WORKFLOW}" \
-            "⏱️ ${TIME_LABEL}: ${DEPLOY_TIME}" \
-            "" \
-            "${RESULT_MESSAGE}" \
-            "" \
-            "Chi tiết:" \
-            "${RUN_URL}")"
+          "${TITLE}" \
+          "" \
+          "🌐 Môi trường: Production" \
+          "" \
+          "📦 Repository: ${REPOSITORY}" \
+          "🌿 Branch: ${BRANCH}" \
+          "" \
+          "🔖 Commit:" \
+          "${SHORT_SHA} - ${COMMIT_MESSAGE}" \
+          "" \
+          "👤 Người thực hiện: ${ACTOR}" \
+          "🚀 Workflow: ${WORKFLOW}" \
+          "🔢 Run: #${RUN_NUMBER}" \
+          "⏱️ ${TIME_LABEL}: ${DEPLOY_TIME}" \
+          "" \
+          "${RESULT_MESSAGE}" \
+          "" \
+          "Chi tiết:" \
+          "${RUN_URL}")"
 
           curl \
             --fail \
