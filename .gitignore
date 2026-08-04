@@ -1,10 +1,14 @@
 # Build and publish output
 [Bb]in/
 [Oo]bj/
+node_modules/
 artifacts/
 publish/
 *.nupkg
 *.snupkg
+
+# dependencies
+node_modules/
 
 # Visual Studio, VS Code, Rider and user state
 .vs/
