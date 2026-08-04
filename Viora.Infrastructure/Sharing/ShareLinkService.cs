@@ -8,7 +8,7 @@ namespace Viora.Infrastructure.Sharing;
 
 public sealed class ShareLinkService(AppDbContext db, IConfiguration configuration) : IShareLinkService
 {
-    private readonly string baseUrl = (configuration["ShareLinks:BaseUrl"] ?? "https://viora.app").TrimEnd('/');
+    private readonly string baseUrl = (configuration["ShareLinks:BaseUrl"] ?? "https://api.mxh.ankt.vn").TrimEnd('/');
 
     public async Task<ShareLinkResult<ShareLinkResponse>> GetUserShareLinkAsync(Guid viewerUserId, Guid userId, CancellationToken token)
     {

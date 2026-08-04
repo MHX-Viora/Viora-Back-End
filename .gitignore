@@ -53,3 +53,4 @@ Desktop.ini
 
 firebase-service-account.json
 *.json
+!viora-BE/wwwroot/.well-known/assetlinks.json
