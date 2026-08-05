@@ -5,6 +5,18 @@
     ],
     "target": {
       "namespace": "android_app",
+      "package_name": "com.ankt.app",
+      "sha256_cert_fingerprints": [
+        "27:AD:E1:D8:D1:62:FF:25:1F:34:6D:A9:97:02:B9:51:F3:6A:3E:4D:02:AA:85:53:F8:5C:BC:5C:0F:82:34:8D"
+      ]
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
       "package_name": "com.quyentrinh.viora",
       "sha256_cert_fingerprints": [
         "6D:B0:0C:87:DF:BB:E8:D6:FD:F0:6C:6E:E2:E2:44:AE:03:46:21:6F:99:22:E2:04:91:5A:14:98:71:DC:76:66",
