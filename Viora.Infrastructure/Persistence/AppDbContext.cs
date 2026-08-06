@@ -16,6 +16,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<PostMedia> PostMedia => Set<PostMedia>();
+    public DbSet<ArticleBlock> ArticleBlocks => Set<ArticleBlock>();
     public DbSet<PostReaction> PostReactions => Set<PostReaction>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<CommentReaction> CommentReactions => Set<CommentReaction>();

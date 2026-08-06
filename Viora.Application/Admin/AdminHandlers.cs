@@ -72,6 +72,12 @@ public sealed class GetAdminVideosHandler(IAdminRepository repository) : IReques
         repository.GetPostsAsync(new GetAdminPostsQuery(request.Page, request.PageSize, request.Keyword, request.UserId, request.Reported, request.Status, request.SortBy, request.SortDirection), PostType.ShortVideo, cancellationToken);
 }
 
+public sealed class GetAdminArticlesHandler(IAdminRepository repository) : IRequestHandler<GetAdminArticlesQuery, AdminPagedResponse<AdminPostSummaryResponse>>
+{
+    public Task<AdminPagedResponse<AdminPostSummaryResponse>> Handle(GetAdminArticlesQuery request, CancellationToken cancellationToken) =>
+        repository.GetPostsAsync(new GetAdminPostsQuery(request.Page, request.PageSize, request.Keyword, request.UserId, request.Reported, request.Status, request.SortBy, request.SortDirection), PostType.Article, cancellationToken);
+}
+
 public sealed class GetAdminPostDetailHandler(IAdminRepository repository) : IRequestHandler<GetAdminPostDetailQuery, AdminPostDetailResponse?>
 {
     public Task<AdminPostDetailResponse?> Handle(GetAdminPostDetailQuery request, CancellationToken cancellationToken) => repository.GetPostDetailAsync(request.Id, request.PostType, cancellationToken);

@@ -23,6 +23,19 @@ public sealed class Post : AuditableEntity
     public ICollection<Post> Shares { get; set; } = [];
     public ICollection<PostMedia> Media { get; set; } = [];
     public ICollection<Comment> Comments { get; set; } = [];
+    public ICollection<ArticleBlock> ArticleBlocks { get; set; } = [];
+}
+
+public sealed class ArticleBlock : AuditableEntity
+{
+    public Guid PostId { get; set; }
+    public int OrderIndex { get; set; }
+    public ArticleBlockType BlockType { get; set; }
+    public string? Content { get; set; }
+    public string? MediaUrl { get; set; }
+    public string? ThumbnailUrl { get; set; }
+    public string? Caption { get; set; }
+    public Post Post { get; set; } = null!;
 }
 
 public sealed class PostMedia : CreatedEntity

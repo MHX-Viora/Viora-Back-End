@@ -238,6 +238,8 @@ app.MapGet("/post/{contentId:guid}", (Guid contentId) =>
     CreateAppLinkFallback("post", contentId));
 app.MapGet("/reel/{contentId:guid}", (Guid contentId) =>
     CreateAppLinkFallback("reel", contentId));
+app.MapGet("/article/{contentId:guid}", (Guid contentId) =>
+    CreateAppLinkFallback("article", contentId));
 
 app.MapControllers();
 app.MapHub<RealtimeHub>("/hubs/realtime");

@@ -44,7 +44,14 @@ public sealed record PostFeedItemResponse(
     PostFeedOriginalPostResponse? OriginalPost)
 {
     public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+    public ArticleFeedSummaryResponse? Article { get; init; }
 }
+
+public sealed record ArticleFeedSummaryResponse(
+    string Title,
+    string? ThumbnailUrl,
+    string? Preview,
+    int ReadingTimeMinutes);
 
 public sealed record PostFeedOriginalPostResponse(
     Guid Id,

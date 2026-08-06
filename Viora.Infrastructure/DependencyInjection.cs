@@ -26,6 +26,7 @@ using Viora.Application.Mentions;
 using Viora.Application.GroupCalls;
 using Viora.Application.Legal;
 using Viora.Infrastructure.GroupCalls;
+using Viora.Application.Articles;
 
 namespace Viora.Infrastructure;
 
@@ -92,6 +93,8 @@ public static class DependencyInjection
         services.AddSingleton<IProfileImageStorage, CloudinaryProfileImageStorage>();
         services.AddSingleton<IMediaStorage, CloudinaryMediaStorage>();
         services.AddScoped<IValidator<CreatePostCommand>, CreatePostValidator>();
+        services.AddScoped<IValidator<CreateArticleCommand>, CreateArticleValidator>();
+        services.AddScoped<IValidator<UpdateArticleCommand>, UpdateArticleValidator>();
         services.AddScoped<IValidator<CreateReelCommand>, CreateReelValidator>();
         services.AddScoped<IValidator<ReactPostCommand>, ReactPostValidator>();
         services.AddScoped<IValidator<CreateCommentCommand>, CreateCommentValidator>();
@@ -154,6 +157,7 @@ public static class DependencyInjection
         services.AddScoped<IProfileFeedRepository, ProfileFeedRepository>();
         services.AddScoped<IVideoFeedRepository, VideoFeedRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
+        services.AddScoped<IArticleRepository, ArticleRepository>();
         services.AddScoped<IHashtagRepository, HashtagRepository>();
         services.AddScoped<ISocialRepository, SocialRepository>();
         services.AddScoped<IPostInteractionRepository, PostInteractionRepository>();

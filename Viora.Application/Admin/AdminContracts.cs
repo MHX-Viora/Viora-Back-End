@@ -196,6 +196,7 @@ public sealed record ApproveAdminIdentityCommand(Guid AdminId, Guid Id) : IReque
 public sealed record RejectAdminIdentityCommand(Guid AdminId, Guid Id, string? Reason) : IRequest<AdminMutationResponse?>;
 public sealed record GetAdminPostsQuery(int Page, int PageSize, string? Keyword, Guid? UserId, bool? Reported, PostStatus? Status, string? SortBy, string? SortDirection) : IRequest<AdminPagedResponse<AdminPostSummaryResponse>>;
 public sealed record GetAdminVideosQuery(int Page, int PageSize, string? Keyword, Guid? UserId, bool? Reported, PostStatus? Status, string? SortBy, string? SortDirection) : IRequest<AdminPagedResponse<AdminPostSummaryResponse>>;
+public sealed record GetAdminArticlesQuery(int Page, int PageSize, string? Keyword, Guid? UserId, bool? Reported, PostStatus? Status, string? SortBy, string? SortDirection) : IRequest<AdminPagedResponse<AdminPostSummaryResponse>>;
 public sealed record GetAdminPostDetailQuery(Guid Id, PostType? PostType = null) : IRequest<AdminPostDetailResponse?>;
 public sealed record HideAdminPostCommand(Guid AdminId, Guid Id, PostType? PostType = null) : IRequest<AdminMutationResponse?>;
 public sealed record RestoreAdminPostCommand(Guid AdminId, Guid Id, PostType? PostType = null) : IRequest<AdminMutationResponse?>;

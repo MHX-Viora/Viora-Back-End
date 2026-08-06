@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Viora.Application.Articles;
 using Viora.Application.Posts;
 using Viora.Domain.Entities;
 
@@ -111,7 +112,7 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
         var posts = dbContext.Posts
             .AsNoTracking()
             .Where(post =>
-                post.PostType == PostType.Post &&
+                (post.PostType == PostType.Post || post.PostType == PostType.Article) &&
                 post.Status == PostStatus.Published &&
                 post.DeletedAt == null &&
                 (post.Visibility == PostVisibility.Public ||
@@ -281,6 +282,42 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                         item.Post.OriginalPost.ViewCount)))
             .ToListAsync(cancellationToken);
 
+        var articleIds = items
+            .Where(item => item.PostType == PostType.Article)
+            .Select(item => item.Id)
+            .ToArray();
+        var articleData = await dbContext.Posts.AsNoTracking()
+                .Where(post => articleIds.Contains(post.Id))
+                .Select(post => new
+                {
+                    post.Id,
+                    Title = post.Content ?? string.Empty,
+                    Blocks = post.ArticleBlocks
+                        .Where(block => block.BlockType == ArticleBlockType.Text ||
+                            block.BlockType == ArticleBlockType.Heading ||
+                            block.BlockType == ArticleBlockType.Quote ||
+                            block.BlockType == ArticleBlockType.Code ||
+                            block.BlockType == ArticleBlockType.Image)
+                        .OrderBy(block => block.OrderIndex)
+                        .Select(block => new { block.BlockType, block.Content, block.MediaUrl })
+                        .ToList()
+                })
+                .ToListAsync(cancellationToken);
+        var articleSummaries = articleData.ToDictionary(
+            article => article.Id,
+            article =>
+            {
+                var preview = article.Blocks.FirstOrDefault(block => block.BlockType == ArticleBlockType.Text)?.Content;
+                if (preview?.Length > 200) preview = preview[..200].TrimEnd() + "…";
+                return new ArticleFeedSummaryResponse(
+                    article.Title,
+                    article.Blocks.FirstOrDefault(block => block.BlockType == ArticleBlockType.Image)?.MediaUrl,
+                    preview,
+                    ArticleReadingTime.Calculate(article.Blocks
+                        .Where(block => block.BlockType != ArticleBlockType.Image)
+                        .Select(block => block.Content)));
+            });
+
         var postIds = items
             .SelectMany(item => item.OriginalPost is null ? [item.Id] : new[] { item.Id, item.OriginalPost.Id })
             .Distinct()
@@ -290,6 +327,7 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
         var mappedItems = items.Select(item => item with
         {
             Mentions = mentions.GetValueOrDefault(item.Id) ?? [],
+            Article = articleSummaries.GetValueOrDefault(item.Id),
             OriginalPost = item.OriginalPost is null
                 ? null
                 : item.OriginalPost with

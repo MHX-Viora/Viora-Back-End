@@ -5,7 +5,18 @@ public enum AccountStatus : short { Banned = 0, Active = 1, Deleted = 2 }
 public enum Gender : short { Unknown = 0, Male = 1, Female = 2 }
 public enum UserIdentityState : short { NotVerified = 0, Verified = 1, Rejected = 2 }
 public enum IdentitySubmissionStatus : short { Pending = 1, Approved = 2, Rejected = 3 }
-public enum PostType : short { Post = 0, ShortVideo = 1 }
+public enum PostType : short { Post = 0, ShortVideo = 1, Article = 2 }
+public enum ArticleBlockType : short
+{
+    Text = 0,
+    Heading = 1,
+    Image = 2,
+    Video = 3,
+    Quote = 4,
+    Divider = 5,
+    Code = 6,
+    Embed = 7
+}
 public enum PostVisibility : short { Public = 0, Followers = 1, Private = 2 }
 public enum PostStatus : short { Draft = 0, Published = 1, Hidden = 2, Deleted = 3 }
 public enum ReactionType : short { Like = 0, Love = 1, Haha = 2, Wow = 3, Sad = 4, Angry = 5 }

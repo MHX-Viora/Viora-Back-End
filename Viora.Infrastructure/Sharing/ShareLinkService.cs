@@ -25,9 +25,13 @@ public sealed class ShareLinkService(AppDbContext db, IConfiguration configurati
 
     public async Task<ShareLinkResult<ShareLinkResponse>> GetPostShareLinkAsync(Guid viewerUserId, Guid postId, CancellationToken token)
     {
-        var validation = await ValidatePostAsync(viewerUserId, postId, PostType.Post, token);
+        var validation = await ValidatePostAsync(viewerUserId, postId, null, token);
+        var postType = validation is null
+            ? await db.Posts.AsNoTracking().Where(x => x.Id == postId).Select(x => x.PostType).SingleAsync(token)
+            : PostType.Post;
         return validation is null
-            ? ShareLinkResult<ShareLinkResponse>.Success(new ShareLinkResponse($"{baseUrl}/post/{postId}"))
+            ? ShareLinkResult<ShareLinkResponse>.Success(new ShareLinkResponse(
+                $"{baseUrl}/{(postType == PostType.Article ? "article" : "post")}/{postId}"))
             : ShareLinkResult<ShareLinkResponse>.Failure(validation.Value.Error, validation.Value.Message);
     }
 
@@ -66,7 +70,7 @@ public sealed class ShareLinkService(AppDbContext db, IConfiguration configurati
         return ShareLinkResult<GroupShareLinkResponse>.Success(new GroupShareLinkResponse(group.InviteCode, $"{baseUrl}/group/{group.InviteCode}"));
     }
 
-    private async Task<(ShareLinkError Error, string Message)?> ValidatePostAsync(Guid viewerUserId, Guid postId, PostType postType, CancellationToken token)
+    private async Task<(ShareLinkError Error, string Message)?> ValidatePostAsync(Guid viewerUserId, Guid postId, PostType? postType, CancellationToken token)
     {
         var post = await db.Posts.AsNoTracking()
             .Where(x => x.Id == postId)
@@ -83,7 +87,10 @@ public sealed class ShareLinkService(AppDbContext db, IConfiguration configurati
             })
             .SingleOrDefaultAsync(token);
 
-        if (post is null || post.PostType != postType || post.Status == PostStatus.Deleted || post.DeletedAt is not null)
+        var hasExpectedType = postType.HasValue
+            ? post?.PostType == postType.Value
+            : post?.PostType is PostType.Post or PostType.Article;
+        if (post is null || !hasExpectedType || post.Status == PostStatus.Deleted || post.DeletedAt is not null)
         {
             return (ShareLinkError.NotFound, postType == PostType.ShortVideo ? "Khong tim thay video." : "Khong tim thay bai viet.");
         }

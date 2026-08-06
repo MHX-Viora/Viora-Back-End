@@ -40,6 +40,26 @@ internal sealed class PostMediaConfiguration : IEntityTypeConfiguration<PostMedi
     }
 }
 
+internal sealed class ArticleBlockConfiguration : IEntityTypeConfiguration<ArticleBlock>
+{
+    public void Configure(EntityTypeBuilder<ArticleBlock> builder)
+    {
+        builder.ToTable("ArticleBlocks", table => table.HasCheckConstraint(
+            "CK_ArticleBlocks_OrderIndex", "\"OrderIndex\" >= 0"));
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.BlockType).IsRequired();
+        builder.Property(x => x.Content).HasMaxLength(50000);
+        builder.Property(x => x.MediaUrl).HasMaxLength(2048);
+        builder.Property(x => x.ThumbnailUrl).HasMaxLength(2048);
+        builder.Property(x => x.Caption).HasMaxLength(500);
+        builder.HasIndex(x => new { x.PostId, x.OrderIndex }).IsUnique();
+        builder.HasOne(x => x.Post)
+            .WithMany(x => x.ArticleBlocks)
+            .HasForeignKey(x => x.PostId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class PostReactionConfiguration : IEntityTypeConfiguration<PostReaction>
 {
     public void Configure(EntityTypeBuilder<PostReaction> builder)

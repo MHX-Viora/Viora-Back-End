@@ -127,6 +127,39 @@ public sealed class AdminController(IMediator mediator) : ControllerBase
         CancellationToken cancellationToken = default) =>
         OkResponse(await mediator.Send(new GetAdminVideosQuery(page, pageSize, keyword, userId, reported, status, sortBy, sortDirection), cancellationToken));
 
+    [HttpGet("articles")]
+    public async Task<ActionResult<AdminApiResponse<AdminPagedResponse<AdminPostSummaryResponse>>>> Articles(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null,
+        [FromQuery] Guid? userId = null, [FromQuery] bool? reported = null, [FromQuery] PostStatus? status = null,
+        [FromQuery] string? sortBy = null, [FromQuery] string? sortDirection = null,
+        CancellationToken cancellationToken = default) =>
+        OkResponse(await mediator.Send(new GetAdminArticlesQuery(page, pageSize, keyword, userId, reported, status, sortBy, sortDirection), cancellationToken));
+
+    [HttpGet("articles/{id:guid}")]
+    public async Task<ActionResult<AdminApiResponse<AdminPostDetailResponse>>> ArticleDetail(Guid id, CancellationToken cancellationToken) =>
+        ToResult(await mediator.Send(new GetAdminPostDetailQuery(id, PostType.Article), cancellationToken));
+
+    [HttpPatch("articles/{id:guid}/hide")]
+    public async Task<ActionResult<AdminApiResponse<AdminMutationResponse>>> HideArticle(Guid id, CancellationToken cancellationToken)
+    {
+        if (!TryGetAdminId(out var adminId)) return UnauthorizedResponse();
+        return ToResult(await mediator.Send(new HideAdminPostCommand(adminId, id, PostType.Article), cancellationToken));
+    }
+
+    [HttpPatch("articles/{id:guid}/restore")]
+    public async Task<ActionResult<AdminApiResponse<AdminMutationResponse>>> RestoreArticle(Guid id, CancellationToken cancellationToken)
+    {
+        if (!TryGetAdminId(out var adminId)) return UnauthorizedResponse();
+        return ToResult(await mediator.Send(new RestoreAdminPostCommand(adminId, id, PostType.Article), cancellationToken));
+    }
+
+    [HttpDelete("articles/{id:guid}")]
+    public async Task<ActionResult<AdminApiResponse<AdminMutationResponse>>> DeleteArticle(Guid id, CancellationToken cancellationToken)
+    {
+        if (!TryGetAdminId(out var adminId)) return UnauthorizedResponse();
+        return ToResult(await mediator.Send(new DeleteAdminPostCommand(adminId, id, PostType.Article), cancellationToken));
+    }
+
     [HttpGet("videos/{id:guid}")]
     public async Task<ActionResult<AdminApiResponse<AdminPostDetailResponse>>> VideoDetail(Guid id, CancellationToken cancellationToken) =>
         ToResult(await mediator.Send(new GetAdminPostDetailQuery(id, PostType.ShortVideo), cancellationToken));
