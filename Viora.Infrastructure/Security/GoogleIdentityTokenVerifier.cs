@@ -1,5 +1,7 @@
 using FirebaseAdmin.Auth;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using Viora.Application.Accounts;
 using Viora.Infrastructure.Realtime;
 
@@ -35,11 +37,21 @@ public sealed class GoogleIdentityTokenVerifier(
                 "firebase",
                 "sign_in_provider");
 
-            return emailVerified && provider == GoogleProvider &&
+            var isValidIdentity = emailVerified && provider == GoogleProvider &&
                 !string.IsNullOrWhiteSpace(decoded.Uid) &&
-                !string.IsNullOrWhiteSpace(email)
-                ? new GoogleVerifiedIdentity(decoded.Uid, email)
-                : null;
+                !string.IsNullOrWhiteSpace(email);
+            if (!isValidIdentity)
+            {
+                logger.LogWarning(
+                    "Google token claims rejected. EmailVerified: {EmailVerified}, Provider: {Provider}, HasUid: {HasUid}, HasEmail: {HasEmail}.",
+                    emailVerified,
+                    provider ?? "missing",
+                    !string.IsNullOrWhiteSpace(decoded.Uid),
+                    !string.IsNullOrWhiteSpace(email));
+                return null;
+            }
+
+            return new GoogleVerifiedIdentity(decoded.Uid, email!);
         }
         catch (FirebaseAuthException exception)
         {
@@ -78,6 +90,20 @@ public sealed class GoogleIdentityTokenVerifier(
             dictionary.TryGetValue(childKey, out var value))
         {
             return value?.ToString();
+        }
+
+        if (parent is JObject jsonObject)
+        {
+            return jsonObject.GetValue(childKey, StringComparison.Ordinal)?.Value<string>();
+        }
+
+        if (parent is JsonElement jsonElement &&
+            jsonElement.ValueKind == JsonValueKind.Object &&
+            jsonElement.TryGetProperty(childKey, out var child))
+        {
+            return child.ValueKind == JsonValueKind.String
+                ? child.GetString()
+                : child.ToString();
         }
 
         return null;
