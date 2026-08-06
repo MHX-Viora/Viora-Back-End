@@ -7,7 +7,8 @@
       "namespace": "android_app",
       "package_name": "com.ankt.app",
       "sha256_cert_fingerprints": [
-        "27:AD:E1:D8:D1:62:FF:25:1F:34:6D:A9:97:02:B9:51:F3:6A:3E:4D:02:AA:85:53:F8:5C:BC:5C:0F:82:34:8D"
+        "27:AD:E1:D8:D1:62:FF:25:1F:34:6D:A9:97:02:B9:51:F3:6A:3E:4D:02:AA:85:53:F8:5C:BC:5C:0F:82:34:8D",
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"
       ]
     }
   },
