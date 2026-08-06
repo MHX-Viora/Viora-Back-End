@@ -6,6 +6,8 @@ namespace Viora.Application.Accounts;
 
 public sealed record RegisterAccountCommand(string Identifier, string Password);
 public sealed record LoginAccountCommand(string Identifier, string Password);
+public sealed record GoogleLoginCommand(string FirebaseToken);
+public sealed record GoogleVerifiedIdentity(string ProviderSubject, string Email);
 public sealed record RefreshAccountTokenCommand(string RefreshToken);
 public sealed record LogoutAccountCommand(string? RefreshToken, Guid AccountId);
 public sealed record ChangePasswordCommand(Guid AccountId, string CurrentPassword, string NewPassword, string ConfirmPassword);
@@ -71,6 +73,33 @@ public interface IAccountService
         CancellationToken cancellationToken);
     Task<AccountResponse?> UpdateAsync(Guid id, UpdateAccountCommand command, CancellationToken cancellationToken);
     Task DeleteAsync(Guid id, CancellationToken cancellationToken);
+}
+
+public interface IGoogleLoginService
+{
+    Task<LoginAccountResult> LoginAsync(
+        GoogleLoginCommand command,
+        CancellationToken cancellationToken);
+}
+
+public interface IGoogleIdentityTokenVerifier
+{
+    Task<GoogleVerifiedIdentity?> VerifyAsync(
+        string firebaseToken,
+        CancellationToken cancellationToken);
+}
+
+public interface IGoogleLoginRepository
+{
+    Task<Account> ResolveAccountAsync(
+        GoogleVerifiedIdentity identity,
+        CancellationToken cancellationToken);
+
+    Task CompleteLoginAsync(
+        Account account,
+        RefreshToken refreshToken,
+        DateTime loginAt,
+        CancellationToken cancellationToken);
 }
 
 public interface IAccountRepository

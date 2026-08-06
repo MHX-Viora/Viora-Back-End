@@ -68,7 +68,8 @@ public sealed class AccountService(
             identifier.Phone,
             cancellationToken);
 
-        if (account is null || !passwordHasher.Verify(command.Password, account.PasswordHash))
+        if (account is null || account.PasswordHash is null ||
+            !passwordHasher.Verify(command.Password, account.PasswordHash))
         {
             return InvalidCredentials();
         }
@@ -192,12 +193,14 @@ public sealed class AccountService(
             return new ChangePasswordResult(ChangePasswordOutcome.AccountNotFound, "Không tìm thấy tài khoản.");
         }
 
-        if (!passwordHasher.Verify(command.CurrentPassword, account.PasswordHash))
+        if (account.PasswordHash is null ||
+            !passwordHasher.Verify(command.CurrentPassword, account.PasswordHash))
         {
             return new ChangePasswordResult(ChangePasswordOutcome.InvalidCurrentPassword, "Mật khẩu hiện tại không đúng.");
         }
 
-        if (passwordHasher.Verify(command.NewPassword, account.PasswordHash))
+        if (account.PasswordHash is not null &&
+            passwordHasher.Verify(command.NewPassword, account.PasswordHash))
         {
             return new ChangePasswordResult(ChangePasswordOutcome.SamePassword, "Mật khẩu mới không được trùng mật khẩu cũ.");
         }

@@ -4,13 +4,22 @@ public sealed class Account : AuditableEntity
 {
     public string? Email { get; set; }
     public string? Phone { get; set; }
-    public string PasswordHash { get; set; } = null!;
+    public string? PasswordHash { get; set; }
     public AccountRole Role { get; set; } = AccountRole.User;
     public AccountStatus Status { get; set; } = AccountStatus.Active;
     public DateTime? LastLoginAt { get; set; }
     public DateTime? DeletedAt { get; set; }
     public User? User { get; set; }
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
+    public ICollection<ExternalLogin> ExternalLogins { get; set; } = [];
+}
+
+public sealed class ExternalLogin : AuditableEntity
+{
+    public Guid AccountId { get; set; }
+    public string Provider { get; set; } = null!;
+    public string ProviderSubject { get; set; } = null!;
+    public Account Account { get; set; } = null!;
 }
 
 public sealed class RefreshToken : AuditableEntity

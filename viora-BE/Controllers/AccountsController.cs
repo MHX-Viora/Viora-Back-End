@@ -12,7 +12,10 @@ namespace viora_BE.Controllers;
 
 [ApiController]
 [Route("api/accounts")]
-public sealed class AccountsController(IAccountService accountService, ISender sender) : ControllerBase
+public sealed class AccountsController(
+    IAccountService accountService,
+    IGoogleLoginService googleLoginService,
+    ISender sender) : ControllerBase
 {
     private const string RefreshTokenCookieName = "refreshToken";
     private const string RefreshTokenCookiePath = "/api/accounts";
@@ -80,6 +83,37 @@ public sealed class AccountsController(IAccountService accountService, ISender s
             return Ok(new LoginSuccessResponse(
                 result.Status!.Value,
                 result.Tokens!.AccessToken,
+                result.User));
+        }
+
+        return result.Outcome switch
+        {
+            LoginOutcome.Banned or LoginOutcome.Deleted => StatusCode(
+                StatusCodes.Status403Forbidden,
+                new LoginMessageResponse(result.Status, result.Message!)),
+            _ => Unauthorized(new LoginMessageResponse(null, result.Message!))
+        };
+    }
+
+    [HttpPost("google-login")]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType<LoginSuccessResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<LoginMessageResponse>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<LoginMessageResponse>(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> GoogleLogin(
+        GoogleLoginRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await googleLoginService.LoginAsync(
+            new GoogleLoginCommand(request.FirebaseToken),
+            cancellationToken);
+
+        if (result.Outcome == LoginOutcome.Active)
+        {
+            SetRefreshTokenCookie(result.Tokens!.RefreshToken);
+            return Ok(new LoginSuccessResponse(
+                result.Status!.Value,
+                result.Tokens.AccessToken,
                 result.User));
         }
 
@@ -241,6 +275,9 @@ public sealed record RegisterAccountResponse(string Message);
 public sealed record LoginAccountRequest(
     [param: Required, MaxLength(255)] string Identifier,
     [param: Required, StringLength(128, MinimumLength = 8)] string Password);
+
+public sealed record GoogleLoginRequest(
+    [param: Required, MaxLength(10000)] string FirebaseToken);
 
 public sealed record LoginSuccessResponse(
     AccountStatus Status,

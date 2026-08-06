@@ -208,7 +208,8 @@ public sealed class ResetForgottenPasswordHandler(
                 "Không tìm thấy tài khoản.");
         }
 
-        if (passwordVerifier.Verify(request.NewPassword, account.PasswordHash))
+        if (account.PasswordHash is not null &&
+            passwordVerifier.Verify(request.NewPassword, account.PasswordHash))
         {
             return ForgotPasswordResult<ForgotPasswordMessageResponse>.Failure(
                 ForgotPasswordOutcome.SamePassword,

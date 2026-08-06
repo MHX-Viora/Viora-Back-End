@@ -139,11 +139,14 @@ public static class DependencyInjection
         services.AddScoped<IValidator<GetVideoRepliesQuery>, GetVideoRepliesValidator>();
         services.AddScoped<IValidator<DeleteVideoCommentCommand>, DeleteVideoCommentValidator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IGoogleLoginRepository, GoogleLoginRepository>();
         services.AddScoped<IForgotPasswordRepository, ForgotPasswordRepository>();
         services.AddScoped<IPasswordHasher, AspNetIdentityPasswordHasher>();
         services.AddScoped<IPasswordResetHasher, BCryptPasswordResetHasher>();
         services.AddScoped<IFirebaseIdentityTokenVerifier, FirebaseIdentityTokenVerifier>();
+        services.AddScoped<IGoogleIdentityTokenVerifier, GoogleIdentityTokenVerifier>();
         services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<IGoogleLoginService, GoogleLoginService>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IUserProfileService, UserProfileService>();
         services.AddScoped<IUserSettingsRepository, UserSettingsRepository>();
