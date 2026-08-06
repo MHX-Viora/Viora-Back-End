@@ -257,7 +257,7 @@ static IResult CreateAppLinkFallback(string contentType, Guid contentId)
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>Mở {{label}} trên Viora</title>
+          <title>Mở {{label}} trên ANKT</title>
           <style>
             body { font-family: system-ui, sans-serif; margin: 0; background: #f5f7fd; color: #071a38; }
             main { box-sizing: border-box; max-width: 420px; min-height: 100vh; margin: auto; padding: 48px 24px; display: grid; place-content: center; text-align: center; }
@@ -267,9 +267,9 @@ static IResult CreateAppLinkFallback(string contentType, Guid contentId)
         </head>
         <body>
           <main>
-            <h1>Mở trong Viora</h1>
+            <h1>Mở trong ANKT</h1>
             <p>Nhấn nút bên dưới để xem {{label}} trong ứng dụng.</p>
-            <a href="{{intentLink}}">Mở ứng dụng Viora</a>
+            <a href="{{intentLink}}">Mở ứng dụng ANKT</a>
             <a href="{{deepLink}}" style="background:#fff;color:#2868d7;border:1px solid #2868d7">Thử cách khác</a>
           </main>
         </body>
