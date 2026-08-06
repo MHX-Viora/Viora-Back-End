@@ -1244,7 +1244,8 @@ public sealed class ChatConversationRepository(
                         other.UserId,
                         other.User.DisplayName,
                         other.User.AvatarUrl,
-                        other.User.IsVerified
+                        other.User.IsVerified,
+                        other.User.AccountStyle
                     })
                     .FirstOrDefault(),
                 MemberCount = member.Conversation.Members.Count(other => other.Status == ConversationMemberStatus.Active),
@@ -1270,7 +1271,8 @@ public sealed class ChatConversationRepository(
                     info.OtherMember.UserId,
                     info.OtherMember.DisplayName,
                     info.OtherMember.AvatarUrl,
-                    info.OtherMember.IsVerified)
+                    info.OtherMember.IsVerified,
+                    info.OtherMember.AccountStyle)
                 : null));
     }
 

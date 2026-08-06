@@ -76,7 +76,8 @@ public sealed record PostFeedUserResponse(
     Guid Id,
     string DisplayName,
     string? AvatarUrl,
-    bool IsVerified);
+    bool IsVerified,
+    AccountStyle AccountStyle = AccountStyle.Personal);
 
 public sealed record PostFeedMediaResponse(
     Guid Id,
@@ -116,7 +117,8 @@ public sealed record PostDetailUserResponse(
     Guid Id,
     string DisplayName,
     string? AvatarUrl,
-    bool IsVerified);
+    bool IsVerified,
+    AccountStyle AccountStyle = AccountStyle.Personal);
 
 public sealed record PostDetailMediaResponse(
     Guid Id,

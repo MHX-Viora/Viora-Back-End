@@ -323,5 +323,6 @@ public sealed class AccountService(
             account.User.Gender,
             account.Role,
             account.User.IsVerified,
-            account.User.IdentityStatus);
+            account.User.IdentityStatus,
+            account.User.AccountStyle);
 }

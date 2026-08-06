@@ -67,7 +67,8 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                     post.User.Id,
                     post.User.DisplayName,
                     post.User.AvatarUrl,
-                    post.User.IsVerified),
+                    post.User.IsVerified,
+                    post.User.AccountStyle),
                 post.Media
                     .OrderBy(media => media.CreatedAt)
                     .Select(media => new PostDetailMediaResponse(
@@ -229,7 +230,8 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                     item.Post.User.Id,
                     item.Post.User.DisplayName,
                     item.Post.User.AvatarUrl,
-                    item.Post.User.IsVerified),
+                    item.Post.User.IsVerified,
+                    item.Post.User.AccountStyle),
                 item.Post.Media
                     .OrderBy(media => media.CreatedAt)
                     .Select(media => new PostFeedMediaResponse(
@@ -267,7 +269,8 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                             item.Post.OriginalPost.User.Id,
                             item.Post.OriginalPost.User.DisplayName,
                             item.Post.OriginalPost.User.AvatarUrl,
-                            item.Post.OriginalPost.User.IsVerified),
+                            item.Post.OriginalPost.User.IsVerified,
+                            item.Post.OriginalPost.User.AccountStyle),
                         item.Post.OriginalPost.Media
                             .OrderBy(media => media.CreatedAt)
                             .Select(media => new PostFeedMediaResponse(

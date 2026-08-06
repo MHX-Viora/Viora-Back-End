@@ -31,7 +31,8 @@ public sealed record UserResponse(
     Gender Gender,
     AccountRole Role,
     bool IsVerified,
-    UserIdentityState VerificationStatus);
+    UserIdentityState VerificationStatus,
+    AccountStyle AccountStyle = AccountStyle.Personal);
 
 public enum UserProfileError
 {

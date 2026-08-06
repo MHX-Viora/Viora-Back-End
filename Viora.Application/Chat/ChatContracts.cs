@@ -285,7 +285,8 @@ public sealed record ChatConversationOtherUserResponse(
     Guid Id,
     string DisplayName,
     string? AvatarUrl,
-    bool IsVerified);
+    bool IsVerified,
+    AccountStyle AccountStyle = AccountStyle.Personal);
 
 public enum ChatAttachmentFilterType : short { All = 0, Image = 1, Video = 2, File = 3, Audio = 4 }
 

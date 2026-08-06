@@ -68,7 +68,8 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
                 friendship.RequesterUser.DisplayName,
                 friendship.RequesterUser.AvatarUrl,
                 friendship.RequesterUser.IsVerified,
-                friendship.CreatedAt))
+                friendship.CreatedAt,
+                friendship.RequesterUser.AccountStyle))
             .ToListAsync(cancellationToken);
 
         return new FriendRequestListResponse(items);
@@ -114,6 +115,9 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
             OtherIsVerified = friendship.RequesterUserId == query.CurrentUserId
                 ? friendship.AddresseeUser.IsVerified
                 : friendship.RequesterUser.IsVerified,
+            OtherAccountStyle = friendship.RequesterUserId == query.CurrentUserId
+                ? friendship.AddresseeUser.AccountStyle
+                : friendship.RequesterUser.AccountStyle,
             OtherAccountStatus = friendship.RequesterUserId == query.CurrentUserId
                 ? friendship.AddresseeUser.Account.Status
                 : friendship.RequesterUser.Account.Status,
@@ -187,7 +191,8 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
                     item.OtherDisplayName,
                     item.OtherAvatarUrl,
                     item.OtherIsVerified,
-                    mutualCounts.GetValueOrDefault(item.OtherUserId))))
+                    mutualCounts.GetValueOrDefault(item.OtherUserId),
+                    item.OtherAccountStyle)))
             .ToList();
 
         return new FriendshipListResponse(page, pageSize, totalItems, totalPages, items);
@@ -255,6 +260,7 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
                 item.User.CoverUrl,
                 item.User.Gender,
                 item.User.IsVerified,
+                item.User.AccountStyle,
                 item.PostCount,
                 item.FollowerCount,
                 item.FollowingCount,

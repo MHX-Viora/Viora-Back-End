@@ -14,9 +14,16 @@ public sealed class CreateArticleHandler(
     public async Task<ArticleResponse> Handle(CreateArticleCommand request, CancellationToken cancellationToken)
     {
         await validator.ValidateAndThrowAsync(request, cancellationToken);
-        if (!await repository.UserExistsAsync(request.UserId, cancellationToken))
+        var accountStyle = await repository.GetUserAccountStyleAsync(request.UserId, cancellationToken);
+        if (accountStyle is null)
         {
             throw new CreatePostException("USER_NOT_FOUND", "Không tìm thấy người dùng.");
+        }
+        if (!accountStyle.Value.CanCreateArticle())
+        {
+            throw new CreatePostException(
+                "ARTICLE_ACCOUNT_STYLE_REQUIRED",
+                "Tài khoản của bạn chưa được cấp quyền đăng bài viết.");
         }
 
         var article = new Post

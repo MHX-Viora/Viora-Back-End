@@ -83,7 +83,7 @@ public sealed class CreateReelCommandHandler(
             post.SaveCount,
             post.ViewCount,
             post.CreatedAt,
-            new PostFeedUserResponse(user.Id, user.DisplayName, user.AvatarUrl, user.IsVerified),
+            new PostFeedUserResponse(user.Id, user.DisplayName, user.AvatarUrl, user.IsVerified, user.AccountStyle),
             post.Media.Select(item => new PostFeedMediaResponse(item.Id, item.MediaUrl, item.ThumbnailUrl)).ToList(),
             responseHashtags.Select(hashtag => new ReelHashtagResponse(hashtag.Id, hashtag.Name)).ToList(),
             false,

@@ -165,7 +165,8 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
                     comment.User.Id,
                     comment.User.DisplayName,
                     comment.User.AvatarUrl,
-                    comment.User.IsVerified)))
+                    comment.User.IsVerified,
+                    comment.User.AccountStyle)))
             .ToListAsync(cancellationToken);
 
         var mentions = await MentionProjection.LoadAsync(
@@ -227,7 +228,8 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
                     comment.User.Id,
                     comment.User.DisplayName,
                     comment.User.AvatarUrl,
-                    comment.User.IsVerified)))
+                    comment.User.IsVerified,
+                    comment.User.AccountStyle)))
             .ToListAsync(cancellationToken);
 
         var mentions = await MentionProjection.LoadAsync(
@@ -283,7 +285,8 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
                     comment.User.Id,
                     comment.User.DisplayName,
                     comment.User.AvatarUrl,
-                    comment.User.IsVerified)))
+                    comment.User.IsVerified,
+                    comment.User.AccountStyle)))
             .ToListAsync(cancellationToken);
 
         return new VideoCommentsResponse(page, pageSize, totalItems, totalPages, items);
@@ -324,12 +327,14 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
                     comment.ReplyToUser!.Id,
                     comment.ReplyToUser.DisplayName,
                     comment.ReplyToUser.AvatarUrl,
-                    comment.ReplyToUser.IsVerified),
+                    comment.ReplyToUser.IsVerified,
+                    comment.ReplyToUser.AccountStyle),
                 new PostInteractionUserResponse(
                     comment.User.Id,
                     comment.User.DisplayName,
                     comment.User.AvatarUrl,
-                    comment.User.IsVerified)))
+                    comment.User.IsVerified,
+                    comment.User.AccountStyle)))
             .ToListAsync(cancellationToken);
 
         return new VideoRepliesResponse(page, pageSize, totalItems, totalPages, items);

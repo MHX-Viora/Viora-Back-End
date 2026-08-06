@@ -85,5 +85,6 @@ public sealed class GoogleLoginService(
             account.User.Gender,
             account.Role,
             account.User.IsVerified,
-            account.User.IdentityStatus);
+            account.User.IdentityStatus,
+            account.User.AccountStyle);
 }

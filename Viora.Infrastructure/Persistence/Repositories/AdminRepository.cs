@@ -57,6 +57,7 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
                 x.Account.Status,
                 x.IdentityStatus,
                 x.IsVerified,
+                x.AccountStyle,
                 dbContext.Posts.Count(p => p.UserId == x.Id && p.PostType == PostType.Post),
                 dbContext.Friendships.Count(f => f.Status == FriendshipStatus.Accepted && (f.RequesterUserId == x.Id || f.AddresseeUserId == x.Id)),
                 x.CreatedAt)),
@@ -78,6 +79,7 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
                 x.Account.Email,
                 x.Account.Phone,
                 x.Account.Role,
+                x.AccountStyle,
                 x.Account.Status,
                 x.IdentityStatus,
                 x.IsVerified,
@@ -114,6 +116,39 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
         await dbContext.SaveChangesAsync(cancellationToken);
         await TryAddLogAsync(adminId, "UpdateUserVerify", "User", id, $"IsVerified={isVerified}", cancellationToken);
         return true;
+    }
+
+    public async Task<Notification?> UpdateUserAccountStyleAsync(
+        Guid adminId,
+        Guid id,
+        AccountStyle accountStyle,
+        CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (user is null) return null;
+
+        var previousStyle = user.AccountStyle;
+        user.AccountStyle = accountStyle;
+        var notification = new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            NotificationType = NotificationType.System,
+            Title = "Loại tài khoản đã được cập nhật",
+            Content = $"Chúc mừng! Tài khoản của bạn hiện là {AccountStyleLabels.ToVietnamese(accountStyle)}.",
+            ReferenceType = NotificationReferenceType.User,
+            ReferenceId = user.Id
+        };
+        dbContext.Notifications.Add(notification);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await TryAddLogAsync(
+            adminId,
+            "UpdateUserAccountStyle",
+            "User",
+            id,
+            $"AccountStyle={previousStyle}->{accountStyle}",
+            cancellationToken);
+        return notification;
     }
 
     public async Task<AdminPagedResponse<AdminIdentitySummaryResponse>> GetIdentitiesAsync(GetAdminIdentitiesQuery query, CancellationToken cancellationToken)

@@ -74,7 +74,8 @@ public sealed record PostInteractionUserResponse(
     Guid Id,
     string DisplayName,
     string? AvatarUrl,
-    bool IsVerified);
+    bool IsVerified,
+    AccountStyle AccountStyle = AccountStyle.Personal);
 
 public sealed record PostCommentsResponse(
     int Page,

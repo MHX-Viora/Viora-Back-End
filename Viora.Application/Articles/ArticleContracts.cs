@@ -52,7 +52,8 @@ public sealed record ArticleAuthorResponse(
     Guid Id,
     string DisplayName,
     string? AvatarUrl,
-    bool IsVerified);
+    bool IsVerified,
+    AccountStyle AccountStyle);
 
 public sealed record ArticleResponse(
     Guid Id,
@@ -75,7 +76,7 @@ public sealed record ArticleResponse(
 
 public interface IArticleRepository
 {
-    Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken);
+    Task<AccountStyle?> GetUserAccountStyleAsync(Guid userId, CancellationToken cancellationToken);
     Task AddAsync(Post article, CancellationToken cancellationToken);
     Task<Post?> GetForUpdateAsync(Guid articleId, CancellationToken cancellationToken);
     Task PrepareBlockOrderUpdateAsync(Post article, CancellationToken cancellationToken);

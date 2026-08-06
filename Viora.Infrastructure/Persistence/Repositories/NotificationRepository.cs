@@ -59,7 +59,8 @@ public sealed class NotificationRepository(AppDbContext dbContext) : INotificati
                         notification.SenderUser.Id,
                         notification.SenderUser.DisplayName,
                         notification.SenderUser.AvatarUrl,
-                        notification.SenderUser.IsVerified),
+                        notification.SenderUser.IsVerified,
+                        notification.SenderUser.AccountStyle),
                 notification.ReferenceId.HasValue && notification.ReferenceType.HasValue
                     ? new NotificationReferenceResponse(
                         notification.ReferenceId.Value,

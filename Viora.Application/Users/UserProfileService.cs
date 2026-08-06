@@ -164,5 +164,6 @@ public sealed class UserProfileService(
         user.Gender,
         account.Role,
         user.IsVerified,
-        user.IdentityStatus);
+        user.IdentityStatus,
+        user.AccountStyle);
 }

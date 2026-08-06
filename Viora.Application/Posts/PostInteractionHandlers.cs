@@ -110,7 +110,8 @@ public sealed class ReactPostHandler(
             comment.User.Id,
             comment.User.DisplayName,
             comment.User.AvatarUrl,
-            comment.User.IsVerified),
+            comment.User.IsVerified,
+            comment.User.AccountStyle),
         comment.Content,
         comment.CreatedAt,
         comment.ReplyCount,
@@ -234,7 +235,7 @@ public sealed class ReplyCommentHandler(
             reply.LikeCount,
             false,
             new CommentReplyToUserResponse(parent.User.Id, parent.User.DisplayName),
-            new PostInteractionUserResponse(user.Id, user.DisplayName, user.AvatarUrl, user.IsVerified))
+            new PostInteractionUserResponse(user.Id, user.DisplayName, user.AvatarUrl, user.IsVerified, user.AccountStyle))
         {
             Mentions = mentions
         });

@@ -35,6 +35,26 @@ public sealed class UpdateAdminUserVerifyHandler(IAdminRepository repository) : 
             : null;
 }
 
+public sealed class UpdateAdminUserAccountStyleHandler(
+    IAdminRepository repository,
+    INotificationService notificationService)
+    : IRequestHandler<UpdateAdminUserAccountStyleCommand, AdminMutationResponse?>
+{
+    public async Task<AdminMutationResponse?> Handle(
+        UpdateAdminUserAccountStyleCommand request,
+        CancellationToken cancellationToken)
+    {
+        var notification = await repository.UpdateUserAccountStyleAsync(
+            request.AdminId,
+            request.Id,
+            request.AccountStyle,
+            cancellationToken);
+        if (notification is null) return null;
+        await notificationService.PublishAsync(notification, cancellationToken);
+        return new AdminMutationResponse(true, "Đã cập nhật loại tài khoản.");
+    }
+}
+
 public sealed class GetAdminIdentitiesHandler(IAdminRepository repository) : IRequestHandler<GetAdminIdentitiesQuery, AdminPagedResponse<AdminIdentitySummaryResponse>>
 {
     public Task<AdminPagedResponse<AdminIdentitySummaryResponse>> Handle(GetAdminIdentitiesQuery request, CancellationToken cancellationToken) => repository.GetIdentitiesAsync(request, cancellationToken);

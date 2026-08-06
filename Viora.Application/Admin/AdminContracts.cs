@@ -7,6 +7,20 @@ namespace Viora.Application.Admin;
 public sealed record AdminPagedResponse<T>(int Page, int PageSize, int TotalItems, int TotalPages, IReadOnlyList<T> Items);
 public sealed record AdminApiResponse<T>(bool Success, string Message, T? Data);
 
+public static class AccountStyleLabels
+{
+    public static string ToVietnamese(AccountStyle value) => value switch
+    {
+        AccountStyle.Personal => "Cá nhân",
+        AccountStyle.Creator => "Nhà sáng tạo",
+        AccountStyle.Journalist => "Nhà báo",
+        AccountStyle.Business => "Doanh nghiệp",
+        AccountStyle.Organization => "Tổ chức",
+        AccountStyle.Agency => "Cơ quan",
+        _ => throw new ArgumentOutOfRangeException(nameof(value), value, null)
+    };
+}
+
 public static class AdminAnnouncementNotificationFactory
 {
     public static Notification Create(
@@ -49,6 +63,7 @@ public sealed record AdminUserSummaryResponse(
     AccountStatus Status,
     UserIdentityState IdentityStatus,
     bool IsVerified,
+    AccountStyle AccountStyle,
     int PostCount,
     int FriendCount,
     DateTime CreatedAt);
@@ -62,6 +77,7 @@ public sealed record AdminUserDetailResponse(
     string? Email,
     string? Phone,
     AccountRole Role,
+    AccountStyle AccountStyle,
     AccountStatus Status,
     UserIdentityState IdentityStatus,
     bool IsVerified,
@@ -190,6 +206,7 @@ public sealed record GetAdminUsersQuery(int Page, int PageSize, string? Keyword,
 public sealed record GetAdminUserDetailQuery(Guid Id) : IRequest<AdminUserDetailResponse?>;
 public sealed record UpdateAdminUserStatusCommand(Guid AdminId, Guid Id, AccountStatus Status, string? Reason) : IRequest<AdminMutationResponse?>;
 public sealed record UpdateAdminUserVerifyCommand(Guid AdminId, Guid Id, bool IsVerified) : IRequest<AdminMutationResponse?>;
+public sealed record UpdateAdminUserAccountStyleCommand(Guid AdminId, Guid Id, AccountStyle AccountStyle) : IRequest<AdminMutationResponse?>;
 public sealed record GetAdminIdentitiesQuery(int Page, int PageSize, string? Keyword, IdentitySubmissionStatus? Status, string? SortBy, string? SortDirection) : IRequest<AdminPagedResponse<AdminIdentitySummaryResponse>>;
 public sealed record GetAdminIdentityDetailQuery(Guid Id) : IRequest<AdminIdentityDetailResponse?>;
 public sealed record ApproveAdminIdentityCommand(Guid AdminId, Guid Id) : IRequest<AdminMutationResponse?>;
@@ -220,6 +237,7 @@ public interface IAdminRepository
     Task<AdminUserDetailResponse?> GetUserDetailAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> UpdateUserStatusAsync(Guid adminId, Guid id, AccountStatus status, string? reason, CancellationToken cancellationToken);
     Task<bool> UpdateUserVerifyAsync(Guid adminId, Guid id, bool isVerified, CancellationToken cancellationToken);
+    Task<Notification?> UpdateUserAccountStyleAsync(Guid adminId, Guid id, AccountStyle accountStyle, CancellationToken cancellationToken);
     Task<AdminPagedResponse<AdminIdentitySummaryResponse>> GetIdentitiesAsync(GetAdminIdentitiesQuery query, CancellationToken cancellationToken);
     Task<AdminIdentityDetailResponse?> GetIdentityDetailAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> ApproveIdentityAsync(Guid adminId, Guid id, CancellationToken cancellationToken);

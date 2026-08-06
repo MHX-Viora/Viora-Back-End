@@ -7,8 +7,10 @@ namespace Viora.Infrastructure.Persistence.Repositories;
 
 public sealed class ArticleRepository(AppDbContext dbContext) : IArticleRepository
 {
-    public Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken) =>
-        dbContext.Users.AnyAsync(x => x.Id == userId, cancellationToken);
+    public Task<AccountStyle?> GetUserAccountStyleAsync(Guid userId, CancellationToken cancellationToken) =>
+        dbContext.Users.Where(x => x.Id == userId)
+            .Select(x => (AccountStyle?)x.AccountStyle)
+            .SingleOrDefaultAsync(cancellationToken);
 
     public Task AddAsync(Post article, CancellationToken cancellationToken) =>
         dbContext.Posts.AddAsync(article, cancellationToken).AsTask();
@@ -70,7 +72,7 @@ public sealed class ArticleRepository(AppDbContext dbContext) : IArticleReposito
             .Select(x => new
             {
                 Post = x,
-                Author = new ArticleAuthorResponse(x.User.Id, x.User.DisplayName, x.User.AvatarUrl, x.User.IsVerified),
+                Author = new ArticleAuthorResponse(x.User.Id, x.User.DisplayName, x.User.AvatarUrl, x.User.IsVerified, x.User.AccountStyle),
                 Blocks = x.ArticleBlocks.OrderBy(b => b.OrderIndex).Select(b => new ArticleBlockResponse(
                     b.Id, b.OrderIndex, b.BlockType, b.Content, b.MediaUrl, b.ThumbnailUrl,
                     b.Caption, b.CreatedAt, b.UpdatedAt)).ToList()

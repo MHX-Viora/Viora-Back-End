@@ -35,7 +35,8 @@ internal static class VideoInteractionGuard
             comment.User.Id,
             comment.User.DisplayName,
             comment.User.AvatarUrl,
-            comment.User.IsVerified));
+            comment.User.IsVerified,
+            comment.User.AccountStyle));
 
     internal static VideoReplyResponse MapReply(Comment comment) => new(
         comment.Id,
@@ -47,7 +48,8 @@ internal static class VideoInteractionGuard
             comment.User.Id,
             comment.User.DisplayName,
             comment.User.AvatarUrl,
-            comment.User.IsVerified));
+            comment.User.IsVerified,
+            comment.User.AccountStyle));
 }
 
 public sealed class ToggleVideoReactionHandler(

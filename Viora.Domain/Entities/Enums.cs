@@ -1,6 +1,15 @@
 namespace Viora.Domain.Entities;
 
 public enum AccountRole : short { User = 0, Moderator = 1, Admin = 2 }
+public enum AccountStyle : short
+{
+    Personal = 0,
+    Creator = 1,
+    Journalist = 2,
+    Business = 3,
+    Organization = 4,
+    Agency = 5
+}
 public enum AccountStatus : short { Banned = 0, Active = 1, Deleted = 2 }
 public enum Gender : short { Unknown = 0, Male = 1, Female = 2 }
 public enum UserIdentityState : short { NotVerified = 0, Verified = 1, Rejected = 2 }

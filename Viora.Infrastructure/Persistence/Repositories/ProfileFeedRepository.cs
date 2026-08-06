@@ -61,7 +61,8 @@ public sealed class ProfileFeedRepository(AppDbContext db) : IProfileFeedReposit
                     reaction.Post.User.Id,
                     reaction.Post.User.DisplayName,
                     reaction.Post.User.AvatarUrl,
-                    reaction.Post.User.IsVerified),
+                    reaction.Post.User.IsVerified,
+                    reaction.Post.User.AccountStyle),
                 reaction.Post.Media
                     .OrderBy(media => media.CreatedAt)
                     .Select(media => new PostFeedMediaResponse(media.Id, media.MediaUrl, media.ThumbnailUrl))
@@ -118,7 +119,8 @@ public sealed class ProfileFeedRepository(AppDbContext db) : IProfileFeedReposit
                     saved.Post.User.Id,
                     saved.Post.User.DisplayName,
                     saved.Post.User.AvatarUrl,
-                    saved.Post.User.IsVerified),
+                    saved.Post.User.IsVerified,
+                    saved.Post.User.AccountStyle),
                 saved.Post.Media
                     .OrderBy(media => media.CreatedAt)
                     .Select(media => new PostFeedMediaResponse(media.Id, media.MediaUrl, media.ThumbnailUrl))

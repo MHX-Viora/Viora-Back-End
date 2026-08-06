@@ -86,7 +86,8 @@ public sealed record FriendshipUserResponse(
     string DisplayName,
     string? AvatarUrl,
     bool IsVerified,
-    int MutualFriendCount);
+    int MutualFriendCount,
+    AccountStyle AccountStyle = AccountStyle.Personal);
 
 public sealed record FriendRequestItemResponse(
     Guid Id,
@@ -94,7 +95,8 @@ public sealed record FriendRequestItemResponse(
     string DisplayName,
     string? AvatarUrl,
     bool IsVerified,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    AccountStyle AccountStyle = AccountStyle.Personal);
 
 public sealed record AcceptFriendResponse(Guid ConversationId);
 
@@ -124,6 +126,7 @@ public sealed record UserProfileSummaryResponse(
     string? CoverUrl,
     Gender Gender,
     bool IsVerified,
+    AccountStyle AccountStyle,
     int PostCount,
     int FollowerCount,
     int FollowingCount,

@@ -121,7 +121,8 @@ public sealed class VideoFeedRepository(AppDbContext dbContext) : IVideoFeedRepo
                     item.Post.User.DisplayName,
                     item.Post.User.AvatarUrl,
                     item.Post.User.IsVerified,
-                    item.IsFollowing)))
+                    item.IsFollowing,
+                    item.Post.User.AccountStyle)))
             .ToListAsync(cancellationToken);
 
         return new VideoFeedResponse(page, pageSize, totalItems, totalPages, items);

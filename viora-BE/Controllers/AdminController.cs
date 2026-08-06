@@ -47,6 +47,25 @@ public sealed class AdminController(IMediator mediator) : ControllerBase
         return ToResult(await mediator.Send(new UpdateAdminUserVerifyCommand(adminId, id, request.IsVerified), cancellationToken));
     }
 
+    [HttpPut("users/{id:guid}/account-style")]
+    [ProducesResponseType<AdminApiResponse<AdminMutationResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<AdminApiResponse<object>>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<AdminApiResponse<object>>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AdminApiResponse<AdminMutationResponse>>> UpdateUserAccountStyle(
+        Guid id,
+        UpdateAdminUserAccountStyleRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetAdminId(out var adminId)) return UnauthorizedResponse();
+        if (!Enum.IsDefined(request.AccountStyle))
+        {
+            return BadRequest(new AdminApiResponse<object>(false, "Loại tài khoản không hợp lệ.", null));
+        }
+        return ToResult(await mediator.Send(
+            new UpdateAdminUserAccountStyleCommand(adminId, id, request.AccountStyle),
+            cancellationToken));
+    }
+
     [HttpGet("identities")]
     public async Task<ActionResult<AdminApiResponse<AdminPagedResponse<AdminIdentitySummaryResponse>>>> Identities(
         [FromQuery] int page = 1,
@@ -305,6 +324,7 @@ public sealed class AdminController(IMediator mediator) : ControllerBase
 
 public sealed record UpdateAdminUserStatusRequest(AccountStatus Status, string? Reason);
 public sealed record UpdateAdminUserVerifyRequest(bool IsVerified);
+public sealed record UpdateAdminUserAccountStyleRequest(AccountStyle AccountStyle);
 public sealed record RejectAdminIdentityRequest(string? Reason);
 public sealed record ApproveAdminReportRequest(string? Action);
 public sealed record RenameAdminHashtagRequest(string Name);

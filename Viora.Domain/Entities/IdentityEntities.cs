@@ -41,6 +41,7 @@ public sealed class User : AuditableEntity
     public Gender Gender { get; set; } = Gender.Unknown;
     public bool IsVerified { get; set; }
     public UserIdentityState IdentityStatus { get; set; } = UserIdentityState.NotVerified;
+    public AccountStyle AccountStyle { get; set; } = AccountStyle.Personal;
     public Account Account { get; set; } = null!;
     public UserSettings? Settings { get; set; }
     public ICollection<UserIdentity> IdentitySubmissions { get; set; } = [];

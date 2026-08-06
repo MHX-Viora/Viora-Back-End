@@ -46,7 +46,8 @@ public sealed record VideoFeedUserResponse(
     string DisplayName,
     string? AvatarUrl,
     bool IsVerified,
-    bool IsFollowing);
+    bool IsFollowing,
+    AccountStyle AccountStyle = AccountStyle.Personal);
 
 public sealed class GetShortVideosValidator : AbstractValidator<GetShortVideosQuery>
 {
