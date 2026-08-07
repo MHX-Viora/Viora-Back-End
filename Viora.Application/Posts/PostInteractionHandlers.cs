@@ -96,13 +96,20 @@ public sealed class ReactPostHandler(
             type,
             sender,
             referenceId,
-            type == NotificationType.CommentReply
-                ? NotificationReferenceType.Comment
-                : NotificationReferenceType.Post,
+            GetNotificationReferenceType(post.PostType, type),
             post.PostType);
         await repository.AddNotificationAsync(notification, cancellationToken);
         return notification;
     }
+
+    internal static NotificationReferenceType GetNotificationReferenceType(
+        PostType postType,
+        NotificationType notificationType) =>
+        notificationType == NotificationType.CommentReply
+            ? NotificationReferenceType.Comment
+            : postType == PostType.Article
+                ? NotificationReferenceType.Article
+                : NotificationReferenceType.Post;
 
     internal static CommentResponse MapComment(Comment comment) => new(
         comment.Id,

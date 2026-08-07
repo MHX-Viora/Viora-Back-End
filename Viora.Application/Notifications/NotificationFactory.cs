@@ -64,6 +64,7 @@ public static class NotificationFactory
         postType switch
         {
             PostType.ShortVideo => new("video", "video của bạn", "video này"),
+            PostType.Article => new("bài báo", "bài báo của bạn", "bài báo này"),
             _ => new("bài viết", "bài viết của bạn", "bài viết này")
         };
 
