@@ -235,11 +235,20 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 app.MapGet("/post/{contentId:guid}", (Guid contentId) =>
-    CreateAppLinkFallback("post", contentId));
+    CreateAppLinkFallback("post", contentId.ToString("D")));
 app.MapGet("/reel/{contentId:guid}", (Guid contentId) =>
-    CreateAppLinkFallback("reel", contentId));
+    CreateAppLinkFallback("reel", contentId.ToString("D")));
 app.MapGet("/article/{contentId:guid}", (Guid contentId) =>
-    CreateAppLinkFallback("article", contentId));
+    CreateAppLinkFallback("article", contentId.ToString("D")));
+app.MapGet("/group/{inviteCode}", (string inviteCode) =>
+{
+    if (inviteCode.Length is < 6 or > 20 || !inviteCode.All(char.IsLetterOrDigit))
+    {
+        return Results.NotFound();
+    }
+
+    return CreateAppLinkFallback("group", inviteCode);
+});
 
 app.MapControllers();
 app.MapHub<RealtimeHub>("/hubs/realtime");
@@ -247,11 +256,17 @@ app.MapHub<CallHub>("/hubs/calls");
 
 app.Run();
 
-static IResult CreateAppLinkFallback(string contentType, Guid contentId)
+static IResult CreateAppLinkFallback(string contentType, string contentId)
 {
-    var deepLink = $"viora://{contentType}/{contentId:D}";
-    var intentLink = $"intent://{contentType}/{contentId:D}#Intent;scheme=viora;package=com.ankt.app;end";
-    var label = contentType == "reel" ? "video ngắn" : "bài viết";
+    var encodedId = Uri.EscapeDataString(contentId);
+    var deepLink = $"viora://{contentType}/{encodedId}";
+    var intentLink = $"intent://{contentType}/{encodedId}#Intent;scheme=viora;package=com.ankt.app;end";
+    var label = contentType switch
+    {
+        "reel" => "video ngắn",
+        "group" => "nhóm",
+        _ => "bài viết"
+    };
 
     var html = $$"""
         <!doctype html>
