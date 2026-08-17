@@ -32,6 +32,7 @@ public sealed class GoogleIdentityTokenVerifier(
                 .VerifyIdTokenAsync(firebaseToken, checkRevoked: true, cancellationToken);
             var emailVerified = TryGetBoolean(decoded.Claims, "email_verified");
             var email = TryGetString(decoded.Claims, "email")?.Trim().ToLowerInvariant();
+            var displayName = TryGetString(decoded.Claims, "name")?.Trim();
             var provider = TryGetNestedString(
                 decoded.Claims,
                 "firebase",
@@ -51,7 +52,10 @@ public sealed class GoogleIdentityTokenVerifier(
                 return null;
             }
 
-            return new GoogleVerifiedIdentity(decoded.Uid, email!);
+            return new GoogleVerifiedIdentity(
+                decoded.Uid,
+                email!,
+                string.IsNullOrWhiteSpace(displayName) ? null : displayName);
         }
         catch (FirebaseAuthException exception)
         {

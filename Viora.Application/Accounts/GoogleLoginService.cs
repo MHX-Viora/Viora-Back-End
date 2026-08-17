@@ -8,6 +8,8 @@ public sealed class GoogleLoginService(
     IGoogleLoginRepository repository,
     ITokenService tokenService) : IGoogleLoginService
 {
+    private const int DisplayNameMaxLength = 100;
+
     public async Task<LoginAccountResult> LoginAsync(
         GoogleLoginCommand command,
         CancellationToken cancellationToken)
@@ -21,6 +23,7 @@ public sealed class GoogleLoginService(
         }
 
         var account = await repository.ResolveAccountAsync(identity, cancellationToken);
+        RepairLegacyEmailDisplayName(account, identity);
         if (account.Status == AccountStatus.Banned)
         {
             return new LoginAccountResult(
@@ -73,6 +76,22 @@ public sealed class GoogleLoginService(
         "Không thể xác thực tài khoản Google.",
         null,
         null);
+
+    private static void RepairLegacyEmailDisplayName(
+        Account account,
+        GoogleVerifiedIdentity identity)
+    {
+        if (account.User is null || string.IsNullOrWhiteSpace(identity.DisplayName)) return;
+        if (!string.Equals(
+                account.User.DisplayName.Trim(),
+                identity.Email,
+                StringComparison.OrdinalIgnoreCase)) return;
+
+        var displayName = identity.DisplayName.Trim();
+        account.User.DisplayName = displayName[..Math.Min(
+            displayName.Length,
+            DisplayNameMaxLength)];
+    }
 
     private static UserResponse? MapUser(Account account) => account.User is null
         ? null

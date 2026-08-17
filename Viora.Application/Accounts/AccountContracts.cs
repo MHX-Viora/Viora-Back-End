@@ -7,7 +7,10 @@ namespace Viora.Application.Accounts;
 public sealed record RegisterAccountCommand(string Identifier, string Password);
 public sealed record LoginAccountCommand(string Identifier, string Password);
 public sealed record GoogleLoginCommand(string FirebaseToken);
-public sealed record GoogleVerifiedIdentity(string ProviderSubject, string Email);
+public sealed record GoogleVerifiedIdentity(
+    string ProviderSubject,
+    string Email,
+    string? DisplayName = null);
 public sealed record RefreshAccountTokenCommand(string RefreshToken);
 public sealed record LogoutAccountCommand(string? RefreshToken, Guid AccountId);
 public sealed record ChangePasswordCommand(Guid AccountId, string CurrentPassword, string NewPassword, string ConfirmPassword);

@@ -33,6 +33,50 @@ public sealed class GoogleLoginServiceTests
         Assert.True(repository.CompletedLogin);
     }
 
+    [Fact]
+    public async Task Login_repairs_an_email_display_name_from_verified_google_name()
+    {
+        var account = ActiveAccount();
+        account.User = new User
+        {
+            Account = account,
+            AccountId = account.Id,
+            DisplayName = "person@example.com"
+        };
+        var service = CreateService(
+            new GoogleVerifiedIdentity(
+                "firebase-uid",
+                "person@example.com",
+                "Nguyen Van An"),
+            new FakeGoogleLoginRepository(account));
+
+        var result = await service.LoginAsync(new GoogleLoginCommand("valid-token"), default);
+
+        Assert.Equal("Nguyen Van An", result.User?.DisplayName);
+    }
+
+    [Fact]
+    public async Task Login_preserves_an_existing_non_email_display_name()
+    {
+        var account = ActiveAccount();
+        account.User = new User
+        {
+            Account = account,
+            AccountId = account.Id,
+            DisplayName = "Ten hien tai"
+        };
+        var service = CreateService(
+            new GoogleVerifiedIdentity(
+                "firebase-uid",
+                "person@example.com",
+                "Google Name"),
+            new FakeGoogleLoginRepository(account));
+
+        var result = await service.LoginAsync(new GoogleLoginCommand("valid-token"), default);
+
+        Assert.Equal("Ten hien tai", result.User?.DisplayName);
+    }
+
     [Theory]
     [InlineData(AccountStatus.Banned, LoginOutcome.Banned)]
     [InlineData(AccountStatus.Deleted, LoginOutcome.Deleted)]
