@@ -9,6 +9,7 @@ using viora_BE.OpenApi;
 using System.Threading.RateLimiting;
 using Viora.Application.Posts;
 using Viora.Infrastructure.Realtime;
+using Viora.Application.MiniApps;
 
 LoadDotEnv();
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
@@ -142,6 +143,25 @@ builder.Services.AddRateLimiter(options => options.AddPolicy("auth", context =>
             QueueLimit = 0,
             AutoReplenishment = true
         })));
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("mini-app-launch", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
+    options.AddPolicy("mini-app-exchange", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            code = MiniAppErrorCodes.RateLimited,
+            message = "Quá nhiều yêu cầu. Vui lòng thử lại sau."
+        }, cancellationToken);
+    };
+});
 builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -195,6 +215,14 @@ app.UseExceptionHandler(errorApp =>
 
         if (context.Response.HasStarted)
         {
+            return;
+        }
+
+        if (exception is MiniAppException miniAppException)
+        {
+            context.Response.StatusCode = miniAppException.StatusCode;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new { code = miniAppException.Code, message = miniAppException.Message });
             return;
         }
 

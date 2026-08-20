@@ -55,3 +55,7 @@ public enum GroupCallType : short { Audio = 0, Video = 1 }
 public enum GroupCallStatus : short { Active = 0, Ended = 1 }
 public enum LegalDocumentType : short { TermsOfService = 0, PrivacyPolicy = 1, PermissionPolicy = 2, CommunityGuidelines = 3, Other = 4 }
 public enum MentionTargetType : short { Post = 0, Comment = 1, Reply = 2, Message = 3 }
+public enum MiniAppStatus : short { Draft = 0, PendingReview = 1, Active = 2, Suspended = 3, Rejected = 4, Deleted = 5 }
+public enum DeveloperStatus : short { Pending = 0, Active = 1, Suspended = 2, Rejected = 3 }
+public enum MiniAppPermissionStatus : short { Inactive = 0, Active = 1 }
+public enum MiniAppLaunchStatus : short { Succeeded = 0, Failed = 1 }

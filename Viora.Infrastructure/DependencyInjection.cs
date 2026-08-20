@@ -27,6 +27,8 @@ using Viora.Application.GroupCalls;
 using Viora.Application.Legal;
 using Viora.Infrastructure.GroupCalls;
 using Viora.Application.Articles;
+using Viora.Application.MiniApps;
+using Viora.Infrastructure.MiniApps;
 
 namespace Viora.Infrastructure;
 
@@ -186,6 +188,11 @@ public static class DependencyInjection
         services.AddScoped<IPushNotificationSender, FirebasePushNotificationSender>();
         services.AddHostedService<CallTimeoutHostedService>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+        services.AddSingleton<IClientCredentialService, ClientCredentialService>();
+        services.AddScoped<IMiniAppService, MiniAppService>();
+        services.AddScoped<MiniAppManagementService>();
+        services.AddScoped<IMiniAppManagementService>(provider => provider.GetRequiredService<MiniAppManagementService>());
+        services.AddScoped<IDeveloperMiniAppService>(provider => provider.GetRequiredService<MiniAppManagementService>());
         return services;
     }
 }

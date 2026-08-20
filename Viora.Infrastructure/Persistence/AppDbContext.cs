@@ -42,6 +42,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AdminLog> AdminLogs => Set<AdminLog>();
     public DbSet<LegalDocument> LegalDocuments => Set<LegalDocument>();
     public DbSet<UserLegalAcceptance> UserLegalAcceptances => Set<UserLegalAcceptance>();
+    public DbSet<Developer> Developers => Set<Developer>();
+    public DbSet<MiniApp> MiniApps => Set<MiniApp>();
+    public DbSet<MiniAppPermission> MiniAppPermissions => Set<MiniAppPermission>();
+    public DbSet<MiniAppPermissionMapping> MiniAppPermissionMappings => Set<MiniAppPermissionMapping>();
+    public DbSet<MiniAppUserConsent> MiniAppUserConsents => Set<MiniAppUserConsent>();
+    public DbSet<MiniAppLaunchCode> MiniAppLaunchCodes => Set<MiniAppLaunchCode>();
+    public DbSet<MiniAppExternalIdentity> MiniAppExternalIdentities => Set<MiniAppExternalIdentity>();
+    public DbSet<MiniAppAuditLog> MiniAppAuditLogs => Set<MiniAppAuditLog>();
+    public DbSet<MiniAppLaunchLog> MiniAppLaunchLogs => Set<MiniAppLaunchLog>();
 
     [DbFunction("translate", IsBuiltIn = true)]
     public static string Translate(string value, string matching, string replacement) =>
