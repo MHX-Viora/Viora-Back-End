@@ -102,32 +102,36 @@ public sealed class CallDeliveryService(
     IRealtimeService realtimeService,
     ICallHistoryMessageRepository historyMessageRepository,
     IPushNotificationSender pushNotificationSender,
-    IOnlineUserRegistry onlineUserRegistry,
     ILogger<CallDeliveryService> logger)
 {
     public async Task PublishIncomingAsync(CallSessionResponse call, CancellationToken cancellationToken)
     {
         var payload = new IncomingCallPayload(call.Id, call.ConversationId, call.Caller, call.CallType);
-        await realtimeService.SendToUserAsync(call.Receiver.Id, "IncomingCall", payload, cancellationToken);
         logger.LogInformation("Call Started. CallId: {CallId}, CallerId: {CallerId}, ReceiverId: {ReceiverId}.", call.Id, call.Caller.Id, call.Receiver.Id);
 
-        if (!onlineUserRegistry.IsOnline(call.Receiver.Id))
-        {
-            await pushNotificationSender.SendAsync(new PushMessage(
-                call.Receiver.Id,
-                call.Caller.DisplayName,
-                "Đang gọi cho bạn...",
-                new Dictionary<string, string>
-                {
-                    ["type"] = "IncomingCall",
-                    ["callId"] = call.Id.ToString(),
-                    ["callType"] = ((short)call.CallType).ToString(),
-                    ["conversationId"] = call.ConversationId.ToString(),
-                    ["callerId"] = call.Caller.Id.ToString(),
-                    ["callerDisplayName"] = call.Caller.DisplayName,
-                    ["callerAvatarUrl"] = call.Caller.AvatarUrl ?? string.Empty
-                }), cancellationToken);
-        }
+        // Always send the call push. A receiver can still appear online while its
+        // Activity is backgrounding, where the realtime event cannot present UI.
+        // The client deduplicates the realtime and FCM paths by callId.
+        var realtimeDelivery = realtimeService.SendToUserAsync(
+            call.Receiver.Id,
+            "IncomingCall",
+            payload,
+            cancellationToken);
+        var pushDelivery = pushNotificationSender.SendAsync(new PushMessage(
+            call.Receiver.Id,
+            call.Caller.DisplayName,
+            "Đang gọi cho bạn...",
+            new Dictionary<string, string>
+            {
+                ["type"] = "IncomingCall",
+                ["callId"] = call.Id.ToString(),
+                ["callType"] = ((short)call.CallType).ToString(),
+                ["conversationId"] = call.ConversationId.ToString(),
+                ["callerId"] = call.Caller.Id.ToString(),
+                ["callerDisplayName"] = call.Caller.DisplayName,
+                ["callerAvatarUrl"] = call.Caller.AvatarUrl ?? string.Empty
+            }), cancellationToken);
+        await Task.WhenAll(realtimeDelivery, pushDelivery);
     }
 
     public Task PublishAcceptedAsync(CallSessionResponse call, CancellationToken cancellationToken)
