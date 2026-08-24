@@ -8,6 +8,7 @@ using System.Text.Json;
 using viora_BE.OpenApi;
 using System.Threading.RateLimiting;
 using Viora.Application.Posts;
+using Viora.Application.Configuration;
 using Viora.Infrastructure.Realtime;
 
 LoadDotEnv();
@@ -160,16 +161,15 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 
+var webCorsOrigins = WebCorsOrigins.Resolve(
+    builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>());
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Web", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:5173",
-                "http://localhost:3000",
-                "https://vioraadmin.vercel.app"
-            )
+            .WithOrigins(webCorsOrigins.ToArray())
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
