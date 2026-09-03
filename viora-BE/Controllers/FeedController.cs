@@ -25,10 +25,11 @@ public sealed class FeedController(IMediator mediator) : ControllerBase
         [FromQuery, Range(1, 100)] int pageSize = 10,
         [FromQuery, MaxLength(255)] string? keyword = null,
         [FromQuery] Guid? userId = null,
+        [FromQuery] PostType? postType = null,
         CancellationToken cancellationToken = default)
     {
         var response = await mediator.Send(
-            new GetCommunityPostsQuery(page, pageSize, keyword, userId, GetViewerUserId()),
+            new GetCommunityPostsQuery(page, pageSize, keyword, userId, GetViewerUserId(), postType),
             cancellationToken);
 
         return Ok(response);

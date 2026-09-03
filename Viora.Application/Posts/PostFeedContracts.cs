@@ -9,7 +9,8 @@ public sealed record GetCommunityPostsQuery(
     int PageSize,
     string? Keyword,
     Guid? UserId,
-    Guid? ViewerUserId) : IRequest<PostFeedResponse>;
+    Guid? ViewerUserId,
+    PostType? PostType = null) : IRequest<PostFeedResponse>;
 
 public sealed record GetPostDetailQuery(Guid UserId, Guid PostId)
     : IRequest<Result<PostDetailResponse>>;

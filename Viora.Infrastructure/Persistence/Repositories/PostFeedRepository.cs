@@ -129,6 +129,11 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
             posts = posts.Where(post => post.UserId == query.UserId.Value);
         }
 
+        if (query.PostType.HasValue)
+        {
+            posts = posts.Where(post => post.PostType == query.PostType.Value);
+        }
+
         if (!string.IsNullOrWhiteSpace(query.Keyword))
         {
             var keyword = $"%{query.Keyword.Trim()}%";
