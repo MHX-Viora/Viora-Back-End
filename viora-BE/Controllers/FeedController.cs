@@ -19,6 +19,7 @@ public sealed class FeedController(IMediator mediator) : ControllerBase
 
     [HttpGet]
     [ProducesResponseType<PostFeedResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<PostFeedResponse>> ListCommunityPosts(
         [FromQuery, Range(1, int.MaxValue)] int page = 1,
@@ -26,10 +27,11 @@ public sealed class FeedController(IMediator mediator) : ControllerBase
         [FromQuery, MaxLength(255)] string? keyword = null,
         [FromQuery] Guid? userId = null,
         [FromQuery] PostType? postType = null,
+        [FromQuery, EnumDataType(typeof(PostFeedSort))] PostFeedSort? sort = null,
         CancellationToken cancellationToken = default)
     {
         var response = await mediator.Send(
-            new GetCommunityPostsQuery(page, pageSize, keyword, userId, GetViewerUserId(), postType),
+            new GetCommunityPostsQuery(page, pageSize, keyword, userId, GetViewerUserId(), postType, sort),
             cancellationToken);
 
         return Ok(response);

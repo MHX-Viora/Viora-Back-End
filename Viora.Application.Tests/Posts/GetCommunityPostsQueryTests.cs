@@ -13,4 +13,31 @@ public sealed class GetCommunityPostsQueryTests
 
         Assert.Equal(PostType.Article, query.PostType);
     }
+
+    [Fact]
+    public void SupportsAnOptionalFeedSort()
+    {
+        var query = new GetCommunityPostsQuery(
+            1, 10, null, null, null, PostType.Article, PostFeedSort.Trending);
+
+        Assert.Equal(PostFeedSort.Trending, query.Sort);
+    }
+
+    [Fact]
+    public void TrendingScoreRewardsFreshArticlesAndWeightedShares()
+    {
+        var fresh = ArticleTrendingRanking.CalculateScore(100, 10, 1);
+        var stale = ArticleTrendingRanking.CalculateScore(500, 0, 168);
+
+        Assert.True(fresh > stale);
+    }
+
+    [Fact]
+    public void TrendingScoreClampsFuturePublicationAge()
+    {
+        var future = ArticleTrendingRanking.CalculateScore(100, 0, -2);
+        var current = ArticleTrendingRanking.CalculateScore(100, 0, 0);
+
+        Assert.Equal(current, future);
+    }
 }

@@ -10,7 +10,14 @@ public sealed record GetCommunityPostsQuery(
     string? Keyword,
     Guid? UserId,
     Guid? ViewerUserId,
-    PostType? PostType = null) : IRequest<PostFeedResponse>;
+    PostType? PostType = null,
+    PostFeedSort? Sort = null) : IRequest<PostFeedResponse>;
+
+public enum PostFeedSort
+{
+    Trending = 0,
+    Latest = 1
+}
 
 public sealed record GetPostDetailQuery(Guid UserId, Guid PostId)
     : IRequest<Result<PostDetailResponse>>;

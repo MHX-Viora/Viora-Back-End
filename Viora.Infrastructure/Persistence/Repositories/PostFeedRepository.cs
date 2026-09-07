@@ -192,33 +192,48 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                 saved.PostId == post.Id)
         });
 
-        var ordered = ranked
-            .OrderByDescending(item => hasBehavior
-                ? (item.IsFriend ? 1300 : 0) +
-                    (item.IsFollowed ? 900 : 0) +
-                    (item.HasInterestedHashtag ? 600 : 0) +
-                    (item.Post.CreatedAt >= oneDayAgo ? 300 :
-                        item.Post.CreatedAt >= threeDaysAgo ? 180 :
-                        item.Post.CreatedAt >= sevenDaysAgo ? 80 : 20) +
-                    item.Post.ReactionCount * 4 +
-                    item.Post.CommentCount * 6 +
-                    item.Post.ShareCount * 8 +
-                    item.Post.SaveCount * 5 +
-                    item.Post.ViewCount -
-                    (item.HasViewed ? 250 : 0)
-                : item.PopularHashtagScore * 3 +
-                    item.Post.ReactionCount * 5 +
-                    item.Post.CommentCount * 7 +
-                    item.Post.ShareCount * 9 +
-                    item.Post.SaveCount * 6 +
-                    item.Post.ViewCount +
-                    (item.Post.CreatedAt >= oneDayAgo ? 180 :
-                        item.Post.CreatedAt >= threeDaysAgo ? 110 :
-                        item.Post.CreatedAt >= sevenDaysAgo ? 55 : 10))
-            .ThenByDescending(item => item.Post.ReactionCount + item.Post.CommentCount + item.Post.ShareCount + item.Post.SaveCount)
-            .ThenByDescending(item => item.PopularHashtagScore)
-            .ThenByDescending(item => item.Post.CreatedAt)
-            .ThenBy(item => item.Post.Id);
+        var ordered = query.Sort switch
+        {
+            PostFeedSort.Trending => ranked
+                .OrderByDescending(item =>
+                    (item.Post.ViewCount + item.Post.ShareCount * ArticleTrendingRanking.ShareWeight) /
+                    Math.Pow(
+                        Math.Max((now - item.Post.CreatedAt).TotalHours, 0d) +
+                            ArticleTrendingRanking.TimeOffsetHours,
+                        ArticleTrendingRanking.DecayExponent))
+                .ThenByDescending(item => item.Post.CreatedAt)
+                .ThenBy(item => item.Post.Id),
+            PostFeedSort.Latest => ranked
+                .OrderByDescending(item => item.Post.CreatedAt)
+                .ThenBy(item => item.Post.Id),
+            _ => ranked
+                .OrderByDescending(item => hasBehavior
+                    ? (item.IsFriend ? 1300 : 0) +
+                        (item.IsFollowed ? 900 : 0) +
+                        (item.HasInterestedHashtag ? 600 : 0) +
+                        (item.Post.CreatedAt >= oneDayAgo ? 300 :
+                            item.Post.CreatedAt >= threeDaysAgo ? 180 :
+                            item.Post.CreatedAt >= sevenDaysAgo ? 80 : 20) +
+                        item.Post.ReactionCount * 4 +
+                        item.Post.CommentCount * 6 +
+                        item.Post.ShareCount * 8 +
+                        item.Post.SaveCount * 5 +
+                        item.Post.ViewCount -
+                        (item.HasViewed ? 250 : 0)
+                    : item.PopularHashtagScore * 3 +
+                        item.Post.ReactionCount * 5 +
+                        item.Post.CommentCount * 7 +
+                        item.Post.ShareCount * 9 +
+                        item.Post.SaveCount * 6 +
+                        item.Post.ViewCount +
+                        (item.Post.CreatedAt >= oneDayAgo ? 180 :
+                            item.Post.CreatedAt >= threeDaysAgo ? 110 :
+                            item.Post.CreatedAt >= sevenDaysAgo ? 55 : 10))
+                .ThenByDescending(item => item.Post.ReactionCount + item.Post.CommentCount + item.Post.ShareCount + item.Post.SaveCount)
+                .ThenByDescending(item => item.PopularHashtagScore)
+                .ThenByDescending(item => item.Post.CreatedAt)
+                .ThenBy(item => item.Post.Id)
+        };
 
         var items = await ordered
             .Skip(skip)
