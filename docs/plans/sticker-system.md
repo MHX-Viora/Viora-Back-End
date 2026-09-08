@@ -31,6 +31,7 @@
 - [ ] Add admin API contracts/services and authorized backend endpoints.
 - [ ] Reuse Cloudinary for validated PNG/WebP thumbnail/sticker uploads.
 - [ ] Add pack list/editor/detail UI within existing admin design/navigation.
+- [ ] Create packs from multipart metadata plus a locally selected thumbnail; validate file size, MIME, and magic bytes before Cloudinary upload.
 - Checkpoint: admin tests/build/lint pass.
 
 ### Phase 4: Paid purchase

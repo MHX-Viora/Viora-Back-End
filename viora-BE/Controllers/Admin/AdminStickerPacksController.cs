@@ -21,9 +21,20 @@ public sealed class AdminStickerPacksController(IAdminStickerService stickers) :
     }
 
     [HttpPost]
-    public async Task<ActionResult<AdminStickerPackResponse>> CreatePack(SaveStickerPackRequest request, CancellationToken token)
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<AdminStickerPackResponse>> CreatePack([FromForm] CreateStickerPackForm request, CancellationToken token)
     {
-        try { var pack = await stickers.CreatePackAsync(request, token); return CreatedAtAction(nameof(GetPack), new { id = pack.Id }, pack); }
+        if (request.Thumbnail is null) return ValidationProblem("Anh dai dien la bat buoc.");
+        try
+        {
+            await using var stream = request.Thumbnail.OpenReadStream();
+            var file = new StickerUploadFile(stream, request.Thumbnail.FileName, request.Thumbnail.ContentType, request.Thumbnail.Length);
+            var pack = await stickers.CreatePackAsync(new CreateStickerPackRequest(
+                request.Name, request.Description, request.Price, request.IsFeatured,
+                request.IsActive, request.SortOrder, request.AvailableFrom,
+                request.AvailableUntil, file), token);
+            return CreatedAtAction(nameof(GetPack), new { id = pack.Id }, pack);
+        }
         catch (ArgumentException error) { return ValidationProblem(error.Message); }
     }
 
@@ -69,8 +80,34 @@ public sealed class AdminStickerPacksController(IAdminStickerService stickers) :
         }
         catch (ArgumentException error) { return ValidationProblem(error.Message); }
     }
+
+    [HttpPost("{packId:guid}/thumbnail")]
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<UploadResponse>> UploadThumbnail(Guid packId, [FromForm] StickerUploadRequest request, CancellationToken token)
+    {
+        if (request.File is null) return ValidationProblem("File la bat buoc.");
+        try
+        {
+            await using var stream = request.File.OpenReadStream();
+            var url = await stickers.UploadThumbnailAsync(packId, new(stream, request.File.FileName, request.File.ContentType, request.File.Length), token);
+            return Ok(new UploadResponse(url));
+        }
+        catch (ArgumentException error) { return ValidationProblem(error.Message); }
+    }
 }
 
 public sealed record ActiveRequest(bool IsActive);
 public sealed record UploadResponse(string Url);
 public sealed class StickerUploadRequest { [FromForm(Name = "file")] public IFormFile? File { get; init; } }
+public sealed class CreateStickerPackForm
+{
+    public string Name { get; init; } = string.Empty;
+    public string? Description { get; init; }
+    public decimal Price { get; init; }
+    public bool IsFeatured { get; init; }
+    public bool IsActive { get; init; } = true;
+    public int SortOrder { get; init; }
+    public DateTime? AvailableFrom { get; init; }
+    public DateTime? AvailableUntil { get; init; }
+    [FromForm(Name = "thumbnail")] public IFormFile? Thumbnail { get; init; }
+}

@@ -20,7 +20,7 @@ Implemented the database-driven free/owned sticker catalog, existing-chat integr
 - Existing repository verifies conversation membership, sticker/pack active and availability, and free/owned entitlement before saving.
 - Message history and SignalR `ReceiveMessage` carry URL metadata resolved from the FK; recipients do not need ownership.
 - Existing forward-message flow applies the same active/ownership checks and preserves `StickerId`.
-- Admin role endpoints under `/api/admin/sticker-packs` create/update/soft-disable packs and stickers and upload PNG/WebP to `viora/stickers/{packId}` on the existing Cloudinary account.
+- Admin role endpoints under `/api/admin/sticker-packs` create/update/soft-disable packs and stickers. Pack creation accepts a required JPEG/PNG/WebP thumbnail as multipart data; sticker uploads remain PNG/WebP. Both use `viora/stickers/{packId}` on the existing Cloudinary account.
 
 ## Client
 
@@ -34,7 +34,7 @@ Implemented the database-driven free/owned sticker catalog, existing-chat integr
 
 - New “Nhãn dán” navigation route.
 - Pack list shows thumbnail, count, price, owners, usage, state.
-- Pack form supports create/update, price, featured/active, order, availability, and thumbnail upload after creation.
+- Pack form selects a local thumbnail for creation/update, uploads it through the backend to Cloudinary, and never asks admins to paste a URL.
 - Sticker form supports PNG/WebP upload, name, URL, order-on-create, and active/inactive.
 
 ## Files

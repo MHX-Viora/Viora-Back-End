@@ -35,6 +35,8 @@ Add database-driven static PNG/WebP sticker packs to the existing ANKT chat, Sig
 - `POST /api/sticker-packs/{id}/purchase` (requires the existing ANKT coin provider)
 - Existing `POST /api/chat/messages` gains optional `stickerId`; Sticker messages require it and forbid content/attachments.
 - Admin CRUD is additive under `/api/admin/sticker-packs`; delete actions are soft-disable operations.
+- Admin pack creation consumes `multipart/form-data` with a required `thumbnail` image; the backend validates JPEG/PNG/WebP content up to 5 MiB, uploads it to the shared Cloudinary account, and persists only the returned HTTPS URL.
+- `POST /api/admin/sticker-packs/{id}/thumbnail` replaces an existing pack thumbnail with the same validation rules; `/upload` remains restricted to PNG/WebP sticker assets.
 - Sticker DTOs always include render URLs. Messages persist only `StickerId`.
 
 ## Data Rules
@@ -45,6 +47,7 @@ Add database-driven static PNG/WebP sticker packs to the existing ANKT chat, Sig
 - `Sticker -> Message` and user ownership relationships use restrictive delete behavior.
 - Availability uses UTC nullable bounds.
 - Static formats in v1: PNG and WebP; URL only, never binary/base64.
+- Pack thumbnails accept JPEG, PNG, or WebP. Clients cannot supply a thumbnail URL when creating a pack.
 
 ## Testing Strategy
 
