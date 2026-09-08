@@ -116,3 +116,14 @@ public sealed class ViewHistory : Entity
     public User? User { get; set; }
     public Post? Post { get; set; }
 }
+
+public sealed class ArticleInteraction : AuditableEntity
+{
+    public Guid UserId { get; set; }
+    public Guid ArticleId { get; set; }
+    public ArticleInteractionType InteractionType { get; set; }
+    public int ReadDuration { get; set; }
+    public decimal ReadPercentage { get; set; }
+    public User User { get; set; } = null!;
+    public Post Article { get; set; } = null!;
+}

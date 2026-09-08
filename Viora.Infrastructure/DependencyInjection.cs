@@ -97,6 +97,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<CreatePostCommand>, CreatePostValidator>();
         services.AddScoped<IValidator<CreateArticleCommand>, CreateArticleValidator>();
         services.AddScoped<IValidator<UpdateArticleCommand>, UpdateArticleValidator>();
+        services.AddScoped<IValidator<RecordArticleInteractionCommand>, RecordArticleInteractionValidator>();
         services.AddScoped<IValidator<CreateReelCommand>, CreateReelValidator>();
         services.AddScoped<IValidator<ReactPostCommand>, ReactPostValidator>();
         services.AddScoped<IValidator<CreateCommentCommand>, CreateCommentValidator>();
@@ -160,6 +161,8 @@ public static class DependencyInjection
         services.AddScoped<IVideoFeedRepository, VideoFeedRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
         services.AddScoped<IArticleRepository, ArticleRepository>();
+        services.AddScoped<IArticleInteractionRepository, ArticleInteractionRepository>();
+        services.AddScoped<IArticleRecommendationService, ArticleRecommendationService>();
         services.AddScoped<IHashtagRepository, HashtagRepository>();
         services.AddScoped<ISocialRepository, SocialRepository>();
         services.AddScoped<IPostInteractionRepository, PostInteractionRepository>();

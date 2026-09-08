@@ -25,6 +25,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<PostHashtag> PostHashtags => Set<PostHashtag>();
     public DbSet<SavedPost> SavedPosts => Set<SavedPost>();
     public DbSet<ViewHistory> ViewHistories => Set<ViewHistory>();
+    public DbSet<ArticleInteraction> ArticleInteractions => Set<ArticleInteraction>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ConversationMember> ConversationMembers => Set<ConversationMember>();

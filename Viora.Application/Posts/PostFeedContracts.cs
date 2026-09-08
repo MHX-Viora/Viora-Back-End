@@ -16,7 +16,8 @@ public sealed record GetCommunityPostsQuery(
 public enum PostFeedSort
 {
     Trending = 0,
-    Latest = 1
+    Latest = 1,
+    Recommended = 2
 }
 
 public sealed record GetPostDetailQuery(Guid UserId, Guid PostId)

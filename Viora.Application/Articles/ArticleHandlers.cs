@@ -126,7 +126,13 @@ public sealed class GetArticleHandler(IArticleRepository repository)
     {
         var result = await repository.GetAsync(request.UserId, request.ArticleId, cancellationToken);
         if (!result.IsSuccess || result.Value is null) return result;
-        await repository.RecordViewAsync(request.UserId, request.ArticleId, cancellationToken);
-        return Result<ArticleResponse>.Success(result.Value with { ViewCount = result.Value.ViewCount + 1 });
+        var isFirstView = await repository.RecordViewAsync(
+            request.UserId,
+            request.ArticleId,
+            cancellationToken);
+        return Result<ArticleResponse>.Success(result.Value with
+        {
+            ViewCount = result.Value.ViewCount + (isFirstView ? 1 : 0)
+        });
     }
 }
