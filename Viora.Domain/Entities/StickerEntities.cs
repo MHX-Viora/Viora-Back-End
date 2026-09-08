@@ -8,7 +8,6 @@ public sealed class StickerPack : AuditableEntity
     public decimal Price { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsFeatured { get; set; }
-    public int SortOrder { get; set; }
     public DateTime? AvailableFrom { get; set; }
     public DateTime? AvailableUntil { get; set; }
     public ICollection<Sticker> Stickers { get; set; } = [];

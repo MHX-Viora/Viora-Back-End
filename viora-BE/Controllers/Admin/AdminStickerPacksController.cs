@@ -31,7 +31,7 @@ public sealed class AdminStickerPacksController(IAdminStickerService stickers) :
             var file = new StickerUploadFile(stream, request.Thumbnail.FileName, request.Thumbnail.ContentType, request.Thumbnail.Length);
             var pack = await stickers.CreatePackAsync(new CreateStickerPackRequest(
                 request.Name, request.Description, request.Price, request.IsFeatured,
-                request.IsActive, request.SortOrder, request.AvailableFrom,
+                request.IsActive, request.AvailableFrom,
                 request.AvailableUntil, file), token);
             return CreatedAtAction(nameof(GetPack), new { id = pack.Id }, pack);
         }
@@ -106,7 +106,6 @@ public sealed class CreateStickerPackForm
     public decimal Price { get; init; }
     public bool IsFeatured { get; init; }
     public bool IsActive { get; init; } = true;
-    public int SortOrder { get; init; }
     public DateTime? AvailableFrom { get; init; }
     public DateTime? AvailableUntil { get; init; }
     [FromForm(Name = "thumbnail")] public IFormFile? Thumbnail { get; init; }

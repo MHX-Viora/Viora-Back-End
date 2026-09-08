@@ -18,8 +18,7 @@ internal sealed class StickerPackConfiguration : IEntityTypeConfiguration<Sticke
         builder.Property(x => x.Price).HasPrecision(18, 2);
         builder.Property(x => x.IsActive).HasDefaultValue(true);
         builder.Property(x => x.IsFeatured).HasDefaultValue(false);
-        builder.Property(x => x.SortOrder).HasDefaultValue(0);
-        builder.HasIndex(x => new { x.IsActive, x.IsFeatured, x.SortOrder });
+        builder.HasIndex(x => new { x.IsActive, x.IsFeatured, x.CreatedAt });
         builder.HasIndex(x => x.Price);
     }
 }

@@ -48,6 +48,7 @@ Add database-driven static PNG/WebP sticker packs to the existing ANKT chat, Sig
 - Availability uses UTC nullable bounds.
 - Static formats in v1: PNG and WebP; URL only, never binary/base64.
 - Pack thumbnails accept JPEG, PNG, or WebP. Clients cannot supply a thumbnail URL when creating a pack.
+- Sticker packs have no manual sort-order field or database column; catalog ordering is deterministic by featured state, creation time, and name. Individual stickers retain `SortOrder` inside a pack.
 
 ## Testing Strategy
 

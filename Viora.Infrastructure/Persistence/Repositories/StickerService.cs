@@ -32,8 +32,8 @@ public sealed class StickerService(AppDbContext db) : IStickerService
 
         var totalItems = await packs.CountAsync(token);
         var items = await packs
-            .OrderBy(pack => pack.SortOrder)
-            .ThenByDescending(pack => pack.IsFeatured)
+            .OrderByDescending(pack => pack.IsFeatured)
+            .ThenByDescending(pack => pack.CreatedAt)
             .ThenBy(pack => pack.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)

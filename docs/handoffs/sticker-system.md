@@ -12,6 +12,7 @@ Implemented the database-driven free/owned sticker catalog, existing-chat integr
 - Delete behavior: all sticker/ownership/message references are restrictive; admin actions soft-disable.
 - Free state: `Price == 0`; no duplicate `IsFree` storage.
 - Migration: `20260908045331_AddStickerSystem` (model snapshot synchronized; not applied to a live database).
+- Migration: `20260908074713_RemoveStickerPackSortOrder` drops the pack-level sort column and replaces its composite index; apply it after `AddStickerSystem`.
 
 ## Backend
 
@@ -34,7 +35,7 @@ Implemented the database-driven free/owned sticker catalog, existing-chat integr
 
 - New “Nhãn dán” navigation route.
 - Pack list shows thumbnail, count, price, owners, usage, state.
-- Pack form selects a local thumbnail for creation/update, uploads it through the backend to Cloudinary, and never asks admins to paste a URL.
+- Pack form selects a local thumbnail for creation/update, uploads it through the backend to Cloudinary, and has no manual sort-order field.
 - Sticker form supports PNG/WebP upload, name, URL, order-on-create, and active/inactive.
 
 ## Files

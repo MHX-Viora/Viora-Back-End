@@ -4,18 +4,18 @@ namespace Viora.Application.Stickers;
 
 public sealed record AdminStickerPackResponse(
     Guid Id, string Name, string? Description, string ThumbnailUrl, decimal Price,
-    bool IsFeatured, bool IsActive, int SortOrder, DateTime? AvailableFrom,
+    bool IsFeatured, bool IsActive, DateTime? AvailableFrom,
     DateTime? AvailableUntil, int StickerCount, int OwnerCount, int UsageCount,
     DateTime CreatedAt, DateTime UpdatedAt);
 
 public sealed record SaveStickerPackRequest(
     string Name, string? Description, string ThumbnailUrl, decimal Price,
-    bool IsFeatured, bool IsActive, int SortOrder, DateTime? AvailableFrom,
+    bool IsFeatured, bool IsActive, DateTime? AvailableFrom,
     DateTime? AvailableUntil);
 
 public sealed record CreateStickerPackRequest(
     string Name, string? Description, decimal Price,
-    bool IsFeatured, bool IsActive, int SortOrder, DateTime? AvailableFrom,
+    bool IsFeatured, bool IsActive, DateTime? AvailableFrom,
     DateTime? AvailableUntil, StickerUploadFile Thumbnail);
 
 public sealed record SaveStickerRequest(

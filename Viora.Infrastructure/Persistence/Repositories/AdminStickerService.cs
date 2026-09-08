@@ -8,7 +8,7 @@ public sealed class AdminStickerService(AppDbContext db, IStickerMediaStorage st
 {
     public async Task<IReadOnlyList<AdminStickerPackResponse>> GetPacksAsync(CancellationToken token) =>
         await db.StickerPacks.AsNoTracking()
-            .OrderBy(pack => pack.SortOrder).ThenBy(pack => pack.Name)
+            .OrderByDescending(pack => pack.CreatedAt).ThenBy(pack => pack.Name)
             .Select(pack => ToAdminResponse(pack,
                 pack.Stickers.Count,
                 pack.Owners.Count,
@@ -131,11 +131,11 @@ public sealed class AdminStickerService(AppDbContext db, IStickerMediaStorage st
     }
 
     private static void Apply(StickerPack target, SaveStickerPackRequest source)
-    { target.Name = source.Name.Trim(); target.Description = string.IsNullOrWhiteSpace(source.Description) ? null : source.Description.Trim(); target.ThumbnailUrl = source.ThumbnailUrl; target.Price = source.Price; target.IsFeatured = source.IsFeatured; target.IsActive = source.IsActive; target.SortOrder = source.SortOrder; target.AvailableFrom = source.AvailableFrom?.ToUniversalTime(); target.AvailableUntil = source.AvailableUntil?.ToUniversalTime(); }
+    { target.Name = source.Name.Trim(); target.Description = string.IsNullOrWhiteSpace(source.Description) ? null : source.Description.Trim(); target.ThumbnailUrl = source.ThumbnailUrl; target.Price = source.Price; target.IsFeatured = source.IsFeatured; target.IsActive = source.IsActive; target.AvailableFrom = source.AvailableFrom?.ToUniversalTime(); target.AvailableUntil = source.AvailableUntil?.ToUniversalTime(); }
     private static void Apply(StickerPack target, CreateStickerPackRequest source, string thumbnailUrl)
-    { target.Name = source.Name.Trim(); target.Description = string.IsNullOrWhiteSpace(source.Description) ? null : source.Description.Trim(); target.ThumbnailUrl = thumbnailUrl; target.Price = source.Price; target.IsFeatured = source.IsFeatured; target.IsActive = source.IsActive; target.SortOrder = source.SortOrder; target.AvailableFrom = source.AvailableFrom?.ToUniversalTime(); target.AvailableUntil = source.AvailableUntil?.ToUniversalTime(); }
+    { target.Name = source.Name.Trim(); target.Description = string.IsNullOrWhiteSpace(source.Description) ? null : source.Description.Trim(); target.ThumbnailUrl = thumbnailUrl; target.Price = source.Price; target.IsFeatured = source.IsFeatured; target.IsActive = source.IsActive; target.AvailableFrom = source.AvailableFrom?.ToUniversalTime(); target.AvailableUntil = source.AvailableUntil?.ToUniversalTime(); }
     private static void Apply(Sticker target, SaveStickerRequest source)
     { target.Name = source.Name.Trim(); target.ImageUrl = source.ImageUrl; target.ThumbnailUrl = string.IsNullOrWhiteSpace(source.ThumbnailUrl) ? null : source.ThumbnailUrl; target.Format = source.Format; target.SortOrder = source.SortOrder; target.IsActive = source.IsActive; }
     private static StickerResponse ToResponse(Sticker value) => new(value.Id, value.StickerPackId, value.Name, value.ImageUrl, value.ThumbnailUrl, value.Format, value.SortOrder) { IsActive = value.IsActive };
-    private static AdminStickerPackResponse ToAdminResponse(StickerPack value, int stickers, int owners, int usage) => new(value.Id, value.Name, value.Description, value.ThumbnailUrl, value.Price, value.IsFeatured, value.IsActive, value.SortOrder, value.AvailableFrom, value.AvailableUntil, stickers, owners, usage, value.CreatedAt, value.UpdatedAt);
+    private static AdminStickerPackResponse ToAdminResponse(StickerPack value, int stickers, int owners, int usage) => new(value.Id, value.Name, value.Description, value.ThumbnailUrl, value.Price, value.IsFeatured, value.IsActive, value.AvailableFrom, value.AvailableUntil, stickers, owners, usage, value.CreatedAt, value.UpdatedAt);
 }

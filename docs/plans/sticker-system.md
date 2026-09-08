@@ -32,6 +32,7 @@
 - [ ] Reuse Cloudinary for validated PNG/WebP thumbnail/sticker uploads.
 - [ ] Add pack list/editor/detail UI within existing admin design/navigation.
 - [ ] Create packs from multipart metadata plus a locally selected thumbnail; validate file size, MIME, and magic bytes before Cloudinary upload.
+- [ ] Remove pack-level sort order from admin contracts/UI and drop `StickerPacks.SortOrder` through a forward migration; retain sticker-level ordering.
 - Checkpoint: admin tests/build/lint pass.
 
 ### Phase 4: Paid purchase
