@@ -375,6 +375,15 @@ public sealed class ChatConversationRepository(
                     message.SenderUser.IsVerified),
                 message.MessageType,
                 message.Content,
+                Sticker = message.Sticker == null
+                    ? null
+                    : new ChatStickerResponse(
+                        message.Sticker.Id,
+                        message.Sticker.StickerPackId,
+                        message.Sticker.Name,
+                        message.Sticker.ImageUrl,
+                        message.Sticker.ThumbnailUrl,
+                        message.Sticker.Format),
                 ReplyMessage = message.ReplyMessage == null
                     ? null
                     : new ChatReplyMessageResponse(
@@ -470,7 +479,8 @@ public sealed class ChatConversationRepository(
                     message.CreatedAt,
                     message.UpdatedAt)
                 {
-                    Mentions = mentionsByMessage.GetValueOrDefault(message.Id) ?? []
+                    Mentions = mentionsByMessage.GetValueOrDefault(message.Id) ?? [],
+                    Sticker = message.Sticker
                 };
             })
             .ToList();
@@ -647,6 +657,54 @@ public sealed class ChatConversationRepository(
                 "Cuoc tro chuyen dang bi chan.");
         }
 
+        ChatStickerResponse? sticker = null;
+        if (command.MessageType == MessageType.Sticker && command.StickerId.HasValue)
+        {
+            var availabilityNow = DateTime.UtcNow;
+            var stickerState = await dbContext.Stickers
+                .AsNoTracking()
+                .Where(value => value.Id == command.StickerId.Value)
+                .Select(value => new
+                {
+                    Sticker = new ChatStickerResponse(
+                        value.Id,
+                        value.StickerPackId,
+                        value.Name,
+                        value.ImageUrl,
+                        value.ThumbnailUrl,
+                        value.Format),
+                    value.IsActive,
+                    PackIsActive = value.StickerPack.IsActive,
+                    value.StickerPack.Price,
+                    value.StickerPack.AvailableFrom,
+                    value.StickerPack.AvailableUntil
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (stickerState is null || !stickerState.IsActive || !stickerState.PackIsActive ||
+                (stickerState.AvailableFrom.HasValue && stickerState.AvailableFrom > availabilityNow) ||
+                (stickerState.AvailableUntil.HasValue && stickerState.AvailableUntil <= availabilityNow))
+            {
+                return ChatResult<SendChatMessageRepositoryResult>.Failure(
+                    ChatError.Validation,
+                    "Sticker khong ton tai hoac khong con hoat dong.");
+            }
+
+            var canUse = stickerState.Price == 0 || await dbContext.UserStickerPacks
+                .AsNoTracking()
+                .AnyAsync(value =>
+                    value.UserId == command.SenderUserId &&
+                    value.StickerPackId == stickerState.Sticker.StickerPackId,
+                    cancellationToken);
+            if (!canUse)
+            {
+                return ChatResult<SendChatMessageRepositoryResult>.Failure(
+                    ChatError.Forbidden,
+                    "Ban chua so huu bo sticker nay.");
+            }
+
+            sticker = stickerState.Sticker;
+        }
+
         ChatReplyMessageResponse? replyMessage = null;
         if (command.ReplyMessageId.HasValue)
         {
@@ -689,6 +747,7 @@ public sealed class ChatConversationRepository(
             ConversationId = command.ConversationId,
             SenderUserId = command.SenderUserId,
             ReplyMessageId = command.ReplyMessageId,
+            StickerId = command.StickerId,
             MessageType = command.MessageType,
             Content = command.Content,
             IsEdited = false,
@@ -750,7 +809,10 @@ public sealed class ChatConversationRepository(
             true,
             false,
             false,
-            message.CreatedAt);
+            message.CreatedAt)
+        {
+            Sticker = sticker
+        };
 
         var recipients = await BuildRecipientStatesAsync(command.ConversationId, cancellationToken);
         foreach (var recipient in recipients)
@@ -776,6 +838,8 @@ public sealed class ChatConversationRepository(
             .AsNoTracking()
             .Include(message => message.Conversation)
             .Include(message => message.Attachments)
+            .Include(message => message.Sticker)
+                .ThenInclude(sticker => sticker!.StickerPack)
             .Include(message => message.ReplyMessage)
                 .ThenInclude(reply => reply!.SenderUser)
             .FirstOrDefaultAsync(message => message.Id == command.MessageId, cancellationToken);
@@ -810,6 +874,24 @@ public sealed class ChatConversationRepository(
         if (!ChatMessagePolicy.CanForward(source.MessageType, source.IsDeleted))
         {
             return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.Validation, "Tin nhắn này không thể chuyển tiếp.");
+        }
+
+        if (source.MessageType == MessageType.Sticker)
+        {
+            var sticker = source.Sticker;
+            var availabilityNow = DateTime.UtcNow;
+            if (sticker is null || !sticker.IsActive || !sticker.StickerPack.IsActive ||
+                (sticker.StickerPack.AvailableFrom.HasValue && sticker.StickerPack.AvailableFrom > availabilityNow) ||
+                (sticker.StickerPack.AvailableUntil.HasValue && sticker.StickerPack.AvailableUntil <= availabilityNow))
+            {
+                return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.Validation, "Sticker khong con hoat dong.");
+            }
+            if (sticker.StickerPack.Price > 0 && !await dbContext.UserStickerPacks.AsNoTracking().AnyAsync(
+                    owner => owner.UserId == command.UserId && owner.StickerPackId == sticker.StickerPackId,
+                    cancellationToken))
+            {
+                return ChatResult<ForwardChatMessageRepositoryResult>.Failure(ChatError.Forbidden, "Ban chua so huu bo sticker nay.");
+            }
         }
 
         var destinationIds = command.ConversationIds.Distinct().ToArray();
@@ -869,6 +951,7 @@ public sealed class ChatConversationRepository(
                 ConversationId = destination.Id,
                 SenderUserId = command.UserId,
                 ReplyMessageId = source.ReplyMessageId,
+                StickerId = source.StickerId,
                 MessageType = source.MessageType,
                 Content = source.Content,
                 IsEdited = false,
@@ -934,7 +1017,16 @@ public sealed class ChatConversationRepository(
                 true,
                 false,
                 false,
-                created.Message.CreatedAt);
+                created.Message.CreatedAt)
+            {
+                Sticker = source.Sticker is null ? null : new ChatStickerResponse(
+                    source.Sticker.Id,
+                    source.Sticker.StickerPackId,
+                    source.Sticker.Name,
+                    source.Sticker.ImageUrl,
+                    source.Sticker.ThumbnailUrl,
+                    source.Sticker.Format)
+            };
             var recipients = await BuildRecipientStatesAsync(created.Message.ConversationId, cancellationToken);
             results.Add(new SendChatMessageRepositoryResult(response, recipients));
         }

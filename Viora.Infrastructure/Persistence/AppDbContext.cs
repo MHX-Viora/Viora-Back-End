@@ -33,6 +33,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
     public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
     public DbSet<MessageRead> MessageReads => Set<MessageRead>();
+    public DbSet<StickerPack> StickerPacks => Set<StickerPack>();
+    public DbSet<Sticker> Stickers => Set<Sticker>();
+    public DbSet<UserStickerPack> UserStickerPacks => Set<UserStickerPack>();
+    public DbSet<StickerPackPurchase> StickerPackPurchases => Set<StickerPackPurchase>();
     public DbSet<ConversationBlock> ConversationBlocks => Set<ConversationBlock>();
     public DbSet<CallSession> CallSessions => Set<CallSession>();
     public DbSet<GroupCallSession> GroupCallSessions => Set<GroupCallSession>();

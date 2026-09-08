@@ -47,6 +47,8 @@ public enum ConversationSendPermission : short { Everyone = 0, AdminsAndOwner = 
 public enum ConversationMemberRole : short { Member = 0, Admin = 1, Owner = 2 }
 public enum ConversationMemberStatus : short { Active = 0, Left = 1, Kicked = 2 }
 public enum MessageType : short { Text = 0, Image = 1, Video = 2, File = 3, Audio = 4, Sticker = 5, Location = 6, Recall = 7, System = 100 }
+public enum StickerFormat : short { Png = 0, WebP = 1, Gif = 2, AnimatedWebP = 3 }
+public enum StickerPurchaseStatus : short { Pending = 0, Completed = 1, Failed = 2, Refunded = 3 }
 public enum NotificationType : short
 {
     System = 0, FriendRequest = 1, FriendAccepted = 2, Follow = 3, PostLike = 4,

@@ -265,7 +265,8 @@ public sealed class ChatMessageDeliveryService(
             message.IsDeleted,
             message.CreatedAt)
         {
-            Mentions = message.Mentions
+            Mentions = message.Mentions,
+            Sticker = message.Sticker
         };
 }
 

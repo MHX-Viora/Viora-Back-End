@@ -29,6 +29,7 @@ using Viora.Infrastructure.GroupCalls;
 using Viora.Application.Articles;
 using Viora.Application.MiniApps;
 using Viora.Infrastructure.MiniApps;
+using Viora.Application.Stickers;
 
 namespace Viora.Infrastructure;
 
@@ -94,6 +95,7 @@ public static class DependencyInjection
         services.AddSingleton(Options.Create(cloudinaryOptions));
         services.AddSingleton<IProfileImageStorage, CloudinaryProfileImageStorage>();
         services.AddSingleton<IMediaStorage, CloudinaryMediaStorage>();
+        services.AddSingleton<IStickerMediaStorage>(provider => (CloudinaryMediaStorage)provider.GetRequiredService<IMediaStorage>());
         services.AddScoped<IValidator<CreatePostCommand>, CreatePostValidator>();
         services.AddScoped<IValidator<CreateArticleCommand>, CreateArticleValidator>();
         services.AddScoped<IValidator<UpdateArticleCommand>, UpdateArticleValidator>();
@@ -172,6 +174,8 @@ public static class DependencyInjection
         services.AddScoped<IMentionRepository, MentionRepository>();
         services.AddScoped<IMentionService, MentionService>();
         services.AddScoped<IChatConversationRepository, ChatConversationRepository>();
+        services.AddScoped<IStickerService, StickerService>();
+        services.AddScoped<IAdminStickerService, AdminStickerService>();
         services.AddScoped<ICallRepository, CallRepository>();
         services.AddScoped<ICallHistoryMessageRepository, CallHistoryMessageRepository>();
         services.AddScoped<IGroupChatService, GroupChatService>();

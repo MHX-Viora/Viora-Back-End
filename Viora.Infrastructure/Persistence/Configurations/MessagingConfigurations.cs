@@ -45,9 +45,11 @@ internal sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(x => x.MessageType).IsRequired();
         builder.Property(x => x.IsEdited).HasDefaultValue(false);
         builder.Property(x => x.IsDeleted).HasDefaultValue(false);
+        builder.HasIndex(x => x.StickerId);
         builder.HasOne(x => x.Conversation).WithMany(x => x.Messages).HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.SenderUser).WithMany().HasForeignKey(x => x.SenderUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.ReplyMessage).WithMany().HasForeignKey(x => x.ReplyMessageId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Sticker).WithMany(x => x.Messages).HasForeignKey(x => x.StickerId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

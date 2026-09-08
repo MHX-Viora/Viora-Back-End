@@ -42,6 +42,7 @@ public sealed class Message : AuditableEntity
     public Guid ConversationId { get; set; }
     public Guid SenderUserId { get; set; }
     public Guid? ReplyMessageId { get; set; }
+    public Guid? StickerId { get; set; }
     public MessageType MessageType { get; set; }
     public string? Content { get; set; }
     public bool IsEdited { get; set; }
@@ -49,6 +50,7 @@ public sealed class Message : AuditableEntity
     public Conversation Conversation { get; set; } = null!;
     public User SenderUser { get; set; } = null!;
     public Message? ReplyMessage { get; set; }
+    public Sticker? Sticker { get; set; }
     public ICollection<MessageAttachment> Attachments { get; set; } = [];
 }
 

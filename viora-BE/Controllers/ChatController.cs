@@ -120,7 +120,8 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
                 request.MessageType,
                 request.Content,
                 request.Attachments,
-                request.MentionUserIds),
+                request.MentionUserIds,
+                request.StickerId),
             cancellationToken);
 
         if (result.IsSuccess)
@@ -569,7 +570,8 @@ public sealed record SendChatMessageRequest(
     MessageType MessageType,
     string? Content,
     IReadOnlyList<SendChatMessageAttachmentRequest>? Attachments,
-    IReadOnlyList<Guid>? MentionUserIds = null);
+    IReadOnlyList<Guid>? MentionUserIds = null,
+    Guid? StickerId = null);
 
 public sealed record ForwardChatMessageRequest(IReadOnlyList<Guid> ConversationIds);
 
