@@ -180,16 +180,38 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 
+var configuredWebOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? [];
+var webOrigins = configuredWebOrigins
+    .Select(origin => origin.Trim().TrimEnd('/'))
+    .Where(origin => Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
+if (webOrigins.Length == 0)
+{
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "Cors:AllowedOrigins must be configured outside Development.");
+    }
+
+    webOrigins =
+    [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8081",
+        "https://vioraadmin.vercel.app"
+    ];
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Web", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:5173",
-                "http://localhost:3000",
-                "https://vioraadmin.vercel.app"
-            )
+            .WithOrigins(webOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();

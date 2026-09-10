@@ -37,7 +37,13 @@ public sealed class AcceptCallHandler(ICallRepository repository, CallDeliverySe
     public async Task<CallResult<CallSessionResponse>> Handle(AcceptCallCommand request, CancellationToken cancellationToken)
     {
         var result = await repository.AcceptCallAsync(request, cancellationToken);
-        if (result.IsSuccess && result.Value is not null) await deliveryService.PublishAcceptedAsync(result.Value, cancellationToken);
+        if (result.IsSuccess && result.Value is not null)
+        {
+            await deliveryService.PublishAcceptedAsync(
+                result.Value,
+                request.RealtimeConnectionId,
+                cancellationToken);
+        }
         return result;
     }
 }
@@ -102,7 +108,6 @@ public sealed class CallDeliveryService(
     IRealtimeService realtimeService,
     ICallHistoryMessageRepository historyMessageRepository,
     IPushNotificationSender pushNotificationSender,
-    IOnlineUserRegistry onlineUserRegistry,
     ILogger<CallDeliveryService> logger)
 {
     public async Task PublishIncomingAsync(CallSessionResponse call, CancellationToken cancellationToken)
@@ -111,29 +116,55 @@ public sealed class CallDeliveryService(
         await realtimeService.SendToUserAsync(call.Receiver.Id, "IncomingCall", payload, cancellationToken);
         logger.LogInformation("Call Started. CallId: {CallId}, CallerId: {CallerId}, ReceiverId: {ReceiverId}.", call.Id, call.Caller.Id, call.Receiver.Id);
 
-        if (!onlineUserRegistry.IsOnline(call.Receiver.Id))
-        {
-            await pushNotificationSender.SendAsync(new PushMessage(
-                call.Receiver.Id,
-                call.Caller.DisplayName,
-                "Đang gọi cho bạn...",
-                new Dictionary<string, string>
-                {
-                    ["type"] = "IncomingCall",
-                    ["callId"] = call.Id.ToString(),
-                    ["callType"] = ((short)call.CallType).ToString(),
-                    ["conversationId"] = call.ConversationId.ToString(),
-                    ["callerId"] = call.Caller.Id.ToString(),
-                    ["callerDisplayName"] = call.Caller.DisplayName,
-                    ["callerAvatarUrl"] = call.Caller.AvatarUrl ?? string.Empty
-                }), cancellationToken);
-        }
+        // Another device for the same user may be suspended while one connection
+        // is online, so push remains a deduplicated per-device fallback.
+        await pushNotificationSender.SendAsync(new PushMessage(
+            call.Receiver.Id,
+            call.Caller.DisplayName,
+            "Đang gọi cho bạn...",
+            new Dictionary<string, string>
+            {
+                ["type"] = "IncomingCall",
+                ["callId"] = call.Id.ToString(),
+                ["callType"] = ((short)call.CallType).ToString(),
+                ["conversationId"] = call.ConversationId.ToString(),
+                ["callerId"] = call.Caller.Id.ToString(),
+                ["callerDisplayName"] = call.Caller.DisplayName,
+                ["callerAvatarUrl"] = call.Caller.AvatarUrl ?? string.Empty
+            }), cancellationToken);
     }
 
-    public Task PublishAcceptedAsync(CallSessionResponse call, CancellationToken cancellationToken)
+    public async Task PublishAcceptedAsync(
+        CallSessionResponse call,
+        string? acceptedConnectionId,
+        CancellationToken cancellationToken)
     {
         logger.LogInformation("Call Accepted. CallId: {CallId}.", call.Id);
-        return realtimeService.SendToUserAsync(call.Caller.Id, "CallAccepted", call, cancellationToken);
+        await realtimeService.SendToUserAsync(call.Caller.Id, "CallAccepted", call, cancellationToken);
+        if (string.IsNullOrWhiteSpace(acceptedConnectionId)) return;
+
+        var payload = new CallAnsweredElsewherePayload(
+            call.Id,
+            call.ConversationId,
+            call.Status,
+            acceptedConnectionId);
+        await realtimeService.SendToUserAsync(
+            call.Receiver.Id,
+            "CallAnsweredElsewhere",
+            payload,
+            cancellationToken);
+        await pushNotificationSender.SendAsync(new PushMessage(
+            call.Receiver.Id,
+            "Call updated",
+            null,
+            new Dictionary<string, string>
+            {
+                ["type"] = "CallAnsweredElsewhere",
+                ["callId"] = call.Id.ToString(),
+                ["conversationId"] = call.ConversationId.ToString(),
+                ["status"] = ((short)call.Status).ToString(),
+                ["acceptedConnectionId"] = acceptedConnectionId
+            }), cancellationToken);
     }
 
     public async Task PublishEndedAsync(CallSessionResponse call, string eventName, CancellationToken cancellationToken)

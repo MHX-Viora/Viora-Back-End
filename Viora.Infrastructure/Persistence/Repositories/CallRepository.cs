@@ -33,8 +33,42 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
         return await GetByIdAsync(command.CallerId, call.Id, cancellationToken);
     }
 
-    public Task<CallResult<CallSessionResponse>> AcceptCallAsync(AcceptCallCommand command, CancellationToken cancellationToken) =>
-        TransitionAsync(command.CallId, command.UserId, [CallStatus.Calling], CallStatus.Accepted, requireReceiver: true, cancellationToken: cancellationToken);
+    public async Task<CallResult<CallSessionResponse>> AcceptCallAsync(
+        AcceptCallCommand command,
+        CancellationToken cancellationToken)
+    {
+        var current = await dbContext.CallSessions
+            .AsNoTracking()
+            .Where(call => call.Id == command.CallId)
+            .Select(call => new { call.ReceiverId, call.Status })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (current is null)
+        {
+            return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Không tìm thấy cuộc gọi.");
+        }
+        if (current.ReceiverId != command.UserId)
+        {
+            return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Chỉ người nhận mới được thao tác.");
+        }
+        if (current.Status != CallStatus.Calling)
+        {
+            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Cuộc gọi đã được xử lý trên thiết bị khác.");
+        }
+
+        var now = DateTime.UtcNow;
+        var updated = await dbContext.CallSessions
+            .Where(call => call.Id == command.CallId && call.Status == CallStatus.Calling)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(call => call.Status, CallStatus.Accepted)
+                .SetProperty(call => call.AnsweredAt, now)
+                .SetProperty(call => call.UpdatedAt, now), cancellationToken);
+        if (updated != 1)
+        {
+            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Cuộc gọi đã được xử lý trên thiết bị khác.");
+        }
+
+        return await GetByIdAsync(command.UserId, command.CallId, cancellationToken);
+    }
 
     public Task<CallResult<CallSessionResponse>> RejectCallAsync(RejectCallCommand command, CancellationToken cancellationToken) =>
         TransitionAsync(command.CallId, command.UserId, [CallStatus.Calling], CallStatus.Rejected, requireReceiver: true, cancellationToken: cancellationToken);
@@ -44,21 +78,31 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
 
     public async Task<CallResult<CallSessionResponse>> EndCallAsync(EndCallCommand command, CancellationToken cancellationToken)
     {
-        var call = await dbContext.CallSessions
-            .Include(value => value.Caller)
-            .Include(value => value.Receiver)
-            .FirstOrDefaultAsync(value => value.Id == command.CallId, cancellationToken);
-        if (call is null) return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Không tìm thấy cuộc gọi.");
-        if (call.CallerId != command.UserId && call.ReceiverId != command.UserId)
+        var current = await dbContext.CallSessions
+            .AsNoTracking()
+            .Where(call => call.Id == command.CallId)
+            .Select(call => new
+            {
+                call.AnsweredAt,
+                call.CallerId,
+                call.ReceiverId,
+                call.Status
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (current is null) return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Không tìm thấy cuộc gọi.");
+        if (current.CallerId != command.UserId && current.ReceiverId != command.UserId)
         {
             return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Bạn không có quyền thao tác cuộc gọi này.");
         }
-        if (IsTerminal(call.Status)) return CallResult<CallSessionResponse>.Success(Map(call));
+        if (IsTerminal(current.Status))
+        {
+            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Cuộc gọi đã kết thúc.");
+        }
 
-        var nextStatus = call.Status switch
+        var nextStatus = current.Status switch
         {
             CallStatus.Accepted => CallStatus.Ended,
-            CallStatus.Calling when call.CallerId == command.UserId => CallStatus.Cancelled,
+            CallStatus.Calling when current.CallerId == command.UserId => CallStatus.Cancelled,
             CallStatus.Calling => CallStatus.Rejected,
             _ => (CallStatus?)null
         };
@@ -67,8 +111,23 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
             return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Trạng thái cuộc gọi không hợp lệ.");
         }
 
-        await ApplyTransitionAsync(call, nextStatus.Value, cancellationToken);
-        return CallResult<CallSessionResponse>.Success(Map(call));
+        var now = DateTime.UtcNow;
+        var duration = current.AnsweredAt.HasValue
+            ? Math.Max(0, (int)(now - current.AnsweredAt.Value).TotalSeconds)
+            : 0;
+        var updated = await dbContext.CallSessions
+            .Where(call => call.Id == command.CallId && call.Status == current.Status)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(call => call.Status, nextStatus.Value)
+                .SetProperty(call => call.EndedAt, now)
+                .SetProperty(call => call.Duration, duration)
+                .SetProperty(call => call.UpdatedAt, now), cancellationToken);
+        if (updated != 1)
+        {
+            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Cuộc gọi đã được xử lý trên thiết bị khác.");
+        }
+
+        return await GetByIdAsync(command.UserId, command.CallId, cancellationToken);
     }
 
     public Task<CallResult<CallSessionResponse>> MarkMissedAsync(Guid callId, CancellationToken cancellationToken) =>
@@ -178,49 +237,40 @@ public sealed class CallRepository(AppDbContext dbContext, ILogger<CallRepositor
         bool requireReceiver = false,
         CancellationToken cancellationToken = default)
     {
-        var call = await dbContext.CallSessions
-            .Include(value => value.Caller)
-            .Include(value => value.Receiver)
-            .FirstOrDefaultAsync(value => value.Id == callId, cancellationToken);
-        if (call is null) return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Không tìm thấy cuộc gọi.");
+        var current = await dbContext.CallSessions
+            .AsNoTracking()
+            .Where(call => call.Id == callId)
+            .Select(call => new { call.CallerId, call.ReceiverId, call.Status })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (current is null) return CallResult<CallSessionResponse>.Failure(CallError.NotFound, "Không tìm thấy cuộc gọi.");
         if (userId.HasValue)
         {
-            if (requireCaller && call.CallerId != userId.Value) return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Chỉ người gọi mới được hủy.");
-            if (requireReceiver && call.ReceiverId != userId.Value) return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Chỉ người nhận mới được thao tác.");
-            if (!requireCaller && !requireReceiver && call.CallerId != userId.Value && call.ReceiverId != userId.Value)
+            if (requireCaller && current.CallerId != userId.Value) return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Chỉ người gọi mới được hủy.");
+            if (requireReceiver && current.ReceiverId != userId.Value) return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Chỉ người nhận mới được thao tác.");
+            if (!requireCaller && !requireReceiver && current.CallerId != userId.Value && current.ReceiverId != userId.Value)
             {
                 return CallResult<CallSessionResponse>.Failure(CallError.Forbidden, "Bạn không có quyền thao tác cuộc gọi này.");
             }
         }
-        if (IsTerminal(call.Status))
-        {
-            return CallResult<CallSessionResponse>.Success(Map(call));
-        }
-        if (call.Status == nextStatus)
-        {
-            return CallResult<CallSessionResponse>.Success(Map(call));
-        }
-        if (!allowedStatuses.Contains(call.Status))
+        if (!allowedStatuses.Contains(current.Status))
         {
             return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Trạng thái cuộc gọi không hợp lệ.");
         }
 
-        await ApplyTransitionAsync(call, nextStatus, cancellationToken);
-        return CallResult<CallSessionResponse>.Success(Map(call));
-    }
-
-    private async Task ApplyTransitionAsync(CallSession call, CallStatus nextStatus, CancellationToken cancellationToken)
-    {
         var now = DateTime.UtcNow;
-        call.Status = nextStatus;
-        if (nextStatus == CallStatus.Accepted) call.AnsweredAt = now;
-        if (nextStatus is CallStatus.Rejected or CallStatus.Cancelled or CallStatus.Missed or CallStatus.Ended)
+        var updated = await dbContext.CallSessions
+            .Where(call => call.Id == callId && allowedStatuses.Contains(call.Status))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(call => call.Status, nextStatus)
+                .SetProperty(call => call.EndedAt, now)
+                .SetProperty(call => call.Duration, 0)
+                .SetProperty(call => call.UpdatedAt, now), cancellationToken);
+        if (updated != 1)
         {
-            call.EndedAt = now;
-            call.Duration = call.AnsweredAt.HasValue ? Math.Max(0, (int)(now - call.AnsweredAt.Value).TotalSeconds) : 0;
+            return CallResult<CallSessionResponse>.Failure(CallError.InvalidState, "Cuộc gọi đã được xử lý trên thiết bị khác.");
         }
-        call.UpdatedAt = now;
-        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(userId ?? current.CallerId, callId, cancellationToken);
     }
 
     private static bool IsTerminal(CallStatus status) =>

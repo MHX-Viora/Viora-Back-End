@@ -28,8 +28,18 @@ public sealed class CallsController(IMediator mediator, IIceServerProvider iceSe
 
     /// <summary>Accepts an incoming call.</summary>
     [HttpPost("{id:guid}/accept")]
-    public async Task<IActionResult> Accept(Guid id, CancellationToken cancellationToken) =>
-        await WithUser(userId => mediator.Send(new AcceptCallCommand(userId, id), cancellationToken));
+    public async Task<IActionResult> Accept(
+        Guid id,
+        [FromHeader(Name = "X-ANKT-Realtime-Connection-Id")] string? realtimeConnectionId,
+        CancellationToken cancellationToken) =>
+        await WithUser(userId => mediator.Send(
+            new AcceptCallCommand(
+                userId,
+                id,
+                string.IsNullOrWhiteSpace(realtimeConnectionId) || realtimeConnectionId.Length > 128
+                    ? null
+                    : realtimeConnectionId),
+            cancellationToken));
 
     /// <summary>Rejects an incoming call.</summary>
     [HttpPost("{id:guid}/reject")]
