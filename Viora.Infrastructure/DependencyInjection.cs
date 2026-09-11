@@ -27,6 +27,9 @@ using Viora.Application.GroupCalls;
 using Viora.Application.Legal;
 using Viora.Infrastructure.GroupCalls;
 using Viora.Application.Articles;
+using Viora.Application.MiniApps;
+using Viora.Infrastructure.MiniApps;
+using Viora.Application.Stickers;
 
 namespace Viora.Infrastructure;
 
@@ -92,9 +95,11 @@ public static class DependencyInjection
         services.AddSingleton(Options.Create(cloudinaryOptions));
         services.AddSingleton<IProfileImageStorage, CloudinaryProfileImageStorage>();
         services.AddSingleton<IMediaStorage, CloudinaryMediaStorage>();
+        services.AddSingleton<IStickerMediaStorage>(provider => (CloudinaryMediaStorage)provider.GetRequiredService<IMediaStorage>());
         services.AddScoped<IValidator<CreatePostCommand>, CreatePostValidator>();
         services.AddScoped<IValidator<CreateArticleCommand>, CreateArticleValidator>();
         services.AddScoped<IValidator<UpdateArticleCommand>, UpdateArticleValidator>();
+        services.AddScoped<IValidator<RecordArticleInteractionCommand>, RecordArticleInteractionValidator>();
         services.AddScoped<IValidator<CreateReelCommand>, CreateReelValidator>();
         services.AddScoped<IValidator<ReactPostCommand>, ReactPostValidator>();
         services.AddScoped<IValidator<CreateCommentCommand>, CreateCommentValidator>();
@@ -158,6 +163,8 @@ public static class DependencyInjection
         services.AddScoped<IVideoFeedRepository, VideoFeedRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
         services.AddScoped<IArticleRepository, ArticleRepository>();
+        services.AddScoped<IArticleInteractionRepository, ArticleInteractionRepository>();
+        services.AddScoped<IArticleRecommendationService, ArticleRecommendationService>();
         services.AddScoped<IHashtagRepository, HashtagRepository>();
         services.AddScoped<ISocialRepository, SocialRepository>();
         services.AddScoped<IPostInteractionRepository, PostInteractionRepository>();
@@ -167,6 +174,8 @@ public static class DependencyInjection
         services.AddScoped<IMentionRepository, MentionRepository>();
         services.AddScoped<IMentionService, MentionService>();
         services.AddScoped<IChatConversationRepository, ChatConversationRepository>();
+        services.AddScoped<IStickerService, StickerService>();
+        services.AddScoped<IAdminStickerService, AdminStickerService>();
         services.AddScoped<ICallRepository, CallRepository>();
         services.AddScoped<ICallHistoryMessageRepository, CallHistoryMessageRepository>();
         services.AddScoped<IGroupChatService, GroupChatService>();
@@ -186,6 +195,11 @@ public static class DependencyInjection
         services.AddScoped<IPushNotificationSender, FirebasePushNotificationSender>();
         services.AddHostedService<CallTimeoutHostedService>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+        services.AddSingleton<IClientCredentialService, ClientCredentialService>();
+        services.AddScoped<IMiniAppService, MiniAppService>();
+        services.AddScoped<MiniAppManagementService>();
+        services.AddScoped<IMiniAppManagementService>(provider => provider.GetRequiredService<MiniAppManagementService>());
+        services.AddScoped<IDeveloperMiniAppService>(provider => provider.GetRequiredService<MiniAppManagementService>());
         return services;
     }
 }

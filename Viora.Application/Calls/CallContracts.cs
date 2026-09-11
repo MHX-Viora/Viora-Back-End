@@ -5,7 +5,7 @@ using Viora.Domain.Entities;
 namespace Viora.Application.Calls;
 
 public sealed record CreateCallCommand(Guid CallerId, Guid ConversationId, CallType CallType) : IRequest<CallResult<CreateCallResponse>>;
-public sealed record AcceptCallCommand(Guid UserId, Guid CallId) : IRequest<CallResult<CallSessionResponse>>;
+public sealed record AcceptCallCommand(Guid UserId, Guid CallId, string? RealtimeConnectionId = null) : IRequest<CallResult<CallSessionResponse>>;
 public sealed record RejectCallCommand(Guid UserId, Guid CallId) : IRequest<CallResult<CallSessionResponse>>;
 public sealed record CancelCallCommand(Guid UserId, Guid CallId) : IRequest<CallResult<CallSessionResponse>>;
 public sealed record EndCallCommand(Guid UserId, Guid CallId) : IRequest<CallResult<CallSessionResponse>>;
@@ -38,6 +38,11 @@ public sealed record IceServerResponse(IReadOnlyList<string> Urls, string? Usern
 public sealed record IncomingCallPayload(Guid CallId, Guid ConversationId, CallParticipantResponse Caller, CallType CallType);
 public sealed record CallSignalPayload(Guid CallId, Guid ConversationId, Guid FromUserId, object Signal);
 public sealed record CallEndedPayload(Guid CallId, Guid ConversationId, CallStatus Status, int? Duration);
+public sealed record CallAnsweredElsewherePayload(
+    Guid CallId,
+    Guid ConversationId,
+    CallStatus Status,
+    string AcceptedConnectionId);
 public sealed record CallHistoryMessage(
     Guid Id,
     Guid ConversationId,

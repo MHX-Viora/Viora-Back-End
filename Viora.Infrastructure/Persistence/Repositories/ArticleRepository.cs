@@ -28,10 +28,30 @@ public sealed class ArticleRepository(AppDbContext dbContext) : IArticleReposito
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task RecordViewAsync(Guid userId, Guid articleId, CancellationToken cancellationToken)
+    public async Task<bool> RecordViewAsync(Guid userId, Guid articleId, CancellationToken cancellationToken)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+        var interactionId = Guid.NewGuid();
+        var interactionType = (short)ArticleInteractionType.View;
+        var inserted = await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "ArticleInteractions"
+                ("Id", "UserId", "ArticleId", "InteractionType", "ReadDuration", "ReadPercentage", "CreatedAt", "UpdatedAt")
+            VALUES
+                ({interactionId}, {userId}, {articleId}, {interactionType}, 0, 0, {now}, {now})
+            ON CONFLICT ("UserId", "ArticleId", "InteractionType") DO NOTHING
+            """, cancellationToken);
+
+        if (inserted == 0)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return false;
+        }
+
         await dbContext.Posts.Where(x => x.Id == articleId)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.ViewCount, x => x.ViewCount + 1), cancellationToken);
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(x => x.ViewCount, x => x.ViewCount + 1),
+                cancellationToken);
         dbContext.ViewHistories.Add(new ViewHistory
         {
             Id = Guid.NewGuid(),
@@ -39,9 +59,11 @@ public sealed class ArticleRepository(AppDbContext dbContext) : IArticleReposito
             PostId = articleId,
             WatchDuration = 0,
             IsCompleted = true,
-            ViewedAt = DateTime.UtcNow
+            ViewedAt = now
         });
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     public async Task<Result<ArticleResponse>> GetAsync(Guid userId, Guid articleId, CancellationToken cancellationToken)

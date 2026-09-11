@@ -25,6 +25,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<PostHashtag> PostHashtags => Set<PostHashtag>();
     public DbSet<SavedPost> SavedPosts => Set<SavedPost>();
     public DbSet<ViewHistory> ViewHistories => Set<ViewHistory>();
+    public DbSet<ArticleInteraction> ArticleInteractions => Set<ArticleInteraction>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ConversationMember> ConversationMembers => Set<ConversationMember>();
@@ -32,6 +33,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
     public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
     public DbSet<MessageRead> MessageReads => Set<MessageRead>();
+    public DbSet<StickerPack> StickerPacks => Set<StickerPack>();
+    public DbSet<Sticker> Stickers => Set<Sticker>();
+    public DbSet<UserStickerPack> UserStickerPacks => Set<UserStickerPack>();
+    public DbSet<StickerPackPurchase> StickerPackPurchases => Set<StickerPackPurchase>();
     public DbSet<ConversationBlock> ConversationBlocks => Set<ConversationBlock>();
     public DbSet<CallSession> CallSessions => Set<CallSession>();
     public DbSet<GroupCallSession> GroupCallSessions => Set<GroupCallSession>();
@@ -42,6 +47,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AdminLog> AdminLogs => Set<AdminLog>();
     public DbSet<LegalDocument> LegalDocuments => Set<LegalDocument>();
     public DbSet<UserLegalAcceptance> UserLegalAcceptances => Set<UserLegalAcceptance>();
+    public DbSet<Developer> Developers => Set<Developer>();
+    public DbSet<MiniApp> MiniApps => Set<MiniApp>();
+    public DbSet<MiniAppPermission> MiniAppPermissions => Set<MiniAppPermission>();
+    public DbSet<MiniAppPermissionMapping> MiniAppPermissionMappings => Set<MiniAppPermissionMapping>();
+    public DbSet<MiniAppUserConsent> MiniAppUserConsents => Set<MiniAppUserConsent>();
+    public DbSet<MiniAppLaunchCode> MiniAppLaunchCodes => Set<MiniAppLaunchCode>();
+    public DbSet<MiniAppExternalIdentity> MiniAppExternalIdentities => Set<MiniAppExternalIdentity>();
+    public DbSet<MiniAppAuditLog> MiniAppAuditLogs => Set<MiniAppAuditLog>();
+    public DbSet<MiniAppLaunchLog> MiniAppLaunchLogs => Set<MiniAppLaunchLog>();
 
     [DbFunction("translate", IsBuiltIn = true)]
     public static string Translate(string value, string matching, string replacement) =>

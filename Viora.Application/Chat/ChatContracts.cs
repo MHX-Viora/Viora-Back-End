@@ -35,7 +35,8 @@ public sealed record SendChatMessageCommand(
     MessageType MessageType,
     string? Content,
     IReadOnlyList<SendChatMessageAttachmentRequest>? Attachments,
-    IReadOnlyList<Guid>? MentionUserIds = null)
+    IReadOnlyList<Guid>? MentionUserIds = null,
+    Guid? StickerId = null)
     : IRequest<ChatResult<SendChatMessageResponse>>;
 
 public sealed record MarkConversationReadCommand(
@@ -185,6 +186,7 @@ public sealed record ChatMessageItemResponse(
     DateTime UpdatedAt)
 {
     public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+    public ChatStickerResponse? Sticker { get; init; }
 }
 
 public sealed record SendChatMessageResponse(
@@ -201,6 +203,7 @@ public sealed record SendChatMessageResponse(
     DateTime CreatedAt)
 {
     public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+    public ChatStickerResponse? Sticker { get; init; }
 }
 
 public sealed record ChatRealtimeMessageResponse(
@@ -218,7 +221,16 @@ public sealed record ChatRealtimeMessageResponse(
     DateTime CreatedAt)
 {
     public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+    public ChatStickerResponse? Sticker { get; init; }
 }
+
+public sealed record ChatStickerResponse(
+    Guid Id,
+    Guid StickerPackId,
+    string Name,
+    string ImageUrl,
+    string? ThumbnailUrl,
+    StickerFormat Format);
 
 public sealed record NewMessageNotificationPayload(
     Guid ConversationId,
@@ -527,6 +539,11 @@ public sealed class SendChatMessageValidator : AbstractValidator<SendChatMessage
             var attachments = command.Attachments ?? [];
             var content = command.Content?.Trim();
 
+            if (command.MessageType != MessageType.Sticker && command.StickerId.HasValue)
+            {
+                context.AddFailure(nameof(command.StickerId), "StickerId chi dung cho tin nhan sticker.");
+            }
+
             switch (command.MessageType)
             {
                 case MessageType.Text:
@@ -558,9 +575,13 @@ public sealed class SendChatMessageValidator : AbstractValidator<SendChatMessage
                     }
                     break;
                 case MessageType.Sticker:
-                    if (string.IsNullOrWhiteSpace(content))
+                    if (!command.StickerId.HasValue || command.StickerId == Guid.Empty)
                     {
-                        context.AddFailure(nameof(command.Content), "StickerId hoac StickerCode la bat buoc.");
+                        context.AddFailure(nameof(command.StickerId), "StickerId la bat buoc.");
+                    }
+                    if (!string.IsNullOrWhiteSpace(content))
+                    {
+                        context.AddFailure(nameof(command.Content), "Tin nhan sticker khong duoc co noi dung.");
                     }
                     if (attachments.Count > 0)
                     {

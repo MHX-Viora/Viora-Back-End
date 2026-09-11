@@ -218,12 +218,16 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
             platform == DevicePlatform.Android &&
             message.Data.TryGetValue("type", out var messageType) &&
             messageType is "IncomingCall" or "GroupCall";
+        var isWebIncomingCall =
+            platform == DevicePlatform.Web &&
+            message.Data.TryGetValue("type", out var webMessageType) &&
+            webMessageType is "IncomingCall" or "GroupCall";
         var isCallLifecycle =
             message.Data.TryGetValue("type", out var lifecycleType) &&
-            lifecycleType is "CallRejected" or "CallCancelled" or "CallEnded" or
+            lifecycleType is "CallRejected" or "CallCancelled" or "CallEnded" or "CallAnsweredElsewhere" or
                 "CallMissed" or "CallTimeout" or "GroupCallEnded";
         var isAndroidDataOnly = isAndroidChat || isAndroidIncomingCall;
-        var isDataOnly = isAndroidDataOnly || isCallLifecycle;
+        var isDataOnly = isAndroidDataOnly || isWebIncomingCall || isCallLifecycle;
         var data = message.Data.ToDictionary(pair => pair.Key, pair => pair.Value);
         if (isDataOnly)
         {
@@ -268,7 +272,17 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
                     ContentAvailable = isCallLifecycle,
                     Sound = isCallLifecycle ? null : "default"
                 }
-            }
+            },
+            Webpush = platform == DevicePlatform.Web && (isWebIncomingCall || isCallLifecycle)
+                ? new WebpushConfig
+                {
+                    Headers = new Dictionary<string, string>
+                    {
+                        ["TTL"] = "30",
+                        ["Urgency"] = "high"
+                    }
+                }
+                : null
         };
     }
 

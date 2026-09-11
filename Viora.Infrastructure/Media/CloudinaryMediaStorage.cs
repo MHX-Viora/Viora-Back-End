@@ -3,10 +3,11 @@ using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Viora.Application.Posts;
+using Viora.Application.Stickers;
 
 namespace Viora.Infrastructure.Media;
 
-public sealed class CloudinaryMediaStorage : IMediaStorage
+public sealed class CloudinaryMediaStorage : IMediaStorage, IStickerMediaStorage
 {
     private readonly Cloudinary cloudinary;
     private readonly ILogger<CloudinaryMediaStorage> logger;
@@ -229,6 +230,30 @@ public sealed class CloudinaryMediaStorage : IMediaStorage
         catch (Exception exception)
         {
             throw new CreatePostException("MEDIA_UPLOAD_FAILED", "Không thể tải avatar nhóm lên dịch vụ lưu trữ.", exception);
+        }
+    }
+
+    public async Task<string> UploadAsync(Guid packId, StickerUploadFile file, CancellationToken token)
+    {
+        try
+        {
+            var result = await cloudinary.UploadAsync(new ImageUploadParams
+            {
+                File = new FileDescription(file.FileName, file.Content),
+                Folder = $"viora/stickers/{packId:N}",
+                UseFilename = false,
+                UniqueFilename = true,
+                Overwrite = false
+            }, token);
+            EnsureUploadSucceeded(result.Error, result.SecureUrl);
+            return result.SecureUrl!.AbsoluteUri;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (CreatePostException) { throw; }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Unexpected Cloudinary sticker upload exception. PackId={PackId}", packId);
+            throw new CreatePostException("MEDIA_UPLOAD_FAILED", "Khong the tai nhan dan len dich vu luu tru.", exception);
         }
     }
 

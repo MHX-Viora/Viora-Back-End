@@ -108,7 +108,8 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
         var oneDayAgo = now.AddDays(-1);
         var threeDaysAgo = now.AddDays(-3);
         var sevenDaysAgo = now.AddDays(-7);
-        var hasBehavior = viewerUserId.HasValue && await HasBehaviorAsync(viewerUserId.Value, cancellationToken);
+        var hasBehavior = query.Sort is null && viewerUserId.HasValue &&
+            await HasBehaviorAsync(viewerUserId.Value, cancellationToken);
 
         var posts = dbContext.Posts
             .AsNoTracking()
@@ -127,6 +128,19 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
         if (query.UserId.HasValue)
         {
             posts = posts.Where(post => post.UserId == query.UserId.Value);
+        }
+
+        if (query.PostType.HasValue)
+        {
+            posts = posts.Where(post => post.PostType == query.PostType.Value);
+        }
+
+        if (query.Sort == PostFeedSort.Recommended && viewerUserId.HasValue)
+        {
+            posts = posts.Where(post => !dbContext.ArticleInteractions.Any(interaction =>
+                interaction.UserId == viewerUserId.Value &&
+                interaction.ArticleId == post.Id &&
+                interaction.InteractionType == ArticleInteractionType.NotInterested));
         }
 
         if (!string.IsNullOrWhiteSpace(query.Keyword))
@@ -154,6 +168,26 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
             HasViewed = viewerUserId.HasValue && dbContext.ViewHistories.Any(view =>
                 view.UserId == viewerUserId.Value &&
                 view.PostId == post.Id),
+            HasStrongAuthorRead = viewerUserId.HasValue && dbContext.ArticleInteractions.Any(interaction =>
+                interaction.UserId == viewerUserId.Value &&
+                interaction.Article.UserId == post.UserId &&
+                interaction.ArticleId != post.Id &&
+                interaction.InteractionType == ArticleInteractionType.View &&
+                interaction.ReadPercentage >= 70),
+            HasAuthorInteraction = viewerUserId.HasValue && (
+                dbContext.PostReactions.Any(reaction =>
+                    reaction.UserId == viewerUserId.Value &&
+                    reaction.Post.UserId == post.UserId &&
+                    reaction.PostId != post.Id) ||
+                dbContext.SavedPosts.Any(saved =>
+                    saved.UserId == viewerUserId.Value &&
+                    saved.Post.UserId == post.UserId &&
+                    saved.PostId != post.Id) ||
+                dbContext.Comments.Any(comment =>
+                    comment.UserId == viewerUserId.Value &&
+                    comment.Post.UserId == post.UserId &&
+                    comment.PostId != post.Id &&
+                    comment.DeletedAt == null)),
             HasInterestedHashtag = viewerUserId.HasValue && dbContext.PostHashtags.Any(postTag =>
                 postTag.PostId == post.Id &&
                 dbContext.PostHashtags.Any(historyTag =>
@@ -187,33 +221,79 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
                 saved.PostId == post.Id)
         });
 
-        var ordered = ranked
-            .OrderByDescending(item => hasBehavior
-                ? (item.IsFriend ? 1300 : 0) +
-                    (item.IsFollowed ? 900 : 0) +
-                    (item.HasInterestedHashtag ? 600 : 0) +
-                    (item.Post.CreatedAt >= oneDayAgo ? 300 :
-                        item.Post.CreatedAt >= threeDaysAgo ? 180 :
-                        item.Post.CreatedAt >= sevenDaysAgo ? 80 : 20) +
-                    item.Post.ReactionCount * 4 +
-                    item.Post.CommentCount * 6 +
-                    item.Post.ShareCount * 8 +
-                    item.Post.SaveCount * 5 +
-                    item.Post.ViewCount -
-                    (item.HasViewed ? 250 : 0)
-                : item.PopularHashtagScore * 3 +
-                    item.Post.ReactionCount * 5 +
-                    item.Post.CommentCount * 7 +
-                    item.Post.ShareCount * 9 +
-                    item.Post.SaveCount * 6 +
-                    item.Post.ViewCount +
-                    (item.Post.CreatedAt >= oneDayAgo ? 180 :
-                        item.Post.CreatedAt >= threeDaysAgo ? 110 :
-                        item.Post.CreatedAt >= sevenDaysAgo ? 55 : 10))
-            .ThenByDescending(item => item.Post.ReactionCount + item.Post.CommentCount + item.Post.ShareCount + item.Post.SaveCount)
-            .ThenByDescending(item => item.PopularHashtagScore)
-            .ThenByDescending(item => item.Post.CreatedAt)
-            .ThenBy(item => item.Post.Id);
+        var ordered = query.Sort switch
+        {
+            PostFeedSort.Recommended => ranked
+                .OrderByDescending(item =>
+                    (
+                        (item.HasInterestedHashtag ? .55d : 0d) +
+                        (item.HasStrongAuthorRead ? .45d : 0d)
+                    ) * ArticleRecommendationScoring.InterestWeight +
+                    (
+                        1d - Math.Exp(-(
+                            item.Post.ViewCount * ArticleRecommendationScoring.ViewEngagementWeight +
+                            item.Post.ReactionCount * ArticleRecommendationScoring.ReactionEngagementWeight +
+                            item.Post.CommentCount * ArticleRecommendationScoring.CommentEngagementWeight +
+                            item.Post.ShareCount * ArticleRecommendationScoring.ShareEngagementWeight +
+                            item.Post.SaveCount * ArticleRecommendationScoring.SaveEngagementWeight
+                        ) / ArticleRecommendationScoring.EngagementNormalizationScale)
+                    ) * ArticleRecommendationScoring.EngagementWeight +
+                    Math.Exp(-Math.Max((now - item.Post.CreatedAt).TotalHours, 0d) /
+                        ArticleRecommendationScoring.FreshnessHalfLifeHours) *
+                        ArticleRecommendationScoring.FreshnessWeight +
+                    (
+                        (item.IsFollowed ? .6d : 0d) +
+                        (item.HasAuthorInteraction ? .4d : 0d)
+                    ) * ArticleRecommendationScoring.AuthorAffinityWeight +
+                    (item.Post.ViewCount < 10 ? 1d : .1d) *
+                        ArticleRecommendationScoring.DiscoveryWeight -
+                    (item.HasViewed ? .12d : 0d))
+                .ThenByDescending(item => item.Post.CreatedAt)
+                .ThenBy(item => item.Post.Id),
+            PostFeedSort.Trending => ranked
+                .OrderByDescending(item =>
+                    (item.Post.ViewCount * ArticleRecommendationScoring.ViewEngagementWeight +
+                        item.Post.ReactionCount * ArticleRecommendationScoring.ReactionEngagementWeight +
+                        item.Post.CommentCount * ArticleRecommendationScoring.CommentEngagementWeight +
+                        item.Post.ShareCount * ArticleRecommendationScoring.ShareEngagementWeight +
+                        item.Post.SaveCount * ArticleRecommendationScoring.SaveEngagementWeight) /
+                    Math.Pow(
+                        Math.Max((now - item.Post.CreatedAt).TotalHours, 0d) +
+                            ArticleTrendingRanking.TimeOffsetHours,
+                        ArticleTrendingRanking.DecayExponent))
+                .ThenByDescending(item => item.Post.CreatedAt)
+                .ThenBy(item => item.Post.Id),
+            PostFeedSort.Latest => ranked
+                .OrderByDescending(item => item.Post.CreatedAt)
+                .ThenBy(item => item.Post.Id),
+            _ => ranked
+                .OrderByDescending(item => hasBehavior
+                    ? (item.IsFriend ? 1300 : 0) +
+                        (item.IsFollowed ? 900 : 0) +
+                        (item.HasInterestedHashtag ? 600 : 0) +
+                        (item.Post.CreatedAt >= oneDayAgo ? 300 :
+                            item.Post.CreatedAt >= threeDaysAgo ? 180 :
+                            item.Post.CreatedAt >= sevenDaysAgo ? 80 : 20) +
+                        item.Post.ReactionCount * 4 +
+                        item.Post.CommentCount * 6 +
+                        item.Post.ShareCount * 8 +
+                        item.Post.SaveCount * 5 +
+                        item.Post.ViewCount -
+                        (item.HasViewed ? 250 : 0)
+                    : item.PopularHashtagScore * 3 +
+                        item.Post.ReactionCount * 5 +
+                        item.Post.CommentCount * 7 +
+                        item.Post.ShareCount * 9 +
+                        item.Post.SaveCount * 6 +
+                        item.Post.ViewCount +
+                        (item.Post.CreatedAt >= oneDayAgo ? 180 :
+                            item.Post.CreatedAt >= threeDaysAgo ? 110 :
+                            item.Post.CreatedAt >= sevenDaysAgo ? 55 : 10))
+                .ThenByDescending(item => item.Post.ReactionCount + item.Post.CommentCount + item.Post.ShareCount + item.Post.SaveCount)
+                .ThenByDescending(item => item.PopularHashtagScore)
+                .ThenByDescending(item => item.Post.CreatedAt)
+                .ThenBy(item => item.Post.Id)
+        };
 
         var items = await ordered
             .Skip(skip)
@@ -346,5 +426,8 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
         await dbContext.Follows.AsNoTracking().AnyAsync(follow => follow.FollowerId == viewerUserId, cancellationToken) ||
         await dbContext.ViewHistories.AsNoTracking().AnyAsync(view => view.UserId == viewerUserId, cancellationToken) ||
         await dbContext.PostReactions.AsNoTracking().AnyAsync(reaction => reaction.UserId == viewerUserId, cancellationToken) ||
-        await dbContext.SavedPosts.AsNoTracking().AnyAsync(saved => saved.UserId == viewerUserId, cancellationToken);
+        await dbContext.SavedPosts.AsNoTracking().AnyAsync(saved => saved.UserId == viewerUserId, cancellationToken) ||
+        await dbContext.ArticleInteractions.AsNoTracking().AnyAsync(
+            interaction => interaction.UserId == viewerUserId,
+            cancellationToken);
 }

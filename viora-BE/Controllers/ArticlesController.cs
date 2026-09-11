@@ -14,6 +14,21 @@ namespace viora_BE.Controllers;
 [Authorize]
 public sealed class ArticlesController(IMediator mediator, IMediaStorage mediaStorage) : ControllerBase
 {
+    [HttpGet("recommended")]
+    [ProducesResponseType<PostFeedResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PostFeedResponse>> Recommended(
+        [FromQuery, System.ComponentModel.DataAnnotations.Range(1, int.MaxValue)] int page = 1,
+        [FromQuery, System.ComponentModel.DataAnnotations.Range(1, 100)] int pageSize = 10,
+        [FromQuery, System.ComponentModel.DataAnnotations.MaxLength(255)] string? keyword = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        return Ok(await mediator.Send(
+            new GetRecommendedArticlesQuery(userId, page, pageSize, keyword),
+            cancellationToken));
+    }
+
     [HttpPost("media")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(100_000_000)]
@@ -99,10 +114,29 @@ public sealed class ArticlesController(IMediator mediator, IMediaStorage mediaSt
         return ToResult(await mediator.Send(new GetArticleQuery(userId, id), cancellationToken));
     }
 
+    [HttpPost("{id:guid}/interactions")]
+    [ProducesResponseType<ArticleInteractionResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RecordInteraction(
+        Guid id,
+        RecordArticleInteractionRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        return ToResult(await mediator.Send(new RecordArticleInteractionCommand(
+            userId,
+            id,
+            request.InteractionType,
+            request.ReadDuration,
+            request.ReadPercentage), cancellationToken));
+    }
+
     private bool TryGetUserId(out Guid userId) =>
         Guid.TryParse(User.FindFirstValue("user_id"), out userId);
 
-    private IActionResult ToResult(Result<ArticleResponse> result)
+    private IActionResult ToResult<T>(Result<T> result)
     {
         if (result.IsSuccess) return Ok(result.Value);
         var status = result.Error switch
@@ -142,3 +176,8 @@ public sealed record ArticleMediaUploadResponse(
     string MediaUrl,
     string? ThumbnailUrl,
     ArticleBlockType Type);
+
+public sealed record RecordArticleInteractionRequest(
+    ArticleInteractionType InteractionType,
+    int ReadDuration = 0,
+    decimal ReadPercentage = 0);

@@ -29,6 +29,17 @@ public enum ArticleBlockType : short
 public enum PostVisibility : short { Public = 0, Followers = 1, Private = 2 }
 public enum PostStatus : short { Draft = 0, Published = 1, Hidden = 2, Deleted = 3 }
 public enum ReactionType : short { Like = 0, Love = 1, Haha = 2, Wow = 3, Sad = 4, Angry = 5 }
+public enum ArticleInteractionType : short
+{
+    Impression = 0,
+    Open = 1,
+    View = 2,
+    Like = 3,
+    Comment = 4,
+    Share = 5,
+    Save = 6,
+    NotInterested = 7
+}
 public enum CommentStatus : short { Hidden = 0, Published = 1, Deleted = 2 }
 public enum FriendshipStatus : short { Pending = 0, Accepted = 1, Rejected = 2, Cancelled = 3, Blocked = 4, Unfriended = 5 }
 public enum ConversationType : short { Private = 0, Group = 1 }
@@ -36,6 +47,8 @@ public enum ConversationSendPermission : short { Everyone = 0, AdminsAndOwner = 
 public enum ConversationMemberRole : short { Member = 0, Admin = 1, Owner = 2 }
 public enum ConversationMemberStatus : short { Active = 0, Left = 1, Kicked = 2 }
 public enum MessageType : short { Text = 0, Image = 1, Video = 2, File = 3, Audio = 4, Sticker = 5, Location = 6, Recall = 7, System = 100 }
+public enum StickerFormat : short { Png = 0, WebP = 1, Gif = 2, AnimatedWebP = 3 }
+public enum StickerPurchaseStatus : short { Pending = 0, Completed = 1, Failed = 2, Refunded = 3 }
 public enum NotificationType : short
 {
     System = 0, FriendRequest = 1, FriendAccepted = 2, Follow = 3, PostLike = 4,
@@ -55,3 +68,7 @@ public enum GroupCallType : short { Audio = 0, Video = 1 }
 public enum GroupCallStatus : short { Active = 0, Ended = 1 }
 public enum LegalDocumentType : short { TermsOfService = 0, PrivacyPolicy = 1, PermissionPolicy = 2, CommunityGuidelines = 3, Other = 4 }
 public enum MentionTargetType : short { Post = 0, Comment = 1, Reply = 2, Message = 3 }
+public enum MiniAppStatus : short { Draft = 0, PendingReview = 1, Active = 2, Suspended = 3, Rejected = 4, Deleted = 5 }
+public enum DeveloperStatus : short { Pending = 0, Active = 1, Suspended = 2, Rejected = 3 }
+public enum MiniAppPermissionStatus : short { Inactive = 0, Active = 1 }
+public enum MiniAppLaunchStatus : short { Succeeded = 0, Failed = 1 }

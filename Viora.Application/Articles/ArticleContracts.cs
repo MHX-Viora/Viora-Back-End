@@ -80,7 +80,7 @@ public interface IArticleRepository
     Task AddAsync(Post article, CancellationToken cancellationToken);
     Task<Post?> GetForUpdateAsync(Guid articleId, CancellationToken cancellationToken);
     Task PrepareBlockOrderUpdateAsync(Post article, CancellationToken cancellationToken);
-    Task RecordViewAsync(Guid userId, Guid articleId, CancellationToken cancellationToken);
+    Task<bool> RecordViewAsync(Guid userId, Guid articleId, CancellationToken cancellationToken);
     Task<Result<ArticleResponse>> GetAsync(Guid userId, Guid articleId, CancellationToken cancellationToken);
 }
 

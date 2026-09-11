@@ -149,3 +149,28 @@ internal sealed class ViewHistoryConfiguration : IEntityTypeConfiguration<ViewHi
         builder.HasOne(x => x.Post).WithMany().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class ArticleInteractionConfiguration : IEntityTypeConfiguration<ArticleInteraction>
+{
+    public void Configure(EntityTypeBuilder<ArticleInteraction> builder)
+    {
+        builder.ToTable("ArticleInteractions", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_ArticleInteractions_ReadDuration",
+                "\"ReadDuration\" >= 0 AND \"ReadDuration\" <= 86400");
+            table.HasCheckConstraint(
+                "CK_ArticleInteractions_ReadPercentage",
+                "\"ReadPercentage\" >= 0 AND \"ReadPercentage\" <= 100");
+        });
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.InteractionType).IsRequired();
+        builder.Property(x => x.ReadDuration).HasDefaultValue(0);
+        builder.Property(x => x.ReadPercentage).HasPrecision(5, 2).HasDefaultValue(0m);
+        builder.HasIndex(x => new { x.UserId, x.ArticleId, x.InteractionType }).IsUnique();
+        builder.HasIndex(x => new { x.UserId, x.CreatedAt });
+        builder.HasIndex(x => new { x.ArticleId, x.InteractionType, x.CreatedAt });
+        builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Article).WithMany().HasForeignKey(x => x.ArticleId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
