@@ -25,9 +25,11 @@ public sealed class ExternalLogin : AuditableEntity
 public sealed class RefreshToken : AuditableEntity
 {
     public Guid AccountId { get; set; }
+    public Guid? SessionId { get; set; }
     public string TokenHash { get; set; } = null!;
     public DateTime ExpiresAt { get; set; }
     public DateTime? RevokedAt { get; set; }
+    public Guid? ReplacedByTokenId { get; set; }
     public string? ReplacedByTokenHash { get; set; }
     public Account Account { get; set; } = null!;
 }

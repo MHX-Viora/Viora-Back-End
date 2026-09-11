@@ -69,17 +69,25 @@ public sealed class AccountRepository(AppDbContext dbContext) : IAccountReposito
         DateTime revokedAt,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var changed = await dbContext.RefreshTokens
             .Where(token => token.Id == currentTokenId && token.RevokedAt == null && token.ExpiresAt > revokedAt)
             .ExecuteUpdateAsync(
                 setters => setters
-                    .SetProperty(token => token.TokenHash, replacement.TokenHash)
-                    .SetProperty(token => token.ExpiresAt, replacement.ExpiresAt)
-                    .SetProperty(token => token.RevokedAt, (DateTime?)null)
-                    .SetProperty(token => token.ReplacedByTokenHash, (string?)null)
+                    .SetProperty(token => token.RevokedAt, revokedAt)
+                    .SetProperty(token => token.ReplacedByTokenId, replacement.Id)
                     .SetProperty(token => token.UpdatedAt, revokedAt),
                 cancellationToken);
-        return changed > 0;
+        if (changed == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await dbContext.RefreshTokens.AddAsync(replacement, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     public Task RevokeRefreshTokenAsync(string tokenHash, Guid accountId, DateTime revokedAt, CancellationToken cancellationToken) =>
@@ -104,6 +112,23 @@ public sealed class AccountRepository(AppDbContext dbContext) : IAccountReposito
                     .SetProperty(token => token.RevokedAt, revokedAt)
                     .SetProperty(token => token.UpdatedAt, revokedAt),
                 cancellationToken);
+
+    public Task RevokeRefreshTokensForSessionAsync(Guid sessionId, DateTime revokedAt, CancellationToken cancellationToken) =>
+        dbContext.RefreshTokens
+            .Where(token => token.SessionId == sessionId &&
+                token.RevokedAt == null &&
+                token.ExpiresAt > revokedAt)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(token => token.RevokedAt, revokedAt)
+                    .SetProperty(token => token.UpdatedAt, revokedAt),
+                cancellationToken);
+
+    public Task<int> DeleteRetainedRefreshTokensAsync(DateTime cutoff, CancellationToken cancellationToken) =>
+        dbContext.RefreshTokens
+            .Where(token => token.ExpiresAt <= cutoff ||
+                (token.RevokedAt != null && token.RevokedAt <= cutoff))
+            .ExecuteDeleteAsync(cancellationToken);
 
     public async Task ChangePasswordAndRevokeRefreshTokensAsync(
         Account account,

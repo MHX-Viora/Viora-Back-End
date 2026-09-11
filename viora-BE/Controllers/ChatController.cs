@@ -84,12 +84,20 @@ public sealed class ChatController(IMediator mediator, IGroupChatService groupCh
         Guid conversationId,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 30,
+        [FromQuery] Guid? afterMessageId = null,
+        [FromQuery] Guid? beforeMessageId = null,
         CancellationToken cancellationToken = default)
     {
         if (!TryGetViewerUserId(out var userId)) return Unauthorized();
 
         var result = await mediator.Send(
-            new GetChatConversationMessagesQuery(userId, conversationId, page, pageSize),
+            new GetChatConversationMessagesQuery(
+                userId,
+                conversationId,
+                page,
+                pageSize,
+                afterMessageId,
+                beforeMessageId),
             cancellationToken);
 
         if (result.IsSuccess)

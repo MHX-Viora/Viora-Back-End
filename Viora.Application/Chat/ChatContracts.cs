@@ -26,7 +26,9 @@ public sealed record GetChatConversationMessagesQuery(
     Guid UserId,
     Guid ConversationId,
     int Page,
-    int PageSize) : IRequest<ChatResult<ChatMessageListResponse>>;
+    int PageSize,
+    Guid? AfterMessageId = null,
+    Guid? BeforeMessageId = null) : IRequest<ChatResult<ChatMessageListResponse>>;
 
 public sealed record SendChatMessageCommand(
     Guid SenderUserId,

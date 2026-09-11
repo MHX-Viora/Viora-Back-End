@@ -140,10 +140,14 @@ public sealed class GoogleLoginServiceTests
 
     private sealed class FakeTokenService : ITokenService
     {
-        public IssuedAccountTokens CreateTokens(Account account) => new(
-            new AccountTokens("access", "refresh"),
-            "hash",
-            DateTime.UtcNow.AddDays(1));
+        public IssuedAccountTokens CreateTokens(Account account, Guid? sessionId = null) => new(
+            new AccountTokens(
+                "access",
+                "refresh",
+                DateTime.UtcNow.AddMinutes(15),
+                DateTime.UtcNow.AddDays(1),
+                sessionId ?? Guid.NewGuid()),
+            "hash");
 
         public string HashRefreshToken(string refreshToken) => "hash";
     }

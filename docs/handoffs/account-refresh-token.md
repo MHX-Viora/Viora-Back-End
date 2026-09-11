@@ -1,17 +1,19 @@
-# Account Refresh Token Handoff
+# Account Refresh Token Handoff (Superseded)
+
+> See [`auth-token-lifecycle.md`](auth-token-lifecycle.md) for the current implementation and rollout guidance.
 
 ## API
-- Login success returns only `accessToken` in JSON and sets an HttpOnly `refreshToken` cookie.
-- `POST /api/accounts/refresh-token` has no body and reads that cookie.
-- Success: HTTP 200 with `accessToken` and a rotated cookie.
+- Web login returns access metadata and sets an HttpOnly `refreshToken` cookie; native opts into both tokens in JSON.
+- `POST /api/accounts/refresh-token` accepts optional JSON and falls back to that cookie.
+- Success rotates a session-scoped database row and returns expiry/session metadata.
 - Invalid, expired, revoked, replayed, or inactive-account token: HTTP 401 with a generic message.
 
 ## Storage and Security
 - Apply migration `AddRefreshTokens` before deployment.
-- Raw refresh tokens are returned once and never persisted; the database stores SHA-256 hashes.
-- Rotation uses a conditional database update inside a transaction, so concurrent reuse has one winner.
+- Raw refresh tokens are never persisted by the backend; native stores them in SecureStore and the database stores only SHA-256 hashes.
+- Rotation conditionally revokes the old row and inserts its replacement inside one transaction, so concurrent reuse has one winner.
 - Configure `Jwt:RefreshTokenDays` / `Jwt__RefreshTokenDays`; default is 30 and values must be positive.
 - The existing `auth` rate-limit policy covers login and refresh.
 
 ## Client Flow
-Call the refresh endpoint with credentials enabled so the browser sends the cookie. Replace the local access token with the response and force login on HTTP 401; JavaScript never reads the refresh token.
+Web sends credentials so the browser owns the cookie. Native sends the SecureStore token. The shared client single-flights refresh, persists both rotated credentials where applicable, retries once, and clears auth only for an invalid refresh.

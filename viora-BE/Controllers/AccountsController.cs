@@ -3,6 +3,7 @@ using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 using Viora.Application.Accounts;
 using Viora.Domain.Entities;
@@ -19,6 +20,7 @@ public sealed class AccountsController(
 {
     private const string RefreshTokenCookieName = "refreshToken";
     private const string RefreshTokenCookiePath = "/api/accounts";
+    private const string RefreshTokenTransportHeader = "X-ANKT-Refresh-Token";
 
     [HttpGet]
     [ProducesResponseType<PagedAccountResponse>(StatusCodes.Status200OK)]
@@ -79,10 +81,14 @@ public sealed class AccountsController(
 
         if (result.Outcome == LoginOutcome.Active)
         {
-            SetRefreshTokenCookie(result.Tokens!.RefreshToken);
+            SetRefreshTokenCookie(result.Tokens!.RefreshToken, result.Tokens.RefreshTokenExpiresAt);
             return Ok(new LoginSuccessResponse(
                 result.Status!.Value,
                 result.Tokens!.AccessToken,
+                RefreshTokenForResponse(result.Tokens.RefreshToken),
+                result.Tokens.AccessTokenExpiresAt,
+                result.Tokens.RefreshTokenExpiresAt,
+                result.Tokens.SessionId,
                 result.User));
         }
 
@@ -110,10 +116,14 @@ public sealed class AccountsController(
 
         if (result.Outcome == LoginOutcome.Active)
         {
-            SetRefreshTokenCookie(result.Tokens!.RefreshToken);
+            SetRefreshTokenCookie(result.Tokens!.RefreshToken, result.Tokens.RefreshTokenExpiresAt);
             return Ok(new LoginSuccessResponse(
                 result.Status!.Value,
                 result.Tokens.AccessToken,
+                RefreshTokenForResponse(result.Tokens.RefreshToken),
+                result.Tokens.AccessTokenExpiresAt,
+                result.Tokens.RefreshTokenExpiresAt,
+                result.Tokens.SessionId,
                 result.User));
         }
 
@@ -131,9 +141,16 @@ public sealed class AccountsController(
     [ProducesResponseType<RefreshTokenSuccessResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<LoginMessageResponse>(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult> RefreshToken(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] RefreshTokenRequest? request,
         CancellationToken cancellationToken)
     {
-        if (!Request.Cookies.TryGetValue(RefreshTokenCookieName, out var refreshToken))
+        var refreshToken = request?.RefreshToken;
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            Request.Cookies.TryGetValue(RefreshTokenCookieName, out refreshToken);
+        }
+
+        if (string.IsNullOrWhiteSpace(refreshToken))
         {
             return Unauthorized(new LoginMessageResponse(null, "Refresh token không hợp lệ hoặc đã hết hạn."));
         }
@@ -148,8 +165,13 @@ public sealed class AccountsController(
             return Unauthorized(new LoginMessageResponse(null, result.Message!));
         }
 
-        SetRefreshTokenCookie(result.Tokens!.RefreshToken);
-        return Ok(new RefreshTokenSuccessResponse(result.Tokens.AccessToken));
+        SetRefreshTokenCookie(result.Tokens!.RefreshToken, result.Tokens.RefreshTokenExpiresAt);
+        return Ok(new RefreshTokenSuccessResponse(
+            result.Tokens.AccessToken,
+            RefreshTokenForResponse(result.Tokens.RefreshToken),
+            result.Tokens.AccessTokenExpiresAt,
+            result.Tokens.RefreshTokenExpiresAt,
+            result.Tokens.SessionId));
     }
 
     [HttpPost("logout")]
@@ -157,14 +179,20 @@ public sealed class AccountsController(
     [EnableRateLimiting("auth")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    public async Task<IActionResult> Logout(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] RefreshTokenRequest? request,
+        CancellationToken cancellationToken)
     {
         if (!TryGetAccountId(out var accountId))
         {
             return Unauthorized(new LoginMessageResponse(null, "Token không hợp lệ."));
         }
 
-        Request.Cookies.TryGetValue(RefreshTokenCookieName, out var refreshToken);
+        var refreshToken = request?.RefreshToken;
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            Request.Cookies.TryGetValue(RefreshTokenCookieName, out refreshToken);
+        }
         await accountService.LogoutAsync(new LogoutAccountCommand(refreshToken, accountId), cancellationToken);
         Response.Cookies.Delete(RefreshTokenCookieName, RefreshTokenCookieOptions());
         return NoContent();
@@ -248,8 +276,16 @@ public sealed class AccountsController(
         return new ObjectResult(problem) { StatusCode = status };
     }
 
-    private void SetRefreshTokenCookie(string refreshToken) =>
-        Response.Cookies.Append(RefreshTokenCookieName, refreshToken, RefreshTokenCookieOptions());
+    private void SetRefreshTokenCookie(string refreshToken, DateTime expiresAt) =>
+        Response.Cookies.Append(RefreshTokenCookieName, refreshToken, RefreshTokenCookieOptions(expiresAt));
+
+    private string? RefreshTokenForResponse(string refreshToken) =>
+        string.Equals(
+            Request.Headers[RefreshTokenTransportHeader],
+            "body",
+            StringComparison.OrdinalIgnoreCase)
+            ? refreshToken
+            : null;
 
     private bool TryGetAccountId(out Guid accountId)
     {
@@ -257,12 +293,13 @@ public sealed class AccountsController(
         return Guid.TryParse(value, out accountId);
     }
 
-    private static CookieOptions RefreshTokenCookieOptions() => new()
+    private static CookieOptions RefreshTokenCookieOptions(DateTime? expiresAt = null) => new()
     {
         HttpOnly = true,
         Secure = true,
         SameSite = SameSiteMode.None,
-        Path = RefreshTokenCookiePath
+        Path = RefreshTokenCookiePath,
+        Expires = expiresAt is null ? null : new DateTimeOffset(DateTime.SpecifyKind(expiresAt.Value, DateTimeKind.Utc))
     };
 }
 
@@ -282,9 +319,20 @@ public sealed record GoogleLoginRequest(
 public sealed record LoginSuccessResponse(
     AccountStatus Status,
     string AccessToken,
+    string? RefreshToken,
+    DateTime AccessTokenExpiresAt,
+    DateTime RefreshTokenExpiresAt,
+    Guid SessionId,
     UserResponse? User);
 
-public sealed record RefreshTokenSuccessResponse(string AccessToken);
+public sealed record RefreshTokenRequest([param: MaxLength(512)] string? RefreshToken);
+
+public sealed record RefreshTokenSuccessResponse(
+    string AccessToken,
+    string? RefreshToken,
+    DateTime AccessTokenExpiresAt,
+    DateTime RefreshTokenExpiresAt,
+    Guid SessionId);
 
 public sealed record LoginMessageResponse(AccountStatus? Status, string Message);
 
