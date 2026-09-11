@@ -357,12 +357,45 @@ public sealed class ChatConversationRepository(
             .AsNoTracking()
             .Where(message => message.ConversationId == query.ConversationId);
 
+        if (query.AfterMessageId.HasValue && query.BeforeMessageId.HasValue)
+        {
+            return ChatResult<ChatMessageListResponse>.Failure(
+                ChatError.Validation,
+                "Chi duoc su dung mot message cursor.");
+        }
+
+        var isAfterCursor = query.AfterMessageId.HasValue;
+        var cursorId = query.AfterMessageId ?? query.BeforeMessageId;
+        if (cursorId.HasValue)
+        {
+            var cursorCreatedAt = await messages
+                .Where(message => message.Id == cursorId.Value)
+                .Select(message => (DateTime?)message.CreatedAt)
+                .SingleOrDefaultAsync(cancellationToken);
+            if (!cursorCreatedAt.HasValue)
+            {
+                return ChatResult<ChatMessageListResponse>.Failure(
+                    ChatError.MessageNotFound,
+                    "Khong tim thay message cursor trong cuoc tro chuyen.");
+            }
+
+            messages = isAfterCursor
+                ? messages.Where(message =>
+                    message.CreatedAt >= cursorCreatedAt.Value && message.Id != cursorId.Value)
+                : messages.Where(message =>
+                    message.CreatedAt <= cursorCreatedAt.Value && message.Id != cursorId.Value);
+            page = 1;
+            skip = 0;
+        }
+
         var totalItems = await messages.CountAsync(cancellationToken);
         var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
 
-        var pageMessages = await messages
-            .OrderByDescending(message => message.CreatedAt)
-            .ThenByDescending(message => message.Id)
+        var orderedMessages = isAfterCursor
+            ? messages.OrderBy(message => message.CreatedAt).ThenBy(message => message.Id)
+            : messages.OrderByDescending(message => message.CreatedAt).ThenByDescending(message => message.Id);
+
+        var pageMessages = await orderedMessages
             .Skip(skip)
             .Take(pageSize)
             .Select(message => new
@@ -485,7 +518,7 @@ public sealed class ChatConversationRepository(
             })
             .ToList();
 
-        items.Reverse();
+        if (!isAfterCursor) items.Reverse();
 
         return ChatResult<ChatMessageListResponse>.Success(
             new ChatMessageListResponse(page, pageSize, totalItems, totalPages, conversationResponse, items));
