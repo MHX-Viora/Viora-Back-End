@@ -15,6 +15,7 @@ public sealed class JwtOptions
     public string Audience { get; set; } = "viora-client";
     public int AccessTokenMinutes { get; set; } = 15;
     public int RefreshTokenDays { get; set; } = 30;
+    public int RefreshTokenRetentionDays { get; set; } = 14;
 }
 
 public sealed class JwtTokenService : ITokenService
@@ -35,19 +36,26 @@ public sealed class JwtTokenService : ITokenService
         {
             throw new InvalidOperationException("JWT token lifetimes must be greater than zero.");
         }
+        if (this.options.RefreshTokenRetentionDays is < 7 or > 30)
+        {
+            throw new InvalidOperationException("Jwt:RefreshTokenRetentionDays must be between 7 and 30.");
+        }
     }
 
-    public IssuedAccountTokens CreateTokens(Account account)
+    public IssuedAccountTokens CreateTokens(Account account, Guid? sessionId = null)
     {
         var now = DateTimeOffset.UtcNow;
+        var accessExpiresAt = now.AddMinutes(options.AccessTokenMinutes);
         var refreshToken = Base64Url(RandomNumberGenerator.GetBytes(64));
         var refreshExpiresAt = now.AddDays(options.RefreshTokenDays);
         return new IssuedAccountTokens(
             new AccountTokens(
-                CreateToken(account, "access", now, now.AddMinutes(options.AccessTokenMinutes)),
-                refreshToken),
-            HashRefreshToken(refreshToken),
-            refreshExpiresAt.UtcDateTime);
+                CreateToken(account, "access", now, accessExpiresAt),
+                refreshToken,
+                accessExpiresAt.UtcDateTime,
+                refreshExpiresAt.UtcDateTime,
+                sessionId ?? Guid.NewGuid()),
+            HashRefreshToken(refreshToken));
     }
 
     public string HashRefreshToken(string refreshToken) =>

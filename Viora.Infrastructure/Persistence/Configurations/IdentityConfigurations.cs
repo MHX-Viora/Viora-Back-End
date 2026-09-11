@@ -63,6 +63,13 @@ internal sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refre
         builder.Property(x => x.ReplacedByTokenHash).HasMaxLength(64);
         builder.HasIndex(x => x.TokenHash).IsUnique();
         builder.HasIndex(x => new { x.AccountId, x.ExpiresAt });
+        builder.HasIndex(x => x.ExpiresAt);
+        builder.HasIndex(x => x.RevokedAt);
+        builder.HasIndex(x => x.ReplacedByTokenId);
+        builder.HasIndex(x => x.SessionId)
+            .IsUnique()
+            .HasFilter("\"SessionId\" IS NOT NULL AND \"RevokedAt\" IS NULL")
+            .HasDatabaseName("UX_RefreshTokens_SessionId_Active");
         builder.HasOne(x => x.Account)
             .WithMany(x => x.RefreshTokens)
             .HasForeignKey(x => x.AccountId)

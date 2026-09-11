@@ -17,13 +17,17 @@ public sealed record ChangePasswordCommand(Guid AccountId, string CurrentPasswor
 
 public enum LoginOutcome { InvalidCredentials, Banned, Active, Deleted }
 
-public sealed record AccountTokens(string AccessToken, string RefreshToken);
+public sealed record AccountTokens(
+    string AccessToken,
+    string RefreshToken,
+    DateTime AccessTokenExpiresAt,
+    DateTime RefreshTokenExpiresAt,
+    Guid SessionId);
 public sealed record IssuedAccountTokens(
     AccountTokens Tokens,
-    string RefreshTokenHash,
-    DateTime RefreshTokenExpiresAt);
+    string RefreshTokenHash);
 
-public enum RefreshTokenOutcome { Active, Invalid }
+public enum RefreshTokenOutcome { Active, Invalid, Expired, Revoked, Reused }
 public enum ChangePasswordOutcome { Success, AccountNotFound, InvalidCurrentPassword, SamePassword, ValidationFailed }
 
 public sealed record RefreshAccountTokenResult(
@@ -121,7 +125,9 @@ public interface IAccountRepository
         DateTime revokedAt,
         CancellationToken cancellationToken);
     Task RevokeRefreshTokenAsync(string tokenHash, Guid accountId, DateTime revokedAt, CancellationToken cancellationToken);
+    Task RevokeRefreshTokensForSessionAsync(Guid sessionId, DateTime revokedAt, CancellationToken cancellationToken);
     Task RevokeRefreshTokensForAccountAsync(Guid accountId, DateTime revokedAt, CancellationToken cancellationToken);
+    Task<int> DeleteRetainedRefreshTokensAsync(DateTime cutoff, CancellationToken cancellationToken);
     Task ChangePasswordAndRevokeRefreshTokensAsync(Account account, string passwordHash, DateTime changedAt, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
@@ -134,7 +140,7 @@ public interface IPasswordHasher
 
 public interface ITokenService
 {
-    IssuedAccountTokens CreateTokens(Account account);
+    IssuedAccountTokens CreateTokens(Account account, Guid? sessionId = null);
     string HashRefreshToken(string refreshToken);
 }
 

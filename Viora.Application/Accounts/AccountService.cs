@@ -2,6 +2,7 @@ using Viora.Domain.Entities;
 using FluentValidation;
 using System.Net.Mail;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using Viora.Application.Users;
 
 namespace Viora.Application.Accounts;
@@ -10,7 +11,8 @@ public sealed class AccountService(
     IAccountRepository repository,
     IPasswordHasher passwordHasher,
     ITokenService? tokenService = null,
-    IValidator<ChangePasswordCommand>? changePasswordValidator = null) : IAccountService
+    IValidator<ChangePasswordCommand>? changePasswordValidator = null,
+    ILogger<AccountService>? logger = null) : IAccountService
 {
     public async Task<PagedAccountResponse> ListAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
@@ -104,8 +106,9 @@ public sealed class AccountService(
         await repository.AddRefreshTokenAsync(new RefreshToken
         {
             AccountId = account.Id,
+            SessionId = issuedTokens.Tokens.SessionId,
             TokenHash = issuedTokens.RefreshTokenHash,
-            ExpiresAt = issuedTokens.RefreshTokenExpiresAt
+            ExpiresAt = issuedTokens.Tokens.RefreshTokenExpiresAt
         }, cancellationToken);
         account.LastLoginAt = DateTime.UtcNow;
         await repository.SaveChangesAsync(cancellationToken);
@@ -125,44 +128,76 @@ public sealed class AccountService(
         var tokens = tokenService ?? throw new InvalidOperationException("Token service is not configured.");
         if (string.IsNullOrWhiteSpace(command.RefreshToken))
         {
+            logger?.LogWarning("Refresh failed because no token was supplied");
             return InvalidRefreshToken();
         }
 
+        var now = DateTime.UtcNow;
         var current = await repository.FindRefreshTokenAsync(
             tokens.HashRefreshToken(command.RefreshToken),
             cancellationToken);
-        if (current is null || current.RevokedAt is not null || current.ExpiresAt <= DateTime.UtcNow ||
-            current.Account.Status != AccountStatus.Active || current.Account.DeletedAt is not null)
+        if (current is null)
         {
+            logger?.LogWarning("Refresh failed: token was not found");
             return InvalidRefreshToken();
         }
 
-        var issued = tokens.CreateTokens(current.Account);
+        if (current.RevokedAt is not null)
+        {
+            if (current.ReplacedByTokenId is not null && current.SessionId is Guid reusedSessionId)
+            {
+                await repository.RevokeRefreshTokensForSessionAsync(reusedSessionId, now, cancellationToken);
+                logger?.LogWarning("Refresh token reuse detected for session {SessionId}", reusedSessionId);
+                return InvalidRefreshToken(RefreshTokenOutcome.Reused);
+            }
+
+            logger?.LogWarning("Refresh rejected because the token was revoked");
+            return InvalidRefreshToken(RefreshTokenOutcome.Revoked);
+        }
+
+        if (current.ExpiresAt <= now)
+        {
+            logger?.LogInformation("Refresh rejected because the token expired");
+            return InvalidRefreshToken(RefreshTokenOutcome.Expired);
+        }
+
+        if (current.Account.Status != AccountStatus.Active || current.Account.DeletedAt is not null)
+        {
+            logger?.LogWarning("Refresh rejected because account {AccountId} is inactive", current.AccountId);
+            return InvalidRefreshToken();
+        }
+
+        var sessionId = current.SessionId ?? Guid.NewGuid();
+        var issued = tokens.CreateTokens(current.Account, sessionId);
         var replacement = new RefreshToken
         {
+            Account = current.Account,
             AccountId = current.AccountId,
+            SessionId = sessionId,
             TokenHash = issued.RefreshTokenHash,
-            ExpiresAt = issued.RefreshTokenExpiresAt
+            ExpiresAt = issued.Tokens.RefreshTokenExpiresAt
         };
         var rotated = await repository.RotateRefreshTokenAsync(
             current.Id,
             replacement,
-            DateTime.UtcNow,
+            now,
             cancellationToken);
 
-        return rotated
-            ? new RefreshAccountTokenResult(RefreshTokenOutcome.Active, issued.Tokens, null)
-            : InvalidRefreshToken();
+        if (!rotated)
+        {
+            logger?.LogWarning("Refresh lost a concurrent rotation for session {SessionId}", sessionId);
+            return InvalidRefreshToken();
+        }
+
+        logger?.LogInformation("Refresh succeeded for account {AccountId}, session {SessionId}", current.AccountId, sessionId);
+        return new RefreshAccountTokenResult(RefreshTokenOutcome.Active, issued.Tokens, null);
     }
 
     public async Task LogoutAsync(LogoutAccountCommand command, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(command.RefreshToken))
         {
-            await repository.RevokeRefreshTokensForAccountAsync(
-                command.AccountId,
-                DateTime.UtcNow,
-                cancellationToken);
+            logger?.LogWarning("Session logout for account {AccountId} had no refresh token", command.AccountId);
             return;
         }
 
@@ -172,6 +207,7 @@ public sealed class AccountService(
             command.AccountId,
             DateTime.UtcNow,
             cancellationToken);
+        logger?.LogInformation("Session logout completed for account {AccountId}", command.AccountId);
     }
 
     public async Task<ChangePasswordResult> ChangePasswordAsync(
@@ -307,8 +343,9 @@ public sealed class AccountService(
         null,
         null);
 
-    private static RefreshAccountTokenResult InvalidRefreshToken() => new(
-        RefreshTokenOutcome.Invalid,
+    private static RefreshAccountTokenResult InvalidRefreshToken(
+        RefreshTokenOutcome outcome = RefreshTokenOutcome.Invalid) => new(
+        outcome,
         null,
         "Refresh token không hợp lệ hoặc đã hết hạn.");
 

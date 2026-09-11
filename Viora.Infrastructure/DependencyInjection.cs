@@ -62,6 +62,15 @@ public static class DependencyInjection
         {
             jwtOptions.RefreshTokenDays = refreshTokenDays;
         }
+        if (int.TryParse(configuration["Jwt:RefreshTokenRetentionDays"], out var refreshTokenRetentionDays))
+        {
+            jwtOptions.RefreshTokenRetentionDays = refreshTokenRetentionDays;
+        }
+        if (jwtOptions.RefreshTokenRetentionDays is < 7 or > 30)
+        {
+            throw new InvalidOperationException(
+                "Jwt:RefreshTokenRetentionDays must be between 7 and 30.");
+        }
         if (Encoding.UTF8.GetByteCount(jwtOptions.Key) < 32)
         {
             throw new InvalidOperationException(
@@ -70,6 +79,7 @@ public static class DependencyInjection
         }
         services.AddSingleton(Options.Create(jwtOptions));
         services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddHostedService<RefreshTokenCleanupHostedService>();
         services.AddSingleton(Options.Create(new LiveKitOptions
         {
             Url = configuration["LIVEKIT_URL"] ?? string.Empty,

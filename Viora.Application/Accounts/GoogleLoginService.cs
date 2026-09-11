@@ -56,8 +56,9 @@ public sealed class GoogleLoginService(
             new RefreshToken
             {
                 AccountId = account.Id,
+                SessionId = issued.Tokens.SessionId,
                 TokenHash = issued.RefreshTokenHash,
-                ExpiresAt = issued.RefreshTokenExpiresAt
+                ExpiresAt = issued.Tokens.RefreshTokenExpiresAt
             },
             loginAt,
             cancellationToken);
