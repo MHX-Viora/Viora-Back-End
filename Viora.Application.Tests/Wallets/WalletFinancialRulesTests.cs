@@ -54,4 +54,17 @@ public sealed class WalletFinancialRulesTests
             "checksum"));
     }
 
+    [Fact]
+    public void ResolveQrPayload_falls_back_to_checkout_url()
+    {
+        Assert.Equal(
+            "https://pay.payos.vn/web/checkout",
+            PaymentCheckout.ResolveQrPayload("   ", "  https://pay.payos.vn/web/checkout  "));
+    }
+
+    [Fact]
+    public void ResolveQrPayload_returns_null_when_provider_data_is_blank()
+    {
+        Assert.Null(PaymentCheckout.ResolveQrPayload(" ", "\t"));
+    }
 }

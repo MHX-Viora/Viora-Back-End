@@ -72,6 +72,15 @@ public static class WithdrawalRules
     }
 }
 
+public static class PaymentCheckout
+{
+    public static string? ResolveQrPayload(string? qrCode, string? checkoutUrl) =>
+        Normalize(qrCode) ?? Normalize(checkoutUrl);
+
+    public static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
 public static class PayOsSignature
 {
     public static string CreatePaymentRequestSignature(

@@ -91,18 +91,39 @@ public sealed class PaymentService(
         message.Headers.Add("x-api-key", apiKey);
         using var response = await httpClientFactory.CreateClient("payos").SendAsync(message, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode) throw new WalletConflictException("PAYOS_UNAVAILABLE", "Không thể tạo phiên thanh toán payOS.");
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogWarning(
+                "payOS create-payment failed with HTTP {StatusCode} for order {OrderCode}.",
+                (int)response.StatusCode,
+                payment.ProviderOrderCode);
+            throw new WalletConflictException("PAYOS_UNAVAILABLE", "Không thể tạo phiên thanh toán payOS. Vui lòng thử lại sau.");
+        }
 
         using var document = JsonDocument.Parse(body);
         if (!document.RootElement.TryGetProperty("code", out var code) || code.GetString() != "00" ||
             !document.RootElement.TryGetProperty("data", out var data))
+        {
+            logger.LogWarning(
+                "payOS returned response code {ProviderCode} without payment data for order {OrderCode}.",
+                code.ValueKind == JsonValueKind.String ? code.GetString() : "missing",
+                payment.ProviderOrderCode);
             throw new WalletConflictException("PAYOS_INVALID_RESPONSE", "Phản hồi payOS không hợp lệ.");
+        }
         if (!document.RootElement.TryGetProperty("signature", out var responseSignature) ||
             !PayOsSignature.VerifyWebhookSignature(data.GetRawText(), responseSignature.GetString() ?? string.Empty, checksumKey))
+        {
+            logger.LogWarning("payOS returned an invalid signature for order {OrderCode}.", payment.ProviderOrderCode);
             throw new WalletConflictException("PAYOS_INVALID_SIGNATURE", "Không thể xác minh phản hồi payOS.");
+        }
         payment.ProviderTransactionId = ReadString(data, "paymentLinkId");
-        payment.CheckoutUrl = ReadString(data, "checkoutUrl");
-        payment.QrCode = ReadString(data, "qrCode");
+        payment.CheckoutUrl = PaymentCheckout.Normalize(ReadString(data, "checkoutUrl"));
+        payment.QrCode = PaymentCheckout.ResolveQrPayload(ReadString(data, "qrCode"), payment.CheckoutUrl);
+        if (payment.QrCode is null)
+        {
+            logger.LogWarning("payOS returned blank QR and checkout data for order {OrderCode}.", payment.ProviderOrderCode);
+            throw new WalletConflictException("PAYOS_INVALID_RESPONSE", "Phản hồi payOS không chứa dữ liệu thanh toán.");
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
         return Map(payment);
     }
