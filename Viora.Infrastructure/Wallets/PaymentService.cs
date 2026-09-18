@@ -71,8 +71,7 @@ public sealed class PaymentService(
         }
 
         var amount = decimal.ToInt64(request.Amount);
-        var description = $"ANKT {payment.ProviderOrderCode}";
-        if (description.Length > 25) description = description[^25..];
+        var description = PaymentCheckout.CreateDescription(payment.ProviderOrderCode);
         var payload = new
         {
             orderCode = payment.ProviderOrderCode,

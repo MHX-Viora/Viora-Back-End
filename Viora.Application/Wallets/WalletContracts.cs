@@ -74,6 +74,9 @@ public static class WithdrawalRules
 
 public static class PaymentCheckout
 {
+    public static string CreateDescription(long orderCode) =>
+        $"ANKT{orderCode % 100_000:D5}";
+
     public static string? ResolveQrPayload(string? qrCode, string? checkoutUrl) =>
         Normalize(qrCode) ?? Normalize(checkoutUrl);
 

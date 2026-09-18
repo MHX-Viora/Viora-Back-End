@@ -67,4 +67,13 @@ public sealed class WalletFinancialRulesTests
     {
         Assert.Null(PaymentCheckout.ResolveQrPayload(" ", "\t"));
     }
+
+    [Fact]
+    public void CreatePayOsDescription_respects_the_nine_character_bank_limit()
+    {
+        var description = PaymentCheckout.CreateDescription(1_789_765_432_123_456);
+
+        Assert.Equal("ANKT23456", description);
+        Assert.True(description.Length <= 9);
+    }
 }
