@@ -16,5 +16,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Viora.Application\Viora.Application.csproj" />
+    <ProjectReference Include="..\viora-BE\viora-BE.csproj" />
   </ItemGroup>
 </Project>

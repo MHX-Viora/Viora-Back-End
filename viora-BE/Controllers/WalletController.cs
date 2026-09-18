@@ -129,19 +129,19 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
 }
 
 public sealed record DepositBody(
-    [property: Range(typeof(decimal), "0.01", "9999999999999999")] decimal Amount,
-    [property: Required, Url] string ReturnUrl,
-    [property: Required, Url] string CancelUrl,
-    [property: Required, StringLength(140, MinimumLength = 8)] string IdempotencyKey);
+    [Range(typeof(decimal), "0.01", "9999999999999999")] decimal Amount,
+    [Required, Url] string ReturnUrl,
+    [Required, Url] string CancelUrl,
+    [Required, StringLength(140, MinimumLength = 8)] string IdempotencyKey);
 
 public sealed record BankAccountBody(
-    [property: Required, StringLength(30)] string BankCode,
-    [property: Required, StringLength(120)] string BankName,
-    [property: Required, StringLength(25, MinimumLength = 6)] string AccountNumber,
-    [property: Required, StringLength(120)] string AccountHolderName,
+    [Required, StringLength(30)] string BankCode,
+    [Required, StringLength(120)] string BankName,
+    [Required, StringLength(25, MinimumLength = 6)] string AccountNumber,
+    [Required, StringLength(120)] string AccountHolderName,
     bool IsDefault);
 
 public sealed record WithdrawalBody(
-    [property: Range(typeof(decimal), "0.01", "9999999999999999")] decimal Amount,
+    [Range(typeof(decimal), "0.01", "9999999999999999")] decimal Amount,
     Guid BankAccountId,
-    [property: Required, StringLength(140, MinimumLength = 8)] string IdempotencyKey);
+    [Required, StringLength(140, MinimumLength = 8)] string IdempotencyKey);
