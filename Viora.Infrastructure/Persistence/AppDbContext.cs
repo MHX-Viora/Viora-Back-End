@@ -59,6 +59,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Wallet> Wallets => Set<Wallet>();
     public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
+    public DbSet<Withdrawal> Withdrawals => Set<Withdrawal>();
 
     [DbFunction("translate", IsBuiltIn = true)]
     public static string Translate(string value, string matching, string replacement) =>

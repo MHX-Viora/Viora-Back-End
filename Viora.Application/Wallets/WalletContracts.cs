@@ -39,6 +39,39 @@ public static class WalletFinancialRules
     }
 }
 
+public static class WithdrawalRules
+{
+    public static decimal CalculateNetAmount(decimal amount, decimal fee)
+    {
+        WalletFinancialRules.RequirePositiveAmount(amount);
+        if (fee < 0 || fee >= amount)
+            throw new WalletValidationException("INVALID_WITHDRAWAL_FEE", "Phí rút tiền không hợp lệ.");
+        return amount - fee;
+    }
+
+    public static void RequireTransition(WithdrawalStatus current, WithdrawalStatus next)
+    {
+        var allowed = (current, next) switch
+        {
+            (WithdrawalStatus.Pending, WithdrawalStatus.Processing) => true,
+            (WithdrawalStatus.Pending, WithdrawalStatus.Cancelled) => true,
+            (WithdrawalStatus.Processing, WithdrawalStatus.Completed) => true,
+            (WithdrawalStatus.Processing, WithdrawalStatus.Failed) => true,
+            (WithdrawalStatus.Processing, WithdrawalStatus.Rejected) => true,
+            _ => false
+        };
+
+        if (!allowed)
+            throw new WalletConflictException("INVALID_WITHDRAWAL_TRANSITION", "Không thể chuyển sang trạng thái rút tiền này.");
+    }
+
+    public static void RequireFailureReason(WithdrawalStatus status, string? reason)
+    {
+        if ((status is WithdrawalStatus.Failed or WithdrawalStatus.Rejected) && string.IsNullOrWhiteSpace(reason))
+            throw new WalletValidationException("WITHDRAWAL_REASON_REQUIRED", "Cần nhập lý do khi yêu cầu thất bại hoặc bị từ chối.");
+    }
+}
+
 public static class PayOsSignature
 {
     public static string CreatePaymentRequestSignature(
@@ -111,11 +144,44 @@ public static class PayOsSignature
     }
 }
 
-public sealed record WalletResponse(Guid Id, decimal AvailableBalance, decimal HeldBalance, string Currency, WalletStatus Status);
-public sealed record WalletTransactionResponse(Guid Id, WalletTransactionType Type, decimal Amount, decimal BalanceBefore, decimal BalanceAfter, decimal HeldBefore, decimal HeldAfter, string ReferenceType, string ReferenceId, string? Description, WalletTransactionStatus Status, DateTime CreatedAt, DateTime? CompletedAt);
+public sealed record WalletResponse(Guid Id, decimal AvailableBalance, decimal HeldBalance, long AnktCoinBalance, string Currency, WalletStatus Status);
+public sealed record WalletTransactionResponse(Guid Id, WalletTransactionType Type, decimal Amount, decimal BalanceBefore, decimal BalanceAfter, decimal HeldBefore, decimal HeldAfter, string ReferenceType, string ReferenceId, string? Description, WalletTransactionStatus Status, WithdrawalStatus? WithdrawalStatus, DateTime CreatedAt, DateTime? CompletedAt);
 public sealed record WalletTransactionPage(IReadOnlyList<WalletTransactionResponse> Data, int Page, int PageSize, int TotalItems, int TotalPages);
 public sealed record CreateDepositRequest(decimal Amount, string ReturnUrl, string CancelUrl, string IdempotencyKey);
 public sealed record PaymentResponse(Guid Id, decimal Amount, string Currency, PaymentStatus Status, string Provider, long ProviderOrderCode, string? ProviderTransactionId, string? CheckoutUrl, string? QrCode, DateTime CreatedAt, DateTime? PaidAt);
+public sealed record BankAccountResponse(Guid Id, string BankCode, string BankName, string AccountNumberMasked, string AccountHolderName, bool IsDefault, DateTime CreatedAt);
+public sealed record CreateBankAccountRequest(string BankCode, string BankName, string AccountNumber, string AccountHolderName, bool IsDefault);
+public sealed record CreateWithdrawalRequest(decimal Amount, Guid BankAccountId, string IdempotencyKey);
+public sealed record WithdrawalResponse(Guid Id, string TransactionCode, decimal Amount, decimal Fee, decimal NetAmount, string Currency, WithdrawalStatus Status, Guid BankAccountId, string BankCode, string BankName, string BankAccountMasked, string BankAccountHolderName, string? FailureReason, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ProcessingAt, DateTime? CompletedAt);
+public sealed record WithdrawalQuoteResponse(decimal Amount, decimal Fee, decimal NetAmount, decimal MinimumAmount, decimal MaximumAmount);
+public sealed record WithdrawalPage(IReadOnlyList<WithdrawalResponse> Data, int Page, int PageSize, int TotalItems, int TotalPages);
+
+public sealed class WithdrawalOptions
+{
+    public decimal Fee { get; set; } = 5_000m;
+    public decimal MinimumAmount { get; set; } = 50_000m;
+    public decimal MaximumAmount { get; set; } = 50_000_000m;
+    public string BankAccountEncryptionKey { get; set; } = string.Empty;
+}
+
+public interface IBankAccountProtector
+{
+    string Protect(string accountNumber);
+    string Hash(string accountNumber);
+}
+
+public interface IWithdrawalService
+{
+    Task<IReadOnlyList<BankAccountResponse>> GetBankAccountsAsync(Guid userId, CancellationToken cancellationToken);
+    Task<BankAccountResponse> CreateBankAccountAsync(Guid userId, CreateBankAccountRequest request, CancellationToken cancellationToken);
+    WithdrawalQuoteResponse Quote(decimal amount);
+    Task<WithdrawalResponse> CreateAsync(Guid userId, CreateWithdrawalRequest request, CancellationToken cancellationToken);
+    Task<WithdrawalResponse?> GetAsync(Guid userId, Guid withdrawalId, CancellationToken cancellationToken);
+    Task<WithdrawalPage> GetPageAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken);
+    Task<WithdrawalPage> GetAdminPageAsync(int page, int pageSize, CancellationToken cancellationToken);
+    Task<WithdrawalResponse> CancelAsync(Guid userId, Guid withdrawalId, CancellationToken cancellationToken);
+    Task<WithdrawalResponse> ChangeStatusAsync(Guid withdrawalId, WithdrawalStatus status, string? reason, CancellationToken cancellationToken);
+}
 
 public interface IWalletService
 {

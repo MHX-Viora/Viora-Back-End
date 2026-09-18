@@ -88,3 +88,12 @@ public enum WalletTransactionType : short
 }
 public enum WalletTransactionStatus : short { Pending = 0, Completed = 1, Failed = 2, Reversed = 3 }
 public enum PaymentStatus : short { Pending = 0, Paid = 1, Failed = 2, Cancelled = 3, Expired = 4 }
+public enum WithdrawalStatus : short
+{
+    Pending = 0,
+    Processing = 1,
+    Completed = 2,
+    Failed = 3,
+    Rejected = 4,
+    Cancelled = 5
+}

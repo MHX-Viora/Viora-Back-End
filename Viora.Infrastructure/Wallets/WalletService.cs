@@ -23,10 +23,15 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
 
         var query = dbContext.WalletTransactions.AsNoTracking().Where(item => item.WalletId == walletId);
         if (type is not null) query = query.Where(item => item.Type == type);
+        else query = query.Where(item => item.Type != WalletTransactionType.Hold && item.Type != WalletTransactionType.Release && item.Type != WalletTransactionType.Capture);
         var total = await query.CountAsync(cancellationToken);
         var items = await query.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
             .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        return new WalletTransactionPage(items.Select(Map).ToArray(), page, pageSize, total, total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize));
+        var transactionIds = items.Where(item => item.Type == WalletTransactionType.Withdrawal).Select(item => item.Id).ToArray();
+        var withdrawalStatuses = await dbContext.Withdrawals.AsNoTracking()
+            .Where(item => transactionIds.Contains(item.LedgerTransactionId))
+            .ToDictionaryAsync(item => item.LedgerTransactionId, item => item.Status, cancellationToken);
+        return new WalletTransactionPage(items.Select(item => Map(item, withdrawalStatuses.GetValueOrDefault(item.Id))).ToArray(), page, pageSize, total, total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize));
     }
 
     public async Task<WalletTransactionResponse?> GetTransactionAsync(
@@ -34,7 +39,11 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
     {
         var item = await dbContext.WalletTransactions.AsNoTracking()
             .SingleOrDefaultAsync(transaction => transaction.Id == transactionId && transaction.Wallet.UserId == userId, cancellationToken);
-        return item is null ? null : Map(item);
+        if (item is null) return null;
+        var withdrawalStatus = item.Type == WalletTransactionType.Withdrawal
+            ? await dbContext.Withdrawals.AsNoTracking().Where(withdrawal => withdrawal.LedgerTransactionId == item.Id).Select(withdrawal => (WithdrawalStatus?)withdrawal.Status).SingleOrDefaultAsync(cancellationToken)
+            : null;
+        return Map(item, withdrawalStatus);
     }
 
     public async Task<WalletTransactionResponse> CompleteDepositAsync(
@@ -234,6 +243,6 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
     }
 
     private static bool IsUniqueViolation(DbUpdateException exception) => exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
-    private static WalletResponse Map(Wallet wallet) => new(wallet.Id, wallet.AvailableBalance, wallet.HeldBalance, wallet.Currency, wallet.Status);
-    private static WalletTransactionResponse Map(WalletTransaction item) => new(item.Id, item.Type, item.Amount, item.BalanceBefore, item.BalanceAfter, item.HeldBefore, item.HeldAfter, item.ReferenceType, item.ReferenceId, item.Description, item.Status, item.CreatedAt, item.CompletedAt);
+    private static WalletResponse Map(Wallet wallet) => new(wallet.Id, wallet.AvailableBalance, wallet.HeldBalance, wallet.AnktCoinBalance, wallet.Currency, wallet.Status);
+    private static WalletTransactionResponse Map(WalletTransaction item, WithdrawalStatus? withdrawalStatus = null) => new(item.Id, item.Type, item.Amount, item.BalanceBefore, item.BalanceAfter, item.HeldBefore, item.HeldAfter, item.ReferenceType, item.ReferenceId, item.Description, item.Status, withdrawalStatus, item.CreatedAt, item.CompletedAt);
 }

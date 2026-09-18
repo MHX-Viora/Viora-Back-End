@@ -5,11 +5,13 @@ public sealed class Wallet : AuditableEntity
     public Guid UserId { get; set; }
     public decimal AvailableBalance { get; set; }
     public decimal HeldBalance { get; set; }
+    public long AnktCoinBalance { get; set; }
     public string Currency { get; set; } = "VND";
     public WalletStatus Status { get; set; } = WalletStatus.Active;
     public User User { get; set; } = null!;
     public ICollection<WalletTransaction> Transactions { get; set; } = [];
     public ICollection<Payment> Payments { get; set; } = [];
+    public ICollection<Withdrawal> Withdrawals { get; set; } = [];
 }
 
 public sealed class WalletTransaction : CreatedEntity
@@ -53,4 +55,43 @@ public sealed class Payment : CreatedEntity
     public DateTime? CancelledAt { get; set; }
     public Wallet Wallet { get; set; } = null!;
     public User User { get; set; } = null!;
+}
+
+public sealed class BankAccount : AuditableEntity
+{
+    public Guid UserId { get; set; }
+    public string BankCode { get; set; } = null!;
+    public string BankName { get; set; } = null!;
+    public string AccountNumberEncrypted { get; set; } = null!;
+    public string AccountNumberHash { get; set; } = null!;
+    public string AccountNumberLast4 { get; set; } = null!;
+    public string AccountHolderName { get; set; } = null!;
+    public bool IsDefault { get; set; }
+    public User User { get; set; } = null!;
+    public ICollection<Withdrawal> Withdrawals { get; set; } = [];
+}
+
+public sealed class Withdrawal : AuditableEntity
+{
+    public Guid UserId { get; set; }
+    public Guid WalletId { get; set; }
+    public Guid BankAccountId { get; set; }
+    public Guid LedgerTransactionId { get; set; }
+    public decimal Amount { get; set; }
+    public decimal Fee { get; set; }
+    public decimal NetAmount { get; set; }
+    public WithdrawalStatus Status { get; set; } = WithdrawalStatus.Pending;
+    public string TransactionCode { get; set; } = null!;
+    public string IdempotencyKey { get; set; } = null!;
+    public string BankCode { get; set; } = null!;
+    public string BankName { get; set; } = null!;
+    public string BankAccountLast4 { get; set; } = null!;
+    public string BankAccountHolderName { get; set; } = null!;
+    public string? FailureReason { get; set; }
+    public DateTime? ProcessingAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public Wallet Wallet { get; set; } = null!;
+    public User User { get; set; } = null!;
+    public BankAccount BankAccount { get; set; } = null!;
+    public WalletTransaction LedgerTransaction { get; set; } = null!;
 }

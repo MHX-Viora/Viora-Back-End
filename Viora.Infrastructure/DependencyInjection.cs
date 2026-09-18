@@ -58,6 +58,9 @@ public static class DependencyInjection
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IAdminWalletService, AdminWalletService>();
+        services.Configure<WithdrawalOptions>(configuration.GetSection("Wallet"));
+        services.AddSingleton<IBankAccountProtector, BankAccountProtector>();
+        services.AddScoped<IWithdrawalService, WithdrawalService>();
         var jwtOptions = new JwtOptions
         {
             Key = configuration["Jwt:Key"] ?? string.Empty,
