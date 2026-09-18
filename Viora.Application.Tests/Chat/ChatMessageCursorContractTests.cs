@@ -1,4 +1,5 @@
 using Viora.Application.Chat;
+using Xunit;
 
 namespace Viora.Application.Tests.Chat;
 

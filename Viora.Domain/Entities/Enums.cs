@@ -72,3 +72,19 @@ public enum MiniAppStatus : short { Draft = 0, PendingReview = 1, Active = 2, Su
 public enum DeveloperStatus : short { Pending = 0, Active = 1, Suspended = 2, Rejected = 3 }
 public enum MiniAppPermissionStatus : short { Inactive = 0, Active = 1 }
 public enum MiniAppLaunchStatus : short { Succeeded = 0, Failed = 1 }
+public enum WalletStatus : short { Active = 0, Suspended = 1, Closed = 2 }
+public enum WalletTransactionType : short
+{
+    Deposit = 0,
+    TransferIn = 1,
+    TransferOut = 2,
+    Payment = 3,
+    Hold = 4,
+    Release = 5,
+    Refund = 6,
+    Withdrawal = 7,
+    Adjustment = 8,
+    Capture = 9
+}
+public enum WalletTransactionStatus : short { Pending = 0, Completed = 1, Failed = 2, Reversed = 3 }
+public enum PaymentStatus : short { Pending = 0, Paid = 1, Failed = 2, Cancelled = 3, Expired = 4 }

@@ -30,6 +30,8 @@ using Viora.Application.Articles;
 using Viora.Application.MiniApps;
 using Viora.Infrastructure.MiniApps;
 using Viora.Application.Stickers;
+using Viora.Application.Wallets;
+using Viora.Infrastructure.Wallets;
 
 namespace Viora.Infrastructure;
 
@@ -48,6 +50,14 @@ public static class DependencyInjection
         }
 
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddHttpClient("payos", client =>
+        {
+            client.BaseAddress = new Uri("https://api-merchant.payos.vn/");
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+        services.AddScoped<IWalletService, WalletService>();
+        services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IAdminWalletService, AdminWalletService>();
         var jwtOptions = new JwtOptions
         {
             Key = configuration["Jwt:Key"] ?? string.Empty,
