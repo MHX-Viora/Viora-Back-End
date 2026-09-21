@@ -84,6 +84,30 @@ public static class PaymentCheckout
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
+public static class PaymentLifecycle
+{
+    public static DateTime CalculateExpiry(DateTime createdAt) => createdAt.AddMinutes(15);
+
+    public static bool CanComplete(PaymentStatus status) =>
+        status is PaymentStatus.Pending or PaymentStatus.Expired;
+
+    public static bool ShouldExpire(PaymentStatus status, DateTime expiresAt, DateTime now) =>
+        status == PaymentStatus.Pending && expiresAt <= now;
+
+    public static string DepositIdempotencyKey(Guid paymentId) => $"deposit:{paymentId:D}";
+
+    public static int ProviderExpiryTimestamp(DateTime expiresAt) =>
+        checked((int)new DateTimeOffset(expiresAt).ToUnixTimeSeconds());
+
+    public static PaymentStatus? FromProviderStatus(string? status) => status?.Trim().ToUpperInvariant() switch
+    {
+        "PAID" => PaymentStatus.Paid,
+        "CANCELLED" => PaymentStatus.Cancelled,
+        "PENDING" or "PROCESSING" => PaymentStatus.Pending,
+        _ => null
+    };
+}
+
 public static class PayOsSignature
 {
     public static string CreatePaymentRequestSignature(
@@ -157,10 +181,10 @@ public static class PayOsSignature
 }
 
 public sealed record WalletResponse(Guid Id, decimal AvailableBalance, decimal HeldBalance, long AnktCoinBalance, string Currency, WalletStatus Status);
-public sealed record WalletTransactionResponse(Guid Id, WalletTransactionType Type, decimal Amount, decimal BalanceBefore, decimal BalanceAfter, decimal HeldBefore, decimal HeldAfter, string ReferenceType, string ReferenceId, string? Description, WalletTransactionStatus Status, WithdrawalStatus? WithdrawalStatus, DateTime CreatedAt, DateTime? CompletedAt);
+public sealed record WalletTransactionResponse(Guid Id, WalletTransactionType Type, decimal Amount, decimal BalanceBefore, decimal BalanceAfter, decimal HeldBefore, decimal HeldAfter, string ReferenceType, string ReferenceId, string? Description, WalletTransactionStatus Status, WithdrawalStatus? WithdrawalStatus, PaymentStatus? PaymentStatus, DateTime CreatedAt, DateTime? CompletedAt);
 public sealed record WalletTransactionPage(IReadOnlyList<WalletTransactionResponse> Data, int Page, int PageSize, int TotalItems, int TotalPages);
 public sealed record CreateDepositRequest(decimal Amount, string ReturnUrl, string CancelUrl, string IdempotencyKey);
-public sealed record PaymentResponse(Guid Id, decimal Amount, string Currency, PaymentStatus Status, string Provider, long ProviderOrderCode, string? ProviderTransactionId, string? CheckoutUrl, string? QrCode, DateTime CreatedAt, DateTime? PaidAt);
+public sealed record PaymentResponse(Guid Id, decimal Amount, string Currency, PaymentStatus Status, string Provider, long ProviderOrderCode, string? ProviderTransactionId, string? CheckoutUrl, string? QrCode, string TransferContent, Guid? TransactionId, DateTime CreatedAt, DateTime ExpiresAt, DateTime? PaidAt);
 public sealed record BankAccountResponse(Guid Id, string BankCode, string BankName, string AccountNumberMasked, string AccountHolderName, bool IsDefault, DateTime CreatedAt);
 public sealed record CreateBankAccountRequest(string BankCode, string BankName, string AccountNumber, string AccountHolderName, bool IsDefault);
 public sealed record CreateWithdrawalRequest(decimal Amount, Guid BankAccountId, string IdempotencyKey);
@@ -200,7 +224,7 @@ public interface IWalletService
     Task<WalletResponse> GetOrCreateAsync(Guid userId, CancellationToken cancellationToken);
     Task<WalletTransactionPage> GetTransactionsAsync(Guid userId, int page, int pageSize, WalletTransactionType? type, CancellationToken cancellationToken);
     Task<WalletTransactionResponse?> GetTransactionAsync(Guid userId, Guid transactionId, CancellationToken cancellationToken);
-    Task<WalletTransactionResponse> CompleteDepositAsync(long providerOrderCode, string providerTransactionId, decimal amount, string idempotencyKey, CancellationToken cancellationToken);
+    Task<WalletTransactionResponse> CompleteDepositAsync(long providerOrderCode, string providerTransactionId, decimal amount, CancellationToken cancellationToken);
     Task<WalletTransactionResponse> HoldAsync(Guid userId, decimal amount, string referenceType, string referenceId, string idempotencyKey, CancellationToken cancellationToken);
     Task<WalletTransactionResponse> ReleaseAsync(Guid userId, decimal amount, string referenceType, string referenceId, string idempotencyKey, CancellationToken cancellationToken);
     Task<WalletTransactionResponse> CaptureAsync(Guid userId, decimal amount, string referenceType, string referenceId, string idempotencyKey, CancellationToken cancellationToken);

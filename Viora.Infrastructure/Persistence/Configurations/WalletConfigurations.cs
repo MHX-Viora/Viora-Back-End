@@ -118,11 +118,13 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.Property(payment => payment.IdempotencyKey).HasMaxLength(150).IsRequired();
         builder.Property(payment => payment.CheckoutUrl).HasMaxLength(2048);
         builder.Property(payment => payment.QrCode).HasMaxLength(2048);
+        builder.HasIndex(payment => payment.LedgerTransactionId).IsUnique().HasFilter("\"LedgerTransactionId\" IS NOT NULL");
         builder.HasIndex(payment => payment.ProviderOrderCode).IsUnique();
         builder.HasIndex(payment => new { payment.UserId, payment.IdempotencyKey }).IsUnique();
         builder.HasIndex(payment => new { payment.Provider, payment.ProviderTransactionId }).IsUnique().HasFilter("\"ProviderTransactionId\" IS NOT NULL");
         builder.HasIndex(payment => new { payment.UserId, payment.CreatedAt });
         builder.HasOne(payment => payment.Wallet).WithMany(wallet => wallet.Payments).HasForeignKey(payment => payment.WalletId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(payment => payment.User).WithMany().HasForeignKey(payment => payment.UserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(payment => payment.LedgerTransaction).WithOne().HasForeignKey<Payment>(payment => payment.LedgerTransactionId).OnDelete(DeleteBehavior.Restrict);
     }
 }

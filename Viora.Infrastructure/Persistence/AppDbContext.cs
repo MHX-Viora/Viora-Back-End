@@ -61,6 +61,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
     public DbSet<Withdrawal> Withdrawals => Set<Withdrawal>();
+    public DbSet<Advertisement> Advertisements => Set<Advertisement>();
+    public DbSet<AdvertisementEvent> AdvertisementEvents => Set<AdvertisementEvent>();
+    public DbSet<AdvertisementFeedback> AdvertisementFeedback => Set<AdvertisementFeedback>();
 
     [DbFunction("translate", IsBuiltIn = true)]
     public static string Translate(string value, string matching, string replacement) =>

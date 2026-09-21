@@ -97,3 +97,32 @@ public enum WithdrawalStatus : short
     Rejected = 4,
     Cancelled = 5
 }
+public enum AdvertisementPlacement : short { Feed = 0, Reels = 1, News = 2 }
+public enum AdvertisementObjective : short { Awareness = 0, Traffic = 1, Engagement = 2 }
+public enum AdvertisementDestinationType : short { InAppContent = 0, ExternalUrl = 1 }
+public enum AdvertisementCtaType : short
+{
+    LearnMore = 0,
+    BuyNow = 1,
+    Message = 2,
+    SignUp = 3,
+    Download = 4,
+    ViewProduct = 5,
+    GetOffer = 6,
+    ContactNow = 7,
+    Follow = 8
+}
+public enum AdvertisementTargetingMode : short { Automatic = 0, Custom = 1 }
+public enum AdvertisementStatus : short
+{
+    Draft = 0,
+    Pending = 1,
+    Approved = 2,
+    Active = 3,
+    Paused = 4,
+    Completed = 5,
+    Rejected = 6,
+    Cancelled = 7
+}
+public enum AdvertisementEventType : short { Impression = 0, Click = 1 }
+public enum AdvertisementFeedbackType : short { Hide = 0, NotInterested = 1, Report = 2 }

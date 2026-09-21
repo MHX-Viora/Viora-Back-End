@@ -25,6 +25,10 @@ public sealed class PaymentsController(IPaymentService paymentService) : Control
         {
             return UnprocessableEntity(new { error = new { code = exception.Code, message = exception.Message } });
         }
+        catch (WalletConflictException exception)
+        {
+            return Conflict(new { error = new { code = exception.Code, message = exception.Message } });
+        }
         catch (System.Text.Json.JsonException)
         {
             return BadRequest(new { error = new { code = "INVALID_JSON", message = "Webhook không hợp lệ." } });

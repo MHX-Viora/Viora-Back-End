@@ -32,6 +32,8 @@ using Viora.Infrastructure.MiniApps;
 using Viora.Application.Stickers;
 using Viora.Application.Wallets;
 using Viora.Infrastructure.Wallets;
+using Viora.Application.Advertisements;
+using Viora.Infrastructure.Advertisements;
 
 namespace Viora.Infrastructure;
 
@@ -61,6 +63,9 @@ public static class DependencyInjection
         services.Configure<WithdrawalOptions>(configuration.GetSection("Wallet"));
         services.AddSingleton<IBankAccountProtector, BankAccountProtector>();
         services.AddScoped<IWithdrawalService, WithdrawalService>();
+        services.Configure<AdvertisementOptions>(configuration.GetSection("Advertisements"));
+        services.AddScoped<IAdvertisementService, AdvertisementService>();
+        services.AddHostedService<AdvertisementLifecycleHostedService>();
         var jwtOptions = new JwtOptions
         {
             Key = configuration["Jwt:Key"] ?? string.Empty,

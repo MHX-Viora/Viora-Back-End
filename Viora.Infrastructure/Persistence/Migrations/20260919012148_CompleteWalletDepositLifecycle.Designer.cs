@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Viora.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Viora.Infrastructure.Persistence;
 namespace Viora.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260919012148_CompleteWalletDepositLifecycle")]
+    partial class CompleteWalletDepositLifecycle
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -111,200 +114,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.ToTable("AdminLogs", (string)null);
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.Advertisement", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("AdvertiserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ApprovedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CampaignId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<short>("CtaType")
-                        .HasColumnType("smallint");
-
-                    b.Property<decimal?>("DailyBudget")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<short>("DestinationType")
-                        .HasColumnType("smallint");
-
-                    b.Property<string>("DestinationUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<DateTime>("EndAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<short?>("MaximumAge")
-                        .HasColumnType("smallint");
-
-                    b.Property<short?>("MinimumAge")
-                        .HasColumnType("smallint");
-
-                    b.Property<short>("Objective")
-                        .HasColumnType("smallint");
-
-                    b.Property<short>("Placement")
-                        .HasColumnType("smallint");
-
-                    b.Property<Guid>("PostId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ReservedAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<string>("ReviewReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ReviewedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("SpentAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime>("StartAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<short>("Status")
-                        .HasColumnType("smallint");
-
-                    b.Property<DateTime?>("SubmittedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TargetLocation")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<short>("TargetingMode")
-                        .HasColumnType("smallint");
-
-                    b.Property<decimal>("TotalBudget")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PostId");
-
-                    b.HasIndex("ReviewedBy");
-
-                    b.HasIndex("AdvertiserId", "CreatedAt");
-
-                    b.HasIndex("Status", "Placement", "StartAt", "EndAt");
-
-                    b.ToTable("Advertisements", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Advertisements_Ages", "(\"MinimumAge\" IS NULL OR \"MinimumAge\" >= 13) AND (\"MaximumAge\" IS NULL OR \"MaximumAge\" <= 100) AND (\"MinimumAge\" IS NULL OR \"MaximumAge\" IS NULL OR \"MaximumAge\" >= \"MinimumAge\")");
-
-                            t.HasCheckConstraint("CK_Advertisements_Budget", "\"TotalBudget\" >= 50000 AND \"SpentAmount\" >= 0 AND \"ReservedAmount\" >= 0 AND \"SpentAmount\" + \"ReservedAmount\" <= \"TotalBudget\"");
-
-                            t.HasCheckConstraint("CK_Advertisements_Schedule", "\"EndAt\" > \"StartAt\"");
-                        });
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.AdvertisementEvent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AdvertisementId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ChargeAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<string>("ClientEventId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<short>("Type")
-                        .HasColumnType("smallint");
-
-                    b.Property<Guid>("ViewerId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ViewerId");
-
-                    b.HasIndex("AdvertisementId", "Type", "CreatedAt");
-
-                    b.HasIndex("AdvertisementId", "ViewerId", "Type", "ClientEventId")
-                        .IsUnique();
-
-                    b.ToTable("AdvertisementEvents", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_AdvertisementEvents_Charge", "\"ChargeAmount\" >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.AdvertisementFeedback", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AdvertisementId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<short>("Type")
-                        .HasColumnType("smallint");
-
-                    b.Property<Guid>("ViewerId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ViewerId");
-
-                    b.HasIndex("AdvertisementId", "ViewerId", "Type")
-                        .IsUnique();
-
-                    b.ToTable("AdvertisementFeedback", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.ArticleBlock", b =>
@@ -2775,70 +2584,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("Admin");
                 });
 
-            modelBuilder.Entity("Viora.Domain.Entities.Advertisement", b =>
-                {
-                    b.HasOne("Viora.Domain.Entities.User", "Advertiser")
-                        .WithMany()
-                        .HasForeignKey("AdvertiserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Viora.Domain.Entities.Post", "Post")
-                        .WithMany()
-                        .HasForeignKey("PostId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Viora.Domain.Entities.User", "Reviewer")
-                        .WithMany()
-                        .HasForeignKey("ReviewedBy")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Advertiser");
-
-                    b.Navigation("Post");
-
-                    b.Navigation("Reviewer");
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.AdvertisementEvent", b =>
-                {
-                    b.HasOne("Viora.Domain.Entities.Advertisement", "Advertisement")
-                        .WithMany("Events")
-                        .HasForeignKey("AdvertisementId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Viora.Domain.Entities.User", "Viewer")
-                        .WithMany()
-                        .HasForeignKey("ViewerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Advertisement");
-
-                    b.Navigation("Viewer");
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.AdvertisementFeedback", b =>
-                {
-                    b.HasOne("Viora.Domain.Entities.Advertisement", "Advertisement")
-                        .WithMany("Feedback")
-                        .HasForeignKey("AdvertisementId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Viora.Domain.Entities.User", "Viewer")
-                        .WithMany()
-                        .HasForeignKey("ViewerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Advertisement");
-
-                    b.Navigation("Viewer");
-                });
-
             modelBuilder.Entity("Viora.Domain.Entities.ArticleBlock", b =>
                 {
                     b.HasOne("Viora.Domain.Entities.Post", "Post")
@@ -3661,13 +3406,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("RefreshTokens");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.Advertisement", b =>
-                {
-                    b.Navigation("Events");
-
-                    b.Navigation("Feedback");
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.BankAccount", b =>

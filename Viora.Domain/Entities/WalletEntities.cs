@@ -45,6 +45,7 @@ public sealed class Payment : CreatedEntity
     public string ReferenceId { get; set; } = null!;
     public string Provider { get; set; } = null!;
     public string? ProviderTransactionId { get; set; }
+    public Guid? LedgerTransactionId { get; set; }
     public long ProviderOrderCode { get; set; }
     public string IdempotencyKey { get; set; } = null!;
     public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
@@ -53,8 +54,10 @@ public sealed class Payment : CreatedEntity
     public DateTime? PaidAt { get; set; }
     public DateTime? FailedAt { get; set; }
     public DateTime? CancelledAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
     public Wallet Wallet { get; set; } = null!;
     public User User { get; set; } = null!;
+    public WalletTransaction? LedgerTransaction { get; set; }
 }
 
 public sealed class BankAccount : AuditableEntity
