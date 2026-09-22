@@ -2,7 +2,10 @@ using Viora.Domain.Entities;
 
 namespace Viora.Application.Advertisements;
 
-public sealed class AdvertisementNotFoundException() : Exception("Không tìm thấy quảng cáo.");
+public sealed class AdvertisementNotFoundException(string code = "ADVERTISEMENT_NOT_FOUND", string message = "Không tìm thấy quảng cáo.") : Exception(message)
+{
+    public string Code { get; } = code;
+}
 public sealed class AdvertisementForbiddenException(string message) : Exception(message);
 public sealed class AdvertisementInsufficientBalanceException(decimal available, decimal required)
     : AdvertisementValidationException("INSUFFICIENT_WALLET_BALANCE", "Số dư của bạn không đủ để chạy quảng cáo.")

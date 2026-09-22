@@ -19,6 +19,18 @@ public sealed class PaymentService(
 {
     private const string Provider = "payOS";
 
+    public async Task<PaymentPage> GetPageAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var query = dbContext.Payments.AsNoTracking().Where(item => item.UserId == userId && item.Purpose == "WalletDeposit");
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return new PaymentPage(items.Select(Map).ToArray(), page, pageSize, total,
+            total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize));
+    }
+
     public async Task<PaymentResponse> CreateDepositAsync(Guid userId, CreateDepositRequest request, CancellationToken cancellationToken)
     {
         WalletFinancialRules.RequirePositiveAmount(request.Amount);
@@ -126,23 +138,6 @@ public sealed class PaymentService(
             logger.LogWarning("payOS returned blank QR and checkout data for order {OrderCode}.", payment.ProviderOrderCode);
             throw new WalletConflictException("PAYOS_INVALID_RESPONSE", "Phản hồi payOS không chứa dữ liệu thanh toán.");
         }
-        var ledger = new WalletTransaction
-        {
-            WalletId = wallet.Id,
-            Type = WalletTransactionType.Deposit,
-            Amount = request.Amount,
-            BalanceBefore = wallet.AvailableBalance,
-            BalanceAfter = wallet.AvailableBalance,
-            HeldBefore = wallet.HeldBalance,
-            HeldAfter = wallet.HeldBalance,
-            ReferenceType = "Payment",
-            ReferenceId = payment.Id.ToString("D"),
-            Description = "Nạp tiền bằng mã QR",
-            Status = WalletTransactionStatus.Pending,
-            IdempotencyKey = PaymentLifecycle.DepositIdempotencyKey(payment.Id)
-        };
-        dbContext.WalletTransactions.Add(ledger);
-        payment.LedgerTransactionId = ledger.Id;
         await dbContext.SaveChangesAsync(cancellationToken);
         return Map(payment);
     }
@@ -277,6 +272,10 @@ public sealed class PaymentService(
             {
                 await SetCancelledAsync(payment.Id, cancellationToken);
             }
+            else if (providerStatus is PaymentStatus.Failed or PaymentStatus.Expired)
+            {
+                await SetTerminalAsync(payment.Id, providerStatus.Value, cancellationToken);
+            }
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested && exception is HttpRequestException or JsonException or TaskCanceledException)
         {
@@ -284,20 +283,23 @@ public sealed class PaymentService(
         }
     }
 
-    private async Task SetCancelledAsync(Guid paymentId, CancellationToken cancellationToken)
+    private Task SetCancelledAsync(Guid paymentId, CancellationToken cancellationToken) =>
+        SetTerminalAsync(paymentId, PaymentStatus.Cancelled, cancellationToken);
+
+    private async Task SetTerminalAsync(Guid paymentId, PaymentStatus status, CancellationToken cancellationToken)
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var payment = await dbContext.Payments
             .FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"Id\" = {paymentId} FOR UPDATE")
             .SingleAsync(cancellationToken);
-        if (payment.Status != PaymentStatus.Pending)
+        if (payment.Status != PaymentStatus.Pending && !(payment.Status == PaymentStatus.Expired && status == PaymentStatus.Failed))
         {
             await transaction.RollbackAsync(cancellationToken);
             return;
         }
 
-        payment.Status = PaymentStatus.Cancelled;
-        payment.CancelledAt = DateTime.UtcNow;
+        payment.Status = status;
+        if (status == PaymentStatus.Cancelled) payment.CancelledAt = DateTime.UtcNow;
         if (payment.LedgerTransactionId is Guid ledgerId)
         {
             var ledger = await dbContext.WalletTransactions.SingleOrDefaultAsync(

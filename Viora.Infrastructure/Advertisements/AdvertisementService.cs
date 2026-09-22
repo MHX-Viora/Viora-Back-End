@@ -31,6 +31,7 @@ public sealed class AdvertisementService(
     {
         AdvertisementRules.RequireBudget(request.TotalBudget);
         AdvertisementRules.RequireSchedule(request.StartAt, request.EndAt);
+        AdvertisementRules.RequireDailyBudgetTotal(request.DailyBudget, request.TotalBudget, request.StartAt, request.EndAt);
         ValidateTargeting(request);
         var destinationUrl = AdvertisementRules.NormalizeDestinationUrl(request.DestinationUrl);
         AdvertisementRules.RequireCtaDestination(request.CtaType, destinationUrl);
@@ -100,6 +101,7 @@ public sealed class AdvertisementService(
         RequireAdvertisablePost(advertisement.Post, userId);
         AdvertisementRules.RequireBudget(advertisement.TotalBudget);
         AdvertisementRules.RequireSchedule(advertisement.StartAt, advertisement.EndAt);
+        AdvertisementRules.RequireDailyBudgetTotal(advertisement.DailyBudget, advertisement.TotalBudget, advertisement.StartAt, advertisement.EndAt);
         if (advertisement.EndAt <= DateTime.UtcNow)
             throw new AdvertisementValidationException("ADVERTISEMENT_END_IN_PAST", "Thời gian kết thúc quảng cáo phải ở tương lai.");
 
@@ -332,7 +334,7 @@ public sealed class AdvertisementService(
         var advertisement = await dbContext.Advertisements
             .Include(item => item.Post).ThenInclude(post => post.User).ThenInclude(user => user.Account)
             .SingleOrDefaultAsync(item => item.Id == advertisementId, cancellationToken)
-            ?? throw new AdvertisementNotFoundException();
+            ?? throw new AdvertisementNotFoundException("POST_NOT_FOUND", "Không tìm thấy bài viết.");
         AdvertisementRules.RequireTransition(advertisement.Status, AdvertisementStatus.Approved);
         var now = DateTime.UtcNow;
         if (advertisement.EndAt <= now || advertisement.ReservedAmount <= 0)

@@ -10,7 +10,7 @@ namespace viora_BE.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/advertisements")]
-public sealed class AdvertisementsController(IAdvertisementService advertisements) : ControllerBase
+public sealed class AdvertisementsController(IAdvertisementService advertisements, ILogger<AdvertisementsController> logger) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Create(CreateAdvertisementBody body, CancellationToken cancellationToken) =>
@@ -74,7 +74,7 @@ public sealed class AdvertisementsController(IAdvertisementService advertisement
     {
         if (!Guid.TryParse(User.FindFirstValue("user_id"), out var userId)) return Unauthorized();
         try { return await action(userId); }
-        catch (AdvertisementNotFoundException) { return Error(404, "ADVERTISEMENT_NOT_FOUND", "Không tìm thấy quảng cáo."); }
+        catch (AdvertisementNotFoundException exception) { return Error(404, exception.Code, exception.Message); }
         catch (AdvertisementForbiddenException exception) { return Error(403, "ADVERTISEMENT_FORBIDDEN", exception.Message); }
         catch (AdvertisementInsufficientBalanceException exception)
         {
@@ -82,6 +82,11 @@ public sealed class AdvertisementsController(IAdvertisementService advertisement
         }
         catch (AdvertisementValidationException exception) { return Error(422, exception.Code, exception.Message); }
         catch (AdvertisementConflictException exception) { return Error(409, exception.Code, exception.Message); }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Advertisement request failed. UserId: {UserId}, Path: {Path}", userId, Request.Path);
+            return Error(500, "ADVERTISEMENT_ERROR", "Không thể thực hiện thao tác lúc này. Vui lòng thử lại.");
+        }
     }
 
     private static ObjectResult Error(int status, string code, string message, object? details = null) =>

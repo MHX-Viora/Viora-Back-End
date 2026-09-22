@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using Viora.Application.Posts;
+using Viora.Application.Wallets;
 using Viora.Domain.Entities;
 
 namespace Viora.Infrastructure.Persistence.Repositories;
 
-public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInteractionRepository
+public sealed class PostInteractionRepository(AppDbContext dbContext, IWalletService walletService) : IPostInteractionRepository
 {
     public Task<User?> GetActiveUserAsync(Guid userId, CancellationToken cancellationToken) =>
         dbContext.Users
@@ -24,6 +26,37 @@ public sealed class PostInteractionRepository(AppDbContext dbContext) : IPostInt
         dbContext.Posts
             .Include(post => post.OriginalPost)
             .SingleOrDefaultAsync(post => post.Id == postId, cancellationToken);
+
+    public async Task DeletePostAndCancelAdvertisementsAsync(Post post, CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var advertisements = await dbContext.Advertisements
+            .Where(item => item.PostId == post.Id &&
+                (item.ReservedAmount > 0 || item.Status == AdvertisementStatus.Draft || item.Status == AdvertisementStatus.Pending ||
+                 item.Status == AdvertisementStatus.Approved || item.Status == AdvertisementStatus.Active ||
+                 item.Status == AdvertisementStatus.Paused))
+            .ToListAsync(cancellationToken);
+        foreach (var advertisement in advertisements)
+        {
+            if (advertisement.ReservedAmount > 0)
+            {
+                await walletService.ReleaseAsync(advertisement.AdvertiserId, advertisement.ReservedAmount,
+                    "Advertisement", advertisement.Id.ToString("D"),
+                    $"advertisement:{advertisement.Id:D}:delete-post:release", cancellationToken);
+                advertisement.ReservedAmount = 0;
+            }
+            if (advertisement.Status is AdvertisementStatus.Draft or AdvertisementStatus.Pending or
+                AdvertisementStatus.Approved or AdvertisementStatus.Active or AdvertisementStatus.Paused)
+            {
+                advertisement.Status = AdvertisementStatus.Cancelled;
+                advertisement.CancelledAt = DateTime.UtcNow;
+            }
+        }
+        post.Status = PostStatus.Deleted;
+        post.DeletedAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
 
     public Task<Comment?> GetCommentForReplyAsync(Guid commentId, CancellationToken cancellationToken) =>
         dbContext.Comments

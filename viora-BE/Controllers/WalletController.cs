@@ -40,6 +40,17 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
         return result is null ? ProblemResult(404, "PAYMENT_NOT_FOUND", "Không tìm thấy payment.") : Ok(result);
     }
 
+    [HttpGet("payments")]
+    public async Task<ActionResult<PaymentPage>> Payments(
+        [FromQuery, Range(1, int.MaxValue)] int page = 1,
+        [FromQuery, Range(1, 100)] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryUserId(out var userId)) return Unauthorized();
+        await paymentService.ReconcilePendingAsync(userId, cancellationToken);
+        return Ok(await paymentService.GetPageAsync(userId, page, pageSize, cancellationToken));
+    }
+
     [HttpPost("payments/{id:guid}/cancel")]
     public async Task<ActionResult<PaymentResponse>> CancelPayment(Guid id, CancellationToken cancellationToken)
     {

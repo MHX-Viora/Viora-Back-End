@@ -23,8 +23,8 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
         await ExpirePaymentsAsync(walletId.Value, cancellationToken);
 
         var query = dbContext.WalletTransactions.AsNoTracking().Where(item => item.WalletId == walletId);
+        query = query.Where(item => item.Type != WalletTransactionType.Deposit || item.Status == WalletTransactionStatus.Completed);
         if (type is not null) query = query.Where(item => item.Type == type);
-        else query = query.Where(item => item.Type != WalletTransactionType.Hold && item.Type != WalletTransactionType.Release && item.Type != WalletTransactionType.Capture);
         var total = await query.CountAsync(cancellationToken);
         var items = await query.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
             .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);

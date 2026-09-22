@@ -76,6 +76,12 @@ public sealed class PaymentLifecycleTests
         Assert.Equal(1_789_780_500, PaymentLifecycle.ProviderExpiryTimestamp(expiresAt));
     }
 
+    [Theory]
+    [InlineData("FAILED", PaymentStatus.Failed)]
+    [InlineData("EXPIRED", PaymentStatus.Expired)]
+    public void Terminal_provider_statuses_are_recognized(string providerStatus, PaymentStatus expected) =>
+        Assert.Equal(expected, PaymentLifecycle.FromProviderStatus(providerStatus));
+
     [Fact]
     public void Cancellation_requires_a_signed_confirmation_for_the_expected_order()
     {

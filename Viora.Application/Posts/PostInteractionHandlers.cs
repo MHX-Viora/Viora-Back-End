@@ -400,11 +400,7 @@ public sealed class DeletePostHandler(IPostInteractionRepository repository)
         var post = await repository.GetPostWithOriginalAsync(request.PostId, cancellationToken);
         if (post is null) return Result<EmptyResponse>.Failure(PostInteractionError.NotFound, "Không tìm thấy bài viết.");
         if (post.UserId != request.UserId) return Result<EmptyResponse>.Failure(PostInteractionError.Forbidden, "Bạn không có quyền xóa bài viết.");
-        if (post.Status == PostStatus.Deleted) return Result<EmptyResponse>.Success(new EmptyResponse());
-
-        post.Status = PostStatus.Deleted;
-        post.DeletedAt = DateTime.UtcNow;
-        await repository.SaveChangesAsync(cancellationToken);
+        await repository.DeletePostAndCancelAdvertisementsAsync(post, cancellationToken);
         return Result<EmptyResponse>.Success(new EmptyResponse());
     }
 }

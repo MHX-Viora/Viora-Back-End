@@ -105,6 +105,8 @@ public static class PaymentLifecycle
     {
         "PAID" => PaymentStatus.Paid,
         "CANCELLED" => PaymentStatus.Cancelled,
+        "FAILED" => PaymentStatus.Failed,
+        "EXPIRED" => PaymentStatus.Expired,
         "PENDING" or "PROCESSING" => PaymentStatus.Pending,
         _ => null
     };
@@ -198,6 +200,7 @@ public sealed record WalletTransactionResponse(Guid Id, WalletTransactionType Ty
 public sealed record WalletTransactionPage(IReadOnlyList<WalletTransactionResponse> Data, int Page, int PageSize, int TotalItems, int TotalPages);
 public sealed record CreateDepositRequest(decimal Amount, string ReturnUrl, string CancelUrl, string IdempotencyKey);
 public sealed record PaymentResponse(Guid Id, decimal Amount, string Currency, PaymentStatus Status, string Provider, long ProviderOrderCode, string? ProviderTransactionId, string? CheckoutUrl, string? QrCode, string TransferContent, Guid? TransactionId, DateTime CreatedAt, DateTime ExpiresAt, DateTime? PaidAt);
+public sealed record PaymentPage(IReadOnlyList<PaymentResponse> Data, int Page, int PageSize, int TotalItems, int TotalPages);
 public sealed record BankAccountResponse(Guid Id, string BankCode, string BankName, string AccountNumberMasked, string AccountHolderName, bool IsDefault, DateTime CreatedAt);
 public sealed record CreateBankAccountRequest(string BankCode, string BankName, string AccountNumber, string AccountHolderName, bool IsDefault);
 public sealed record CreateWithdrawalRequest(decimal Amount, Guid BankAccountId, string IdempotencyKey);
@@ -247,6 +250,7 @@ public interface IWalletService
 
 public interface IPaymentService
 {
+    Task<PaymentPage> GetPageAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken);
     Task<PaymentResponse> CreateDepositAsync(Guid userId, CreateDepositRequest request, CancellationToken cancellationToken);
     Task<PaymentResponse?> GetAsync(Guid userId, Guid paymentId, CancellationToken cancellationToken);
     Task<PaymentResponse?> CancelAsync(Guid userId, Guid paymentId, CancellationToken cancellationToken);

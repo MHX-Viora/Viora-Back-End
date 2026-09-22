@@ -105,6 +105,14 @@ public static class AdvertisementRules
         return dailyRemaining.HasValue ? Math.Min(charge, Math.Max(0m, dailyRemaining.Value)) : charge;
     }
 
+    public static void RequireDailyBudgetTotal(decimal? dailyBudget, decimal totalBudget, DateTime startAt, DateTime endAt)
+    {
+        if (!dailyBudget.HasValue || endAt <= startAt) return;
+        var days = (decimal)Math.Ceiling((endAt - startAt).TotalDays);
+        if (dailyBudget.Value * days != totalBudget)
+            throw new AdvertisementValidationException("INVALID_ADVERTISEMENT_TOTAL_BUDGET", "Tổng ngân sách phải bằng ngân sách ngày nhân số ngày chạy.");
+    }
+
     public static bool IsRepeatedImpression(DateTime lastImpressionAt, DateTime now) =>
         lastImpressionAt > now.AddHours(-24);
 }

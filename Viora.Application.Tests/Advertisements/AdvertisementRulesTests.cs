@@ -110,6 +110,15 @@ public sealed class AdvertisementRulesTests
     }
 
     [Fact]
+    public void Daily_budget_must_cover_the_selected_days()
+    {
+        var start = new DateTime(2026, 9, 22, 0, 0, 0, DateTimeKind.Utc);
+        var error = Assert.Throws<AdvertisementValidationException>(() =>
+            AdvertisementRules.RequireDailyBudgetTotal(50_000m, 50_000m, start, start.AddDays(3)));
+        Assert.Equal("INVALID_ADVERTISEMENT_TOTAL_BUDGET", error.Code);
+    }
+
+    [Fact]
     public void Impression_is_counted_at_most_once_per_viewer_per_day()
     {
         var now = new DateTime(2026, 9, 22, 12, 0, 0, DateTimeKind.Utc);
