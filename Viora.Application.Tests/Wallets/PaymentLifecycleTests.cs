@@ -1,5 +1,6 @@
 using Viora.Application.Wallets;
 using Viora.Domain.Entities;
+using System.Text.Json;
 using Xunit;
 
 namespace Viora.Application.Tests.Wallets;
@@ -25,6 +26,17 @@ public sealed class PaymentLifecycleTests
         Assert.Equal(expected, PaymentLifecycle.CanComplete(status));
     }
 
+    [Theory]
+    [InlineData(PaymentStatus.Pending, true)]
+    [InlineData(PaymentStatus.Paid, false)]
+    [InlineData(PaymentStatus.Failed, false)]
+    [InlineData(PaymentStatus.Cancelled, false)]
+    [InlineData(PaymentStatus.Expired, false)]
+    public void CanCancel_only_accepts_an_open_payment(PaymentStatus status, bool expected)
+    {
+        Assert.Equal(expected, PaymentLifecycle.CanCancel(status));
+    }
+
     [Fact]
     public void DepositIdempotencyKey_is_stable_for_every_delivery()
     {
@@ -33,13 +45,17 @@ public sealed class PaymentLifecycleTests
         Assert.Equal("deposit:19a3d4c4-98bf-4a56-8fca-9cb04a34fe8b", PaymentLifecycle.DepositIdempotencyKey(paymentId));
     }
 
-    [Fact]
-    public void Paid_payment_never_expires_when_the_deadline_passes()
+    [Theory]
+    [InlineData(PaymentStatus.Pending, true)]
+    [InlineData(PaymentStatus.Paid, false)]
+    [InlineData(PaymentStatus.Failed, false)]
+    [InlineData(PaymentStatus.Cancelled, false)]
+    [InlineData(PaymentStatus.Expired, false)]
+    public void Only_pending_payment_expires_when_the_deadline_passes(PaymentStatus status, bool expected)
     {
         var now = new DateTime(2026, 9, 19, 1, 15, 1, DateTimeKind.Utc);
 
-        Assert.True(PaymentLifecycle.ShouldExpire(PaymentStatus.Pending, now.AddSeconds(-1), now));
-        Assert.False(PaymentLifecycle.ShouldExpire(PaymentStatus.Paid, now.AddSeconds(-1), now));
+        Assert.Equal(expected, PaymentLifecycle.ShouldExpire(status, now.AddSeconds(-1), now));
     }
 
     [Theory]
@@ -58,5 +74,18 @@ public sealed class PaymentLifecycleTests
         var expiresAt = new DateTime(2026, 9, 19, 1, 15, 0, DateTimeKind.Utc);
 
         Assert.Equal(1_789_780_500, PaymentLifecycle.ProviderExpiryTimestamp(expiresAt));
+    }
+
+    [Fact]
+    public void Cancellation_requires_a_signed_confirmation_for_the_expected_order()
+    {
+        const string data = "{\"orderCode\":123,\"status\":\"CANCELLED\"}";
+        var signature = PayOsSignature.CreateWebhookSignature(data, "checksum");
+        using var response = JsonDocument.Parse($"{{\"code\":\"00\",\"data\":{data},\"signature\":\"{signature}\"}}");
+        Assert.True(PaymentLifecycle.IsConfirmedCancellation(response.RootElement, 123, "checksum"));
+        Assert.False(PaymentLifecycle.IsConfirmedCancellation(response.RootElement, 124, "checksum"));
+        Assert.False(PaymentLifecycle.IsConfirmedCancellation(response.RootElement, 123, "wrong-key"));
+        using var malformed = JsonDocument.Parse("[]");
+        Assert.False(PaymentLifecycle.IsConfirmedCancellation(malformed.RootElement, 123, "checksum"));
     }
 }

@@ -91,6 +91,8 @@ public static class PaymentLifecycle
     public static bool CanComplete(PaymentStatus status) =>
         status is PaymentStatus.Pending or PaymentStatus.Expired;
 
+    public static bool CanCancel(PaymentStatus status) => status == PaymentStatus.Pending;
+
     public static bool ShouldExpire(PaymentStatus status, DateTime expiresAt, DateTime now) =>
         status == PaymentStatus.Pending && expiresAt <= now;
 
@@ -106,6 +108,17 @@ public static class PaymentLifecycle
         "PENDING" or "PROCESSING" => PaymentStatus.Pending,
         _ => null
     };
+
+    public static bool IsConfirmedCancellation(JsonElement root, long expectedOrderCode, string checksumKey) =>
+        root.ValueKind == JsonValueKind.Object &&
+        root.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String && code.GetString() == "00" &&
+        root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object &&
+        root.TryGetProperty("signature", out var signature) && signature.ValueKind == JsonValueKind.String &&
+        PayOsSignature.VerifyWebhookSignature(data.GetRawText(), signature.GetString() ?? "", checksumKey) &&
+        data.TryGetProperty("orderCode", out var orderCode) && orderCode.TryGetInt64(out var confirmedOrderCode) &&
+        confirmedOrderCode == expectedOrderCode &&
+        data.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.String &&
+        status.GetString() == "CANCELLED";
 }
 
 public static class PayOsSignature
@@ -236,5 +249,7 @@ public interface IPaymentService
 {
     Task<PaymentResponse> CreateDepositAsync(Guid userId, CreateDepositRequest request, CancellationToken cancellationToken);
     Task<PaymentResponse?> GetAsync(Guid userId, Guid paymentId, CancellationToken cancellationToken);
+    Task<PaymentResponse?> CancelAsync(Guid userId, Guid paymentId, CancellationToken cancellationToken);
+    Task ReconcilePendingAsync(Guid userId, CancellationToken cancellationToken);
     Task HandlePayOsWebhookAsync(string payload, CancellationToken cancellationToken);
 }

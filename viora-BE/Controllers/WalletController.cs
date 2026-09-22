@@ -40,6 +40,18 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
         return result is null ? ProblemResult(404, "PAYMENT_NOT_FOUND", "Không tìm thấy payment.") : Ok(result);
     }
 
+    [HttpPost("payments/{id:guid}/cancel")]
+    public async Task<ActionResult<PaymentResponse>> CancelPayment(Guid id, CancellationToken cancellationToken)
+    {
+        if (!TryUserId(out var userId)) return Unauthorized();
+        try
+        {
+            var result = await paymentService.CancelAsync(userId, id, cancellationToken);
+            return result is null ? ProblemResult(404, "PAYMENT_NOT_FOUND", "Không tìm thấy payment.") : Ok(result);
+        }
+        catch (WalletConflictException exception) { return ProblemResult(409, exception.Code, exception.Message); }
+    }
+
     [HttpGet("transactions")]
     public async Task<ActionResult<WalletTransactionPage>> Transactions(
         [FromQuery, Range(1, int.MaxValue)] int page = 1,
@@ -48,6 +60,8 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
         CancellationToken cancellationToken = default)
     {
         if (!TryUserId(out var userId)) return Unauthorized();
+        if (type is null or WalletTransactionType.Deposit)
+            await paymentService.ReconcilePendingAsync(userId, cancellationToken);
         return Ok(await walletService.GetTransactionsAsync(userId, page, pageSize, type, cancellationToken));
     }
 
@@ -56,6 +70,11 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
     {
         if (!TryUserId(out var userId)) return Unauthorized();
         var result = await walletService.GetTransactionAsync(userId, id, cancellationToken);
+        if (result is { Type: WalletTransactionType.Deposit, ReferenceType: "Payment" } && Guid.TryParse(result.ReferenceId, out var paymentId))
+        {
+            await paymentService.GetAsync(userId, paymentId, cancellationToken);
+            result = await walletService.GetTransactionAsync(userId, id, cancellationToken);
+        }
         return result is null ? ProblemResult(404, "TRANSACTION_NOT_FOUND", "Không tìm thấy giao dịch.") : Ok(result);
     }
 

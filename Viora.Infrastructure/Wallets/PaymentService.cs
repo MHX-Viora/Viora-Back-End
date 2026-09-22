@@ -156,6 +156,58 @@ public sealed class PaymentService(
         return payment is null ? null : Map(payment);
     }
 
+    public async Task ReconcilePendingAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        await ExpirePendingAsync(userId, cancellationToken);
+        var cutoff = DateTime.UtcNow.AddDays(-30);
+        var paymentIds = await dbContext.Payments.AsNoTracking()
+            .Where(payment => payment.UserId == userId &&
+                (payment.Status == PaymentStatus.Pending || payment.Status == PaymentStatus.Expired) &&
+                payment.CreatedAt >= cutoff)
+            .OrderByDescending(payment => payment.CreatedAt)
+            .Take(5).Select(payment => payment.Id).ToListAsync(cancellationToken);
+        foreach (var paymentId in paymentIds)
+            await GetAsync(userId, paymentId, cancellationToken);
+    }
+
+    public async Task<PaymentResponse?> CancelAsync(Guid userId, Guid paymentId, CancellationToken cancellationToken)
+    {
+        await ReconcileWithProviderAsync(userId, paymentId, cancellationToken);
+        var payment = await dbContext.Payments.AsNoTracking().SingleOrDefaultAsync(
+            item => item.Id == paymentId && item.UserId == userId, cancellationToken);
+        if (payment is null) return null;
+        if (!PaymentLifecycle.CanCancel(payment.Status)) return Map(payment);
+
+        try
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Post, $"v2/payment-requests/{payment.ProviderOrderCode}/cancel")
+            {
+                Content = JsonContent.Create(new { cancellationReason = "User requested cancellation" })
+            };
+            message.Headers.Add("x-client-id", RequiredSecret("PAYOS_CLIENT_ID"));
+            message.Headers.Add("x-api-key", RequiredSecret("PAYOS_API_KEY"));
+            using var response = await httpClientFactory.CreateClient("payos").SendAsync(message, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+                if (PaymentLifecycle.IsConfirmedCancellation(document.RootElement, payment.ProviderOrderCode, RequiredSecret("PAYOS_CHECKSUM_KEY")))
+                {
+                    await SetCancelledAsync(payment.Id, cancellationToken);
+                    return await GetAsync(userId, paymentId, cancellationToken);
+                }
+            }
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && exception is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            logger.LogWarning(exception, "Unable to cancel payOS order {OrderCode}.", payment.ProviderOrderCode);
+        }
+
+        await ReconcileWithProviderAsync(userId, paymentId, cancellationToken);
+        var current = await dbContext.Payments.AsNoTracking().SingleAsync(item => item.Id == paymentId, cancellationToken);
+        if (current.Status != PaymentStatus.Pending) return Map(current);
+        throw new WalletConflictException("PAYMENT_CANCEL_UNCONFIRMED", "Chưa thể xác nhận hủy thanh toán. Vui lòng thử lại.");
+    }
+
     public async Task HandlePayOsWebhookAsync(string payload, CancellationToken cancellationToken)
     {
         var checksumKey = RequiredSecret("PAYOS_CHECKSUM_KEY");
@@ -184,7 +236,8 @@ public sealed class PaymentService(
     private async Task ReconcileWithProviderAsync(Guid userId, Guid paymentId, CancellationToken cancellationToken)
     {
         var payment = await dbContext.Payments.AsNoTracking().SingleOrDefaultAsync(
-            item => item.Id == paymentId && item.UserId == userId && item.Status == PaymentStatus.Pending,
+            item => item.Id == paymentId && item.UserId == userId &&
+                (item.Status == PaymentStatus.Pending || item.Status == PaymentStatus.Expired),
             cancellationToken);
         if (payment is null) return;
 
@@ -195,13 +248,15 @@ public sealed class PaymentService(
 
         try
         {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
             using var message = new HttpRequestMessage(HttpMethod.Get, $"v2/payment-requests/{payment.ProviderOrderCode}");
             message.Headers.Add("x-client-id", clientId);
             message.Headers.Add("x-api-key", apiKey);
-            using var response = await httpClientFactory.CreateClient("payos").SendAsync(message, cancellationToken);
+            using var response = await httpClientFactory.CreateClient("payos").SendAsync(message, timeout.Token);
             if (!response.IsSuccessStatusCode) return;
 
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(timeout.Token);
             using var document = JsonDocument.Parse(body);
             var root = document.RootElement;
             if (!root.TryGetProperty("code", out var code) || code.ValueKind != JsonValueKind.String || code.GetString() != "00" ||
@@ -274,6 +329,33 @@ public sealed class PaymentService(
                 cancellationToken);
             if (ledger is not null) ledger.Status = WalletTransactionStatus.Failed;
         }
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private async Task ExpirePendingAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var payments = await dbContext.Payments
+            .FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"UserId\" = {userId} AND \"Status\" = {(short)PaymentStatus.Pending} AND \"ExpiresAt\" <= {now} FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        if (payments.Count == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return;
+        }
+
+        var ledgerIds = payments.Where(payment => payment.LedgerTransactionId.HasValue)
+            .Select(payment => payment.LedgerTransactionId!.Value).ToArray();
+        if (ledgerIds.Length > 0)
+        {
+            var ledgers = await dbContext.WalletTransactions
+                .Where(item => ledgerIds.Contains(item.Id) && item.Status == WalletTransactionStatus.Pending)
+                .ToListAsync(cancellationToken);
+            foreach (var ledger in ledgers) ledger.Status = WalletTransactionStatus.Failed;
+        }
+        foreach (var payment in payments) payment.Status = PaymentStatus.Expired;
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
