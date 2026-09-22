@@ -10,7 +10,8 @@ public static class AccountStyleCapabilities
             or AccountStyle.Agency;
 
     public static bool CanAdvertise(this AccountStyle accountStyle) =>
-        accountStyle is AccountStyle.Creator
+        accountStyle is AccountStyle.Personal
+            or AccountStyle.Creator
             or AccountStyle.Journalist
             or AccountStyle.Business
             or AccountStyle.Organization

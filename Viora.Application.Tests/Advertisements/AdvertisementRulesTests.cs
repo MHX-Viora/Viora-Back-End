@@ -7,8 +7,8 @@ namespace Viora.Application.Tests.Advertisements;
 public sealed class AdvertisementRulesTests
 {
     [Fact]
-    public void Personal_account_cannot_advertise() =>
-        Assert.False(AccountStyle.Personal.CanAdvertise());
+    public void Personal_account_can_advertise() =>
+        Assert.True(AccountStyle.Personal.CanAdvertise());
 
     [Theory]
     [InlineData(AccountStyle.Creator)]
