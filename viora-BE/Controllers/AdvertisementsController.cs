@@ -20,7 +20,7 @@ public sealed class AdvertisementsController(IAdvertisementService advertisement
                 body.PostId, body.Objective, body.DestinationUrl, body.CtaType, body.TargetingMode,
                 body.MinimumAge, body.MaximumAge, body.TargetLocation, body.DailyBudget,
                 body.TotalBudget, body.StartAt, body.EndAt), cancellationToken);
-            return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+            return Created($"/api/advertisements/{result.Id:D}", result);
         });
 
     [HttpPost("{id:guid}/submit")]
