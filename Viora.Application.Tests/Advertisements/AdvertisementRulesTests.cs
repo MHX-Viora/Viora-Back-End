@@ -37,6 +37,22 @@ public sealed class AdvertisementRulesTests
         Assert.Null(AdvertisementRules.NormalizeDestinationUrl("  "));
 
     [Fact]
+    public void Message_cta_cannot_open_an_external_website()
+    {
+        var exception = Assert.Throws<AdvertisementValidationException>(() =>
+            AdvertisementRules.RequireCtaDestination(AdvertisementCtaType.Message, "https://example.com/"));
+        Assert.Equal("INVALID_AD_CTA_DESTINATION", exception.Code);
+    }
+
+    [Fact]
+    public void Purchase_cta_requires_a_website()
+    {
+        var exception = Assert.Throws<AdvertisementValidationException>(() =>
+            AdvertisementRules.RequireCtaDestination(AdvertisementCtaType.BuyNow, null));
+        Assert.Equal("AD_DESTINATION_REQUIRED", exception.Code);
+    }
+
+    [Fact]
     public void Budget_below_minimum_is_rejected()
     {
         var exception = Assert.Throws<AdvertisementValidationException>(
@@ -89,5 +105,15 @@ public sealed class AdvertisementRulesTests
     {
         Assert.Equal(30m, AdvertisementRules.CalculateCharge(100m, 970m, 1_000m));
         Assert.Equal(0m, AdvertisementRules.CalculateCharge(100m, 1_000m, 1_000m));
+        Assert.Equal(20m, AdvertisementRules.CalculateCharge(100m, 0m, 1_000m, 20m));
+        Assert.Equal(0m, AdvertisementRules.CalculateCharge(100m, 0m, 1_000m, 0m));
+    }
+
+    [Fact]
+    public void Impression_is_counted_at_most_once_per_viewer_per_day()
+    {
+        var now = new DateTime(2026, 9, 22, 12, 0, 0, DateTimeKind.Utc);
+        Assert.True(AdvertisementRules.IsRepeatedImpression(now.AddHours(-23), now));
+        Assert.False(AdvertisementRules.IsRepeatedImpression(now.AddHours(-24), now));
     }
 }

@@ -33,6 +33,21 @@ public static class AdvertisementRules
         return uri.AbsoluteUri;
     }
 
+    public static void RequireCtaDestination(AdvertisementCtaType ctaType, string? destinationUrl)
+    {
+        if (ctaType is AdvertisementCtaType.Message or AdvertisementCtaType.ContactNow or AdvertisementCtaType.Follow)
+        {
+            if (destinationUrl is not null)
+                throw new AdvertisementValidationException("INVALID_AD_CTA_DESTINATION", "CTA này phải mở đích đến trong ứng dụng.");
+        }
+        else if (ctaType is AdvertisementCtaType.BuyNow or AdvertisementCtaType.SignUp or
+                 AdvertisementCtaType.Download or AdvertisementCtaType.ViewProduct or AdvertisementCtaType.GetOffer)
+        {
+            if (destinationUrl is null)
+                throw new AdvertisementValidationException("AD_DESTINATION_REQUIRED", "CTA này cần liên kết HTTPS.");
+        }
+    }
+
     public static void RequireBudget(decimal budget)
     {
         if (budget < MinimumBudget)
@@ -83,9 +98,13 @@ public static class AdvertisementRules
             throw new AdvertisementValidationException("ADVERTISEMENT_REVIEW_REASON_TOO_LONG", "Lý do kiểm duyệt không được vượt quá 500 ký tự.");
     }
 
-    public static decimal CalculateCharge(decimal unitPrice, decimal spentAmount, decimal totalBudget)
+    public static decimal CalculateCharge(decimal unitPrice, decimal spentAmount, decimal totalBudget, decimal? dailyRemaining = null)
     {
         if (unitPrice <= 0 || spentAmount >= totalBudget) return 0m;
-        return Math.Min(unitPrice, totalBudget - spentAmount);
+        var charge = Math.Min(unitPrice, totalBudget - spentAmount);
+        return dailyRemaining.HasValue ? Math.Min(charge, Math.Max(0m, dailyRemaining.Value)) : charge;
     }
+
+    public static bool IsRepeatedImpression(DateTime lastImpressionAt, DateTime now) =>
+        lastImpressionAt > now.AddHours(-24);
 }

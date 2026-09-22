@@ -33,6 +33,7 @@ public sealed class AdvertisementService(
         AdvertisementRules.RequireSchedule(request.StartAt, request.EndAt);
         ValidateTargeting(request);
         var destinationUrl = AdvertisementRules.NormalizeDestinationUrl(request.DestinationUrl);
+        AdvertisementRules.RequireCtaDestination(request.CtaType, destinationUrl);
         var now = DateTime.UtcNow;
         if (request.EndAt.ToUniversalTime() <= now)
             throw new AdvertisementValidationException("ADVERTISEMENT_END_IN_PAST", "Thời gian kết thúc quảng cáo phải ở tương lai.");
@@ -127,8 +128,10 @@ public sealed class AdvertisementService(
 
     public async Task<AdvertisementResponse> ResumeAsync(Guid userId, Guid advertisementId, CancellationToken cancellationToken)
     {
-        var advertisement = await LoadOwnedEntityAsync(userId, advertisementId, cancellationToken);
+        var advertisement = await LoadOwnedEntityAsync(userId, advertisementId, cancellationToken, includePost: true);
         AdvertisementRules.RequireTransition(advertisement.Status, AdvertisementStatus.Active);
+        if (!IsAdvertisablePost(advertisement.Post))
+            throw new AdvertisementConflictException("ADVERTISEMENT_CONTENT_UNAVAILABLE", "Nội dung quảng cáo không còn công khai hoặc đủ điều kiện.");
         if (advertisement.EndAt <= DateTime.UtcNow || advertisement.ReservedAmount <= 0)
             throw new AdvertisementConflictException("ADVERTISEMENT_CANNOT_RESUME", "Quảng cáo đã hết hạn hoặc hết ngân sách.");
         if (advertisement.StartAt > DateTime.UtcNow)
@@ -175,6 +178,7 @@ public sealed class AdvertisementService(
     {
         await SynchronizeLifecycleAsync(cancellationToken);
         var now = DateTime.UtcNow;
+        var todayUtc = now.Date;
         var boundedTake = Math.Clamp(take, 1, Math.Max(1, settings.MaximumDeliveryItems));
         var birthday = await dbContext.UserIdentities.AsNoTracking()
             .Where(item => item.UserId == viewerId && item.Status == IdentitySubmissionStatus.Approved && item.Birthday.HasValue)
@@ -192,8 +196,17 @@ public sealed class AdvertisementService(
             .Where(item => item.Status == AdvertisementStatus.Active &&
                            item.Placement == placement &&
                            item.AdvertiserId != viewerId &&
+                           item.Post.Status == PostStatus.Published &&
+                           item.Post.Visibility == PostVisibility.Public &&
+                           item.Post.DeletedAt == null &&
+                           item.Post.User.Account.Status == AccountStatus.Active &&
+                           item.Post.User.AccountStyle >= AccountStyle.Creator &&
+                           item.Post.User.AccountStyle <= AccountStyle.Agency &&
                            item.StartAt <= now && item.EndAt > now &&
                            item.ReservedAmount > 0 &&
+                           (!item.DailyBudget.HasValue ||
+                            (dbContext.AdvertisementEvents.Where(adEvent => adEvent.AdvertisementId == item.Id && adEvent.CreatedAt >= todayUtc)
+                                .Sum(adEvent => (decimal?)adEvent.ChargeAmount) ?? 0m) < item.DailyBudget.Value) &&
                            (item.TargetingMode == AdvertisementTargetingMode.Automatic ||
                             (viewerAge.HasValue &&
                              (!item.MinimumAge.HasValue || viewerAge.Value >= item.MinimumAge.Value) &&
@@ -227,15 +240,40 @@ public sealed class AdvertisementService(
         }
 
         var now = DateTime.UtcNow;
+        if (type == AdvertisementEventType.Impression)
+        {
+            var lastImpression = await dbContext.AdvertisementEvents.AsNoTracking()
+                .Where(item => item.AdvertisementId == advertisementId && item.ViewerId == viewerId && item.Type == AdvertisementEventType.Impression)
+                .OrderByDescending(item => item.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (lastImpression is not null && AdvertisementRules.IsRepeatedImpression(lastImpression.CreatedAt, now))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return EventResponse(lastImpression, advertisement, true);
+            }
+        }
         if (advertisement.AdvertiserId == viewerId)
             throw new AdvertisementForbiddenException("Không ghi nhận tương tác trên quảng cáo của chính bạn.");
         if (advertisement.Status != AdvertisementStatus.Active || advertisement.StartAt > now || advertisement.EndAt <= now || advertisement.ReservedAmount <= 0)
             throw new AdvertisementConflictException("ADVERTISEMENT_NOT_ACTIVE", "Quảng cáo hiện không được phân phối.");
+        var post = await dbContext.Posts.AsNoTracking()
+            .Include(item => item.User).ThenInclude(user => user.Account)
+            .SingleOrDefaultAsync(item => item.Id == advertisement.PostId, cancellationToken);
+        if (post is null || !IsAdvertisablePost(post))
+            throw new AdvertisementConflictException("ADVERTISEMENT_CONTENT_UNAVAILABLE", "Nội dung quảng cáo không còn công khai hoặc đủ điều kiện.");
 
         var unitPrice = type == AdvertisementEventType.Impression ? settings.ImpressionPrice : settings.ClickPrice;
-        var charge = AdvertisementRules.CalculateCharge(unitPrice, advertisement.SpentAmount, advertisement.TotalBudget);
+        decimal? dailyRemaining = null;
+        if (advertisement.DailyBudget.HasValue)
+        {
+            var dailySpent = await dbContext.AdvertisementEvents.AsNoTracking()
+                .Where(item => item.AdvertisementId == advertisementId && item.CreatedAt >= now.Date)
+                .SumAsync(item => (decimal?)item.ChargeAmount, cancellationToken) ?? 0m;
+            dailyRemaining = advertisement.DailyBudget.Value - dailySpent;
+        }
+        var charge = AdvertisementRules.CalculateCharge(unitPrice, advertisement.SpentAmount, advertisement.TotalBudget, dailyRemaining);
         if (charge <= 0)
-            throw new AdvertisementConflictException("ADVERTISEMENT_BUDGET_EXHAUSTED", "Quảng cáo đã hết ngân sách.");
+            throw new AdvertisementConflictException(dailyRemaining <= 0 ? "ADVERTISEMENT_DAILY_BUDGET_EXHAUSTED" : "ADVERTISEMENT_BUDGET_EXHAUSTED", "Quảng cáo đã hết ngân sách hôm nay hoặc tổng ngân sách.");
         var ledgerKey = BuildEventLedgerKey(advertisementId, viewerId, type, eventKey);
         await walletService.CaptureAsync(advertisement.AdvertiserId, charge, "AdvertisementEvent", advertisementId.ToString("D"), ledgerKey, cancellationToken);
 
@@ -291,10 +329,16 @@ public sealed class AdvertisementService(
 
     public async Task<AdvertisementResponse> ApproveAsync(Guid adminId, Guid advertisementId, CancellationToken cancellationToken)
     {
-        var advertisement = await dbContext.Advertisements.SingleOrDefaultAsync(item => item.Id == advertisementId, cancellationToken)
+        var advertisement = await dbContext.Advertisements
+            .Include(item => item.Post).ThenInclude(post => post.User).ThenInclude(user => user.Account)
+            .SingleOrDefaultAsync(item => item.Id == advertisementId, cancellationToken)
             ?? throw new AdvertisementNotFoundException();
         AdvertisementRules.RequireTransition(advertisement.Status, AdvertisementStatus.Approved);
         var now = DateTime.UtcNow;
+        if (advertisement.EndAt <= now || advertisement.ReservedAmount <= 0)
+            throw new AdvertisementConflictException("ADVERTISEMENT_EXPIRED", "Quảng cáo đã hết hạn hoặc hết ngân sách.");
+        if (!IsAdvertisablePost(advertisement.Post))
+            throw new AdvertisementConflictException("ADVERTISEMENT_CONTENT_UNAVAILABLE", "Nội dung quảng cáo không còn công khai hoặc đủ điều kiện.");
         advertisement.Status = advertisement.StartAt <= now ? AdvertisementStatus.Active : AdvertisementStatus.Approved;
         advertisement.ReviewedBy = adminId;
         advertisement.ReviewedAt = now;
@@ -453,6 +497,11 @@ public sealed class AdvertisementService(
             throw new AdvertisementForbiddenException("Loại tài khoản này chưa đủ điều kiện chạy quảng cáo.");
     }
 
+    private static bool IsAdvertisablePost(Post post) =>
+        post.Status == PostStatus.Published && post.Visibility == PostVisibility.Public &&
+        !post.DeletedAt.HasValue && post.User.Account.Status == AccountStatus.Active &&
+        post.User.AccountStyle.CanAdvertise();
+
     private static AdvertisementPlacement PlacementFor(PostType postType) => postType switch
     {
         PostType.ShortVideo => AdvertisementPlacement.Reels,
@@ -474,6 +523,8 @@ public sealed class AdvertisementService(
             throw new AdvertisementValidationException("INVALID_TARGET_AGE", "Độ tuổi mục tiêu phải từ 13 đến 100 và khoảng tuổi phải hợp lệ.");
         if (request.TargetLocation?.Trim().Length > 120)
             throw new AdvertisementValidationException("INVALID_TARGET_LOCATION", "Khu vực mục tiêu không được vượt quá 120 ký tự.");
+        if (!string.IsNullOrWhiteSpace(request.TargetLocation))
+            throw new AdvertisementValidationException("TARGET_LOCATION_UNAVAILABLE", "Chưa hỗ trợ nhắm mục tiêu theo khu vực.");
     }
 
     private static string NormalizeEventKey(string value)
