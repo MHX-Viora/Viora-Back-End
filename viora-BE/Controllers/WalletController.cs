@@ -68,12 +68,14 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
         [FromQuery, Range(1, int.MaxValue)] int page = 1,
         [FromQuery, Range(1, 100)] int pageSize = 20,
         [FromQuery] WalletTransactionType? type = null,
+        [FromQuery] WalletHistoryGroup? group = null,
         CancellationToken cancellationToken = default)
     {
         if (!TryUserId(out var userId)) return Unauthorized();
-        if (type is null or WalletTransactionType.Deposit)
+        if (type == WalletTransactionType.Deposit ||
+            (type is null && group is (null or WalletHistoryGroup.Deposit)))
             await paymentService.ReconcilePendingAsync(userId, cancellationToken);
-        return Ok(await walletService.GetTransactionsAsync(userId, page, pageSize, type, cancellationToken));
+        return Ok(await walletService.GetTransactionsAsync(userId, page, pageSize, type, group, cancellationToken));
     }
 
     [HttpGet("transactions/{id:guid}")]

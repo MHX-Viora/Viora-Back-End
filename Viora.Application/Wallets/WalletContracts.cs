@@ -196,8 +196,9 @@ public static class PayOsSignature
 }
 
 public sealed record WalletResponse(Guid Id, decimal AvailableBalance, decimal HeldBalance, long AnktCoinBalance, string Currency, WalletStatus Status);
-public sealed record WalletTransactionResponse(Guid Id, WalletTransactionType Type, decimal Amount, decimal BalanceBefore, decimal BalanceAfter, decimal HeldBefore, decimal HeldAfter, string ReferenceType, string ReferenceId, string? Description, WalletTransactionStatus Status, WithdrawalStatus? WithdrawalStatus, PaymentStatus? PaymentStatus, DateTime CreatedAt, DateTime? CompletedAt);
+public sealed record WalletTransactionResponse(Guid Id, WalletTransactionType Type, decimal Amount, decimal BalanceBefore, decimal BalanceAfter, decimal HeldBefore, decimal HeldAfter, string ReferenceType, string ReferenceId, string? Description, WalletTransactionStatus Status, WithdrawalStatus? WithdrawalStatus, PaymentStatus? PaymentStatus, DateTime CreatedAt, DateTime? CompletedAt, bool HasBalanceSnapshot = true, string? Source = null, string? Destination = null, string? RelatedContent = null, string? RelatedStatus = null);
 public sealed record WalletTransactionPage(IReadOnlyList<WalletTransactionResponse> Data, int Page, int PageSize, int TotalItems, int TotalPages);
+public enum WalletHistoryGroup { Deposit = 0, Withdrawal = 1, Payment = 2, Refund = 3 }
 public sealed record CreateDepositRequest(decimal Amount, string ReturnUrl, string CancelUrl, string IdempotencyKey);
 public sealed record PaymentResponse(Guid Id, decimal Amount, string Currency, PaymentStatus Status, string Provider, long ProviderOrderCode, string? ProviderTransactionId, string? CheckoutUrl, string? QrCode, string TransferContent, Guid? TransactionId, DateTime CreatedAt, DateTime ExpiresAt, DateTime? PaidAt);
 public sealed record PaymentPage(IReadOnlyList<PaymentResponse> Data, int Page, int PageSize, int TotalItems, int TotalPages);
@@ -238,7 +239,7 @@ public interface IWithdrawalService
 public interface IWalletService
 {
     Task<WalletResponse> GetOrCreateAsync(Guid userId, CancellationToken cancellationToken);
-    Task<WalletTransactionPage> GetTransactionsAsync(Guid userId, int page, int pageSize, WalletTransactionType? type, CancellationToken cancellationToken);
+    Task<WalletTransactionPage> GetTransactionsAsync(Guid userId, int page, int pageSize, WalletTransactionType? type, WalletHistoryGroup? group, CancellationToken cancellationToken);
     Task<WalletTransactionResponse?> GetTransactionAsync(Guid userId, Guid transactionId, CancellationToken cancellationToken);
     Task<WalletTransactionResponse> CompleteDepositAsync(long providerOrderCode, string providerTransactionId, decimal amount, CancellationToken cancellationToken);
     Task<WalletTransactionResponse> HoldAsync(Guid userId, decimal amount, string referenceType, string referenceId, string idempotencyKey, CancellationToken cancellationToken);

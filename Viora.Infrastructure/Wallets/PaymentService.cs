@@ -46,7 +46,7 @@ public sealed class PaymentService(
         var existing = await dbContext.Payments.AsNoTracking().SingleOrDefaultAsync(
             payment => payment.UserId == userId && payment.IdempotencyKey == request.IdempotencyKey,
             cancellationToken);
-        if (existing is not null) return Map(existing);
+        if (existing is not null) return Map(RequireSameDeposit(existing, request.Amount));
 
         var clientId = RequiredSecret("PAYOS_CLIENT_ID");
         var apiKey = RequiredSecret("PAYOS_API_KEY");
@@ -70,6 +70,23 @@ public sealed class PaymentService(
             Status = PaymentStatus.Pending,
             ExpiresAt = PaymentLifecycle.CalculateExpiry(createdAt)
         };
+        var ledger = new WalletTransaction
+        {
+            WalletId = wallet.Id,
+            Type = WalletTransactionType.Deposit,
+            Amount = request.Amount,
+            BalanceBefore = wallet.AvailableBalance,
+            BalanceAfter = wallet.AvailableBalance,
+            HeldBefore = wallet.HeldBalance,
+            HeldAfter = wallet.HeldBalance,
+            ReferenceType = "Payment",
+            ReferenceId = payment.Id.ToString("D"),
+            Description = "Nạp tiền bằng mã QR",
+            Status = WalletTransactionStatus.Pending,
+            IdempotencyKey = PaymentLifecycle.DepositIdempotencyKey(payment.Id)
+        };
+        payment.LedgerTransactionId = ledger.Id;
+        dbContext.WalletTransactions.Add(ledger);
         dbContext.Payments.Add(payment);
         try
         {
@@ -78,9 +95,10 @@ public sealed class PaymentService(
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             dbContext.Entry(payment).State = EntityState.Detached;
+            dbContext.Entry(ledger).State = EntityState.Detached;
             var duplicate = await dbContext.Payments.AsNoTracking().SingleOrDefaultAsync(
                 item => item.UserId == userId && item.IdempotencyKey == request.IdempotencyKey, cancellationToken);
-            if (duplicate is not null) return Map(duplicate);
+            if (duplicate is not null) return Map(RequireSameDeposit(duplicate, request.Amount));
             throw new WalletConflictException("PAYMENT_ORDER_CONFLICT", "Không thể tạo mã payment duy nhất. Vui lòng thử lại.");
         }
 
@@ -289,9 +307,10 @@ public sealed class PaymentService(
     private async Task SetTerminalAsync(Guid paymentId, PaymentStatus status, CancellationToken cancellationToken)
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var payment = await dbContext.Payments
-            .FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"Id\" = {paymentId} FOR UPDATE")
-            .SingleAsync(cancellationToken);
+        var paymentQuery = dbContext.Database.IsNpgsql()
+            ? dbContext.Payments.FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"Id\" = {paymentId} FOR UPDATE")
+            : dbContext.Payments.Where(item => item.Id == paymentId);
+        var payment = await paymentQuery.SingleAsync(cancellationToken);
         if (payment.Status != PaymentStatus.Pending && !(payment.Status == PaymentStatus.Expired && status == PaymentStatus.Failed))
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -300,6 +319,7 @@ public sealed class PaymentService(
 
         payment.Status = status;
         if (status == PaymentStatus.Cancelled) payment.CancelledAt = DateTime.UtcNow;
+        if (status == PaymentStatus.Failed) payment.FailedAt = DateTime.UtcNow;
         if (payment.LedgerTransactionId is Guid ledgerId)
         {
             var ledger = await dbContext.WalletTransactions.SingleOrDefaultAsync(
@@ -314,9 +334,10 @@ public sealed class PaymentService(
     private async Task ExpireIfNeededAsync(Guid userId, Guid paymentId, CancellationToken cancellationToken)
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var payment = await dbContext.Payments
-            .FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"Id\" = {paymentId} AND \"UserId\" = {userId} FOR UPDATE")
-            .SingleOrDefaultAsync(cancellationToken);
+        var paymentQuery = dbContext.Database.IsNpgsql()
+            ? dbContext.Payments.FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"Id\" = {paymentId} AND \"UserId\" = {userId} FOR UPDATE")
+            : dbContext.Payments.Where(item => item.Id == paymentId && item.UserId == userId);
+        var payment = await paymentQuery.SingleOrDefaultAsync(cancellationToken);
         if (payment is null || !PaymentLifecycle.ShouldExpire(payment.Status, payment.ExpiresAt, DateTime.UtcNow))
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -339,9 +360,10 @@ public sealed class PaymentService(
     {
         var now = DateTime.UtcNow;
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var payments = await dbContext.Payments
-            .FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"UserId\" = {userId} AND \"Status\" = {(short)PaymentStatus.Pending} AND \"ExpiresAt\" <= {now} FOR UPDATE")
-            .ToListAsync(cancellationToken);
+        var paymentsQuery = dbContext.Database.IsNpgsql()
+            ? dbContext.Payments.FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"UserId\" = {userId} AND \"Status\" = {(short)PaymentStatus.Pending} AND \"ExpiresAt\" <= {now} FOR UPDATE")
+            : dbContext.Payments.Where(item => item.UserId == userId && item.Status == PaymentStatus.Pending && item.ExpiresAt <= now);
+        var payments = await paymentsQuery.ToListAsync(cancellationToken);
         if (payments.Count == 0)
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -363,6 +385,10 @@ public sealed class PaymentService(
     }
 
     private decimal ReadDecimal(string key, decimal fallback) => decimal.TryParse(configuration[key], out var value) ? value : fallback;
+
+    private static Payment RequireSameDeposit(Payment payment, decimal amount) =>
+        payment.Amount == amount ? payment : throw new WalletConflictException(
+            "DEPOSIT_IDEMPOTENCY_MISMATCH", "Khóa giao dịch nạp tiền đã được dùng với số tiền khác.");
 
     private string RequiredSecret(string key)
     {
