@@ -194,7 +194,7 @@ public sealed class AdvertisementService(
             .Where(item => item.ViewerId == viewerId &&
                            (item.Type == AdvertisementFeedbackType.Hide || item.Type == AdvertisementFeedbackType.NotInterested))
             .Select(item => item.AdvertisementId);
-        var items = await BaseQuery()
+        var deliveryQuery = BaseQuery()
             .Where(item => item.Status == AdvertisementStatus.Active &&
                            item.Placement == placement &&
                            item.AdvertiserId != viewerId &&
@@ -202,23 +202,42 @@ public sealed class AdvertisementService(
                            item.Post.Visibility == PostVisibility.Public &&
                            item.Post.DeletedAt == null &&
                            item.Post.User.Account.Status == AccountStatus.Active &&
-                           item.Post.User.AccountStyle >= AccountStyle.Creator &&
+                           item.Post.User.AccountStyle >= AccountStyle.Personal &&
                            item.Post.User.AccountStyle <= AccountStyle.Agency &&
                            item.StartAt <= now && item.EndAt > now &&
                            item.ReservedAmount > 0 &&
-                           (!item.DailyBudget.HasValue ||
-                            (dbContext.AdvertisementEvents.Where(adEvent => adEvent.AdvertisementId == item.Id && adEvent.CreatedAt >= todayUtc)
-                                .Sum(adEvent => (decimal?)adEvent.ChargeAmount) ?? 0m) < item.DailyBudget.Value) &&
                            (item.TargetingMode == AdvertisementTargetingMode.Automatic ||
                             (viewerAge.HasValue &&
                              (!item.MinimumAge.HasValue || viewerAge.Value >= item.MinimumAge.Value) &&
                              (!item.MaximumAge.HasValue || viewerAge.Value <= item.MaximumAge.Value))) &&
-                           !hiddenIds.Contains(item.Id))
-            .OrderBy(item => item.SpentAmount / item.TotalBudget)
-            .ThenBy(item => item.CreatedAt)
-            .Take(boundedTake)
-            .AsSplitQuery()
-            .ToListAsync(cancellationToken);
+                           !hiddenIds.Contains(item.Id));
+        List<Advertisement> items;
+        if (dbContext.Database.IsNpgsql())
+        {
+            items = await deliveryQuery
+                .Where(item => !item.DailyBudget.HasValue ||
+                               (dbContext.AdvertisementEvents.Where(adEvent => adEvent.AdvertisementId == item.Id && adEvent.CreatedAt >= todayUtc)
+                                   .Sum(adEvent => (decimal?)adEvent.ChargeAmount) ?? 0m) < item.DailyBudget.Value)
+                .OrderBy(item => item.SpentAmount / item.TotalBudget)
+                .ThenBy(item => item.CreatedAt)
+                .Take(boundedTake)
+                .AsSplitQuery()
+                .ToListAsync(cancellationToken);
+        }
+        else
+        {
+            // SQLite does not translate decimal SUM or ordering; retain exact decimal checks for local integration tests.
+            var candidates = await deliveryQuery.AsSplitQuery().ToListAsync(cancellationToken);
+            var ids = candidates.Select(item => item.Id).ToArray();
+            var charges = await dbContext.AdvertisementEvents.AsNoTracking()
+                .Where(item => ids.Contains(item.AdvertisementId) && item.CreatedAt >= todayUtc)
+                .Select(item => new { item.AdvertisementId, item.ChargeAmount })
+                .ToListAsync(cancellationToken);
+            var dailySpent = charges.GroupBy(item => item.AdvertisementId)
+                .ToDictionary(group => group.Key, group => group.Sum(item => item.ChargeAmount));
+            items = candidates.Where(item => !item.DailyBudget.HasValue || dailySpent.GetValueOrDefault(item.Id) < item.DailyBudget.Value)
+                .OrderBy(item => item.SpentAmount / item.TotalBudget).ThenBy(item => item.CreatedAt).Take(boundedTake).ToList();
+        }
         return new AdvertisementDeliveryResponse(await MapManyAsync(items, cancellationToken));
     }
 
@@ -228,9 +247,10 @@ public sealed class AdvertisementService(
     {
         var eventKey = NormalizeEventKey(request.ClientEventId);
         await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        var advertisement = await dbContext.Advertisements
-            .FromSqlInterpolated($"SELECT * FROM \"Advertisements\" WHERE \"Id\" = {advertisementId} FOR UPDATE")
-            .SingleOrDefaultAsync(cancellationToken)
+        var advertisementQuery = dbContext.Database.IsNpgsql()
+            ? dbContext.Advertisements.FromSqlInterpolated($"SELECT * FROM \"Advertisements\" WHERE \"Id\" = {advertisementId} FOR UPDATE")
+            : dbContext.Advertisements.Where(item => item.Id == advertisementId);
+        var advertisement = await advertisementQuery.SingleOrDefaultAsync(cancellationToken)
             ?? throw new AdvertisementNotFoundException();
         var existing = await dbContext.AdvertisementEvents.AsNoTracking().SingleOrDefaultAsync(item =>
             item.AdvertisementId == advertisementId && item.ViewerId == viewerId &&
