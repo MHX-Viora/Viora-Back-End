@@ -41,4 +41,4 @@ public sealed class AdminAdvertisementsController(IAdvertisementService advertis
         new(new { error = new { code, message } }) { StatusCode = status };
 }
 
-public sealed record RejectAdvertisementBody([property: Required, StringLength(500, MinimumLength = 3)] string Reason);
+public sealed record RejectAdvertisementBody([param: Required, StringLength(500, MinimumLength = 3)] string Reason);

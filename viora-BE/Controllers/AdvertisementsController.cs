@@ -96,16 +96,16 @@ public sealed class AdvertisementsController(IAdvertisementService advertisement
 public sealed record CreateAdvertisementBody(
     Guid PostId,
     AdvertisementObjective Objective,
-    [property: StringLength(2048)] string? DestinationUrl,
+    [param: StringLength(2048)] string? DestinationUrl,
     AdvertisementCtaType CtaType,
     AdvertisementTargetingMode TargetingMode,
     short? MinimumAge,
     short? MaximumAge,
-    [property: StringLength(120)] string? TargetLocation,
-    [property: Range(typeof(decimal), "50000", "1000000000")] decimal? DailyBudget,
-    [property: Range(typeof(decimal), "50000", "1000000000")] decimal TotalBudget,
+    [param: StringLength(120)] string? TargetLocation,
+    [param: Range(typeof(decimal), "50000", "1000000000")] decimal? DailyBudget,
+    [param: Range(typeof(decimal), "50000", "1000000000")] decimal TotalBudget,
     DateTime StartAt,
     DateTime EndAt);
 
-public sealed record AdvertisementEventBody([property: Required, StringLength(100, MinimumLength = 8)] string ClientEventId);
-public sealed record AdvertisementFeedbackBody(AdvertisementFeedbackType Type, [property: StringLength(500)] string? Reason);
+public sealed record AdvertisementEventBody([param: Required, StringLength(100, MinimumLength = 8)] string ClientEventId);
+public sealed record AdvertisementFeedbackBody(AdvertisementFeedbackType Type, [param: StringLength(500)] string? Reason);
