@@ -58,6 +58,7 @@ public sealed record AdvertisementContentResponse(
     int ViewCount,
     AdvertisementUserResponse User,
     IReadOnlyList<AdvertisementMediaResponse> Media,
+    IReadOnlyList<string> Hashtags,
     AdvertisementArticleResponse? Article);
 
 public sealed record AdvertisementResponse(

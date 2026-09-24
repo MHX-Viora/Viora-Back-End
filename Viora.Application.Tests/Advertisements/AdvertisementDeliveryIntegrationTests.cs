@@ -28,6 +28,38 @@ public sealed class AdvertisementDeliveryIntegrationTests
         Assert.Equal(0m, result.Items[0].SpentAmount);
     }
 
+    [Fact]
+    public async Task Sponsored_reel_keeps_the_original_post_hashtags()
+    {
+        await using var scope = await DeliveryScope.CreateAsync(PostType.ShortVideo);
+        var hashtag = new Hashtag { Name = "amthanh" };
+        scope.Db.Hashtags.Add(hashtag);
+        scope.Db.PostHashtags.Add(new PostHashtag
+        {
+            PostId = (await scope.Db.Posts.SingleAsync()).Id,
+            HashtagId = hashtag.Id
+        });
+        await scope.Db.SaveChangesAsync();
+
+        var ad = Assert.Single((await scope.Service.GetDeliveryAsync(
+            scope.ViewerId, AdvertisementPlacement.Reels, 3, default)).Items);
+
+        Assert.Equal(["amthanh"], ad.Content.Hashtags);
+    }
+
+    [Fact]
+    public async Task My_advertisements_returns_ads_owned_by_the_signed_in_account()
+    {
+        await using var scope = await DeliveryScope.CreateAsync(PostType.ShortVideo);
+
+        var mine = await scope.Service.GetMineAsync(scope.AdvertiserId, 1, 20, null, default);
+        var otherAccount = await scope.Service.GetMineAsync(scope.ViewerId, 1, 20, null, default);
+
+        Assert.Equal(scope.AdvertisementId, Assert.Single(mine.Items).Id);
+        Assert.Equal(1, mine.TotalItems);
+        Assert.Empty(otherAccount.Items);
+    }
+
     [Theory]
     [InlineData(AdvertisementStatus.Pending)]
     [InlineData(AdvertisementStatus.Paused)]

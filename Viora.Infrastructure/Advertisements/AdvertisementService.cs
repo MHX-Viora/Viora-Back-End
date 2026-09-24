@@ -461,13 +461,25 @@ public sealed class AdvertisementService(
     {
         var advertisement = await BaseQuery().AsSplitQuery().SingleAsync(item => item.Id == id, cancellationToken);
         var counts = await EventCountsAsync([id], cancellationToken);
-        return Map(advertisement, counts.GetValueOrDefault(id));
+        var hashtags = await HashtagsAsync([advertisement.PostId], cancellationToken);
+        return Map(advertisement, counts.GetValueOrDefault(id), hashtags.GetValueOrDefault(advertisement.PostId) ?? []);
     }
 
     private async Task<IReadOnlyList<AdvertisementResponse>> MapManyAsync(IReadOnlyList<Advertisement> items, CancellationToken cancellationToken)
     {
         var counts = await EventCountsAsync(items.Select(item => item.Id).ToArray(), cancellationToken);
-        return items.Select(item => Map(item, counts.GetValueOrDefault(item.Id))).ToList();
+        var hashtags = await HashtagsAsync(items.Select(item => item.PostId).ToArray(), cancellationToken);
+        return items.Select(item => Map(item, counts.GetValueOrDefault(item.Id), hashtags.GetValueOrDefault(item.PostId) ?? [])).ToList();
+    }
+
+    private async Task<Dictionary<Guid, string[]>> HashtagsAsync(Guid[] postIds, CancellationToken cancellationToken)
+    {
+        var rows = await dbContext.PostHashtags.AsNoTracking()
+            .Where(item => postIds.Contains(item.PostId))
+            .Select(item => new { item.PostId, item.Hashtag.Name })
+            .ToListAsync(cancellationToken);
+        return rows.GroupBy(item => item.PostId)
+            .ToDictionary(group => group.Key, group => group.Select(item => item.Name).OrderBy(name => name).ToArray());
     }
 
     private async Task<Dictionary<Guid, EventCounts>> EventCountsAsync(Guid[] ids, CancellationToken cancellationToken) =>
@@ -483,7 +495,7 @@ public sealed class AdvertisementService(
         .Include(item => item.Post).ThenInclude(post => post.Media)
         .Include(item => item.Post).ThenInclude(post => post.ArticleBlocks);
 
-    private static AdvertisementResponse Map(Advertisement item, EventCounts counts)
+    private static AdvertisementResponse Map(Advertisement item, EventCounts counts, IReadOnlyList<string> hashtags)
     {
         var post = item.Post;
         var orderedBlocks = post.ArticleBlocks.OrderBy(block => block.OrderIndex).ToList();
@@ -504,7 +516,7 @@ public sealed class AdvertisementService(
             new(post.Id, post.PostType, post.Content, post.Location, post.Link, post.CreatedAt,
                 post.ReactionCount, post.CommentCount, post.ShareCount, post.SaveCount, post.ViewCount,
                 new(post.User.Id, post.User.DisplayName, post.User.AvatarUrl, post.User.IsVerified, post.User.AccountStyle),
-                post.Media.Select(media => new AdvertisementMediaResponse(media.Id, media.MediaUrl, media.ThumbnailUrl)).ToList(), article));
+                post.Media.Select(media => new AdvertisementMediaResponse(media.Id, media.MediaUrl, media.ThumbnailUrl)).ToList(), hashtags, article));
     }
 
     private static AdvertisementEventResponse EventResponse(AdvertisementEvent trackedEvent, Advertisement advertisement, bool duplicate) =>
