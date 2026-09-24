@@ -10,18 +10,11 @@ public sealed class CreateArticleValidator : AbstractValidator<CreateArticleComm
         RuleFor(x => x.Title).NotEmpty().MaximumLength(255);
         RuleFor(x => x.Visibility).IsInEnum();
         RuleFor(x => x.Blocks).Cascade(CascadeMode.Stop).NotNull().NotEmpty().WithErrorCode("ARTICLE_BLOCKS_REQUIRED");
-        RuleFor(x => x.Blocks).Must(blocks => blocks is not null && HasRequiredBlocks(blocks))
-            .WithMessage("Article phải có ít nhất một Heading và một Text.")
-            .WithErrorCode("ARTICLE_REQUIRED_BLOCKS_MISSING");
         RuleFor(x => x.Blocks).Must(blocks => blocks is not null && HasContinuousOrder(blocks))
             .WithMessage("OrderIndex phải liên tục, bắt đầu từ 0 và không trùng.")
             .WithErrorCode("ARTICLE_BLOCK_ORDER_INVALID");
         RuleForEach(x => x.Blocks).SetValidator(new CreateArticleBlockValidator());
     }
-
-    internal static bool HasRequiredBlocks(IReadOnlyList<CreateArticleBlockRequest> blocks) =>
-        blocks.Any(x => x.Type == ArticleBlockType.Heading) &&
-        blocks.Any(x => x.Type == ArticleBlockType.Text);
 
     internal static bool HasContinuousOrder<T>(IReadOnlyList<T> blocks) where T : notnull =>
         blocks.Select(GetOrder).OrderBy(x => x).SequenceEqual(Enumerable.Range(0, blocks.Count));
@@ -42,10 +35,6 @@ public sealed class UpdateArticleValidator : AbstractValidator<UpdateArticleComm
         RuleFor(x => x.Title).NotEmpty().MaximumLength(255);
         RuleFor(x => x.Visibility).IsInEnum();
         RuleFor(x => x.Blocks).Cascade(CascadeMode.Stop).NotNull().NotEmpty().WithErrorCode("ARTICLE_BLOCKS_REQUIRED");
-        RuleFor(x => x.Blocks).Must(blocks => blocks is not null &&
-                blocks.Any(x => x.Type == ArticleBlockType.Heading) &&
-                blocks.Any(x => x.Type == ArticleBlockType.Text))
-            .WithErrorCode("ARTICLE_REQUIRED_BLOCKS_MISSING");
         RuleFor(x => x.Blocks).Must(blocks => blocks is not null && CreateArticleValidator.HasContinuousOrder(blocks))
             .WithErrorCode("ARTICLE_BLOCK_ORDER_INVALID");
         RuleFor(x => x.Blocks).Must(blocks => blocks is not null && blocks.Where(x => x.Id.HasValue).Select(x => x.Id).Distinct().Count() == blocks.Count(x => x.Id.HasValue))

@@ -18,16 +18,39 @@ public sealed class ArticleValidatorTests
         Assert.Contains(result.Errors, error => error.ErrorCode == "ARTICLE_BLOCKS_REQUIRED");
     }
 
-    [Theory]
-    [InlineData(ArticleBlockType.Heading)]
-    [InlineData(ArticleBlockType.Text)]
-    public void Create_requires_heading_and_text(ArticleBlockType existingType)
+    [Fact]
+    public void Create_accepts_text_and_image_without_a_heading_block()
     {
-        var blocks = new[] { Block(0, existingType, "Content") };
+        var blocks = new[]
+        {
+            Block(0, ArticleBlockType.Image, mediaUrl: "https://cdn.example.com/image.jpg"),
+            Block(1, ArticleBlockType.Text, "Content")
+        };
         var result = new CreateArticleValidator().Validate(
             new CreateArticleCommand(UserId, "Title", PostVisibility.Public, blocks));
 
-        Assert.False(result.IsValid);
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Create_accepts_an_image_as_the_only_body_block()
+    {
+        var result = new CreateArticleValidator().Validate(new CreateArticleCommand(
+            UserId, "Title", PostVisibility.Public,
+            [Block(0, ArticleBlockType.Image, mediaUrl: "https://cdn.example.com/image.jpg")]));
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Update_accepts_an_image_as_the_only_body_block()
+    {
+        var image = new UpdateArticleBlockRequest(null, 0, ArticleBlockType.Image, null,
+            "https://cdn.example.com/image.jpg", null, null);
+        var result = new UpdateArticleValidator().Validate(new UpdateArticleCommand(
+            UserId, Guid.NewGuid(), "Title", PostVisibility.Public, [image]));
+
+        Assert.True(result.IsValid);
     }
 
     [Fact]
