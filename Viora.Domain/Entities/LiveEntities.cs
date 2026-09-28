@@ -32,6 +32,7 @@ public sealed class Live : AuditableEntity
     public long NextAgoraUid { get; set; } = 1;
     public LiveStatus Status { get; set; } = LiveStatus.Preparing;
     public DateTime? StartedAt { get; set; }
+    public DateTime? HostLastSeenAt { get; set; }
     public DateTime? EndedAt { get; set; }
     public int CurrentViewerCount { get; set; }
     public int PeakViewerCount { get; set; }

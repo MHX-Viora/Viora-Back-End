@@ -16,7 +16,7 @@ namespace viora_BE.Controllers;
 [ApiController]
 [Route("api/lives")]
 public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> realtime, IAgoraTokenService agoraTokens, IMediaStorage mediaStorage,
-    ILiveCommentBuffer commentBuffer, LiveCommentCountFlusher commentCounts) : ControllerBase
+    LiveSessionFinalizer finalizer) : ControllerBase
 {
     [Authorize]
     [HttpGet("config")]
@@ -62,6 +62,22 @@ public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> re
     }
 
     [Authorize]
+    [HttpGet("mine/active")]
+    public async Task<IActionResult> Active(CancellationToken cancellationToken)
+    {
+        if (!TryUserId(out var userId)) return Unauthorized();
+        var live = await db.Lives.AsNoTracking().Where(x => x.HostUserId == userId &&
+            (x.Status == LiveStatus.Preparing || x.Status == LiveStatus.Live || x.Status == LiveStatus.Reconnecting))
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new LiveDto(x.Id, x.HostUserId, x.Host.DisplayName, x.Host.AvatarUrl,
+                x.CategoryId, x.Category.Name, x.Title, x.CoverUrl, x.Privacy,
+                x.AllowComments, x.AllowGifts, x.Status, x.StartedAt, x.EndedAt, x.CurrentViewerCount,
+                x.PeakViewerCount, x.TotalViews, x.UniqueViewers))
+            .FirstOrDefaultAsync(cancellationToken);
+        return Ok(live);
+    }
+
+    [Authorize]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken)
     {
@@ -89,6 +105,11 @@ public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> re
             return UnprocessableEntity(new { code = "LIVE_INVALID_SETUP", message = "Thông tin buổi Live không hợp lệ." });
         if (!await db.LiveCategories.AnyAsync(x => x.Id == body.CategoryId && x.IsActive, cancellationToken))
             return UnprocessableEntity(new { code = "LIVE_CATEGORY_INACTIVE", message = "Danh mục Live không còn hoạt động." });
+        var existing = await db.Lives.AsNoTracking().Where(x => x.HostUserId == userId &&
+            (x.Status == LiveStatus.Preparing || x.Status == LiveStatus.Live || x.Status == LiveStatus.Reconnecting))
+            .Select(x => x.Id).ToListAsync(cancellationToken);
+        foreach (var existingId in existing)
+            await finalizer.EndAsync(existingId, true, cancellationToken);
         if (await db.Lives.AnyAsync(x => x.HostUserId == userId &&
             (x.Status == LiveStatus.Preparing || x.Status == LiveStatus.Live || x.Status == LiveStatus.Reconnecting), cancellationToken))
             return Conflict(new { code = "LIVE_ALREADY_ACTIVE", message = "Bạn đã có một buổi Live đang diễn ra." });
@@ -99,7 +120,8 @@ public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> re
             Id = id, HostUserId = userId, CategoryId = body.CategoryId, Title = title,
             CoverUrl = body.CoverUrl, Description = body.Description?.Trim(), Privacy = body.Privacy,
             AllowComments = body.AllowComments, AllowGifts = body.AllowGifts,
-            AgoraChannelName = $"live_{id:N}_{Guid.NewGuid():N}"[..46], Status = LiveStatus.Preparing
+            AgoraChannelName = $"live_{id:N}_{Guid.NewGuid():N}"[..46], Status = LiveStatus.Preparing,
+            HostLastSeenAt = DateTime.UtcNow
         };
         db.Lives.Add(live);
         await db.SaveChangesAsync(cancellationToken);
@@ -118,6 +140,7 @@ public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> re
         if (live.Status != LiveStatus.Preparing) return Conflict(new { code = "LIVE_INVALID_STATE" });
         live.Status = LiveStatus.Live;
         live.StartedAt = DateTime.UtcNow;
+        live.HostLastSeenAt = live.StartedAt;
         await db.SaveChangesAsync(cancellationToken);
         if (live.Privacy == LivePrivacy.Public)
             await realtime.Clients.All.SendAsync("LiveStarted", new { live.Id, live.HostUserId, live.CategoryId, live.Title, live.StartedAt }, cancellationToken);
@@ -129,33 +152,33 @@ public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> re
     public async Task<IActionResult> End(Guid id, CancellationToken cancellationToken)
     {
         if (!TryUserId(out var userId)) return Unauthorized();
-        var live = await db.Lives.FindAsync([id], cancellationToken);
+        var hostId = await db.Lives.AsNoTracking().Where(x => x.Id == id)
+            .Select(x => (Guid?)x.HostUserId).SingleOrDefaultAsync(cancellationToken);
+        if (hostId is null) return NotFound();
+        if (hostId != userId) return Forbid();
+        var result = await finalizer.EndAsync(id, false, cancellationToken);
+        if (result is null) return NotFound();
+        if (result.Status is not (LiveStatus.Ended or LiveStatus.Cancelled))
+            return Conflict(new { code = "LIVE_INVALID_STATE" });
+        return Ok(new { result.Id, result.Status, result.EndedAt });
+    }
+
+    [Authorize]
+    [HttpPost("{id:guid}/heartbeat")]
+    public async Task<IActionResult> Heartbeat(Guid id, CancellationToken cancellationToken)
+    {
+        if (!TryUserId(out var userId)) return Unauthorized();
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var live = (await db.Lives.FromSqlInterpolated($"SELECT * FROM \"Lives\" WHERE \"Id\" = {id} FOR UPDATE")
+            .ToListAsync(cancellationToken)).SingleOrDefault();
         if (live is null) return NotFound();
         if (live.HostUserId != userId) return Forbid();
-        if (live.Status is LiveStatus.Ended or LiveStatus.Cancelled)
-        {
-            commentBuffer.Close(id);
-            await commentCounts.FlushAsync(id, cancellationToken);
-            return Ok(new { live.Id, live.Status, live.EndedAt });
-        }
         if (live.Status is not (LiveStatus.Preparing or LiveStatus.Live or LiveStatus.Reconnecting))
             return Conflict(new { code = "LIVE_INVALID_STATE" });
-        live.Status = live.Status == LiveStatus.Preparing ? LiveStatus.Cancelled : LiveStatus.Ended;
-        live.EndedAt = DateTime.UtcNow;
-        live.CurrentViewerCount = 0;
-        var openSessions = await db.LiveViewerSessions.Where(x => x.LiveId == id && x.LeftAt == null).ToListAsync(cancellationToken);
-        foreach (var session in openSessions)
-        {
-            session.LeftAt = live.EndedAt;
-            session.DurationSeconds = Math.Max(0, (int)(live.EndedAt.Value - session.JoinedAt).TotalSeconds);
-        }
+        live.HostLastSeenAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
-        commentBuffer.Close(id);
-        await commentCounts.FlushAsync(id, cancellationToken);
-        await realtime.Clients.Group($"live:{id:N}").SendAsync("LiveEnded", new { live.Id, live.Status, live.EndedAt }, cancellationToken);
-        if (live.Privacy == LivePrivacy.Public)
-            await realtime.Clients.All.SendAsync("LiveEnded", new { live.Id, live.Status, live.EndedAt }, cancellationToken);
-        return Ok(new { live.Id, live.Status, live.EndedAt });
+        await transaction.CommitAsync(cancellationToken);
+        return NoContent();
     }
 
     [Authorize]

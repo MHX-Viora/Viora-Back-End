@@ -224,6 +224,9 @@ public static class DependencyInjection
         services.AddSingleton<ILiveCommentBuffer, InMemoryLiveCommentBuffer>();
         services.AddSingleton<LiveCommentCountFlusher>();
         services.AddHostedService(provider => provider.GetRequiredService<LiveCommentCountFlusher>());
+        services.Configure<LiveLifecycleOptions>(configuration.GetSection("LiveLifecycle"));
+        services.AddScoped<LiveSessionFinalizer>();
+        services.AddHostedService<LiveHostTimeoutService>();
         services.AddSingleton<IFirebaseInitializer, FirebaseInitializer>();
         services.AddSingleton<IFirebaseMessagingClientFactory, FirebaseMessagingClientFactory>();
         services.AddScoped<IRealtimeService, SignalRRealtimeService>();
