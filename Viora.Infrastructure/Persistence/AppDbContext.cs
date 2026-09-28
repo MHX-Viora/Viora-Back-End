@@ -64,6 +64,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Advertisement> Advertisements => Set<Advertisement>();
     public DbSet<AdvertisementEvent> AdvertisementEvents => Set<AdvertisementEvent>();
     public DbSet<AdvertisementFeedback> AdvertisementFeedback => Set<AdvertisementFeedback>();
+    public DbSet<Live> Lives => Set<Live>();
+    public DbSet<LiveCategory> LiveCategories => Set<LiveCategory>();
+    public DbSet<LiveGift> LiveGifts => Set<LiveGift>();
+    public DbSet<LiveViewerSession> LiveViewerSessions => Set<LiveViewerSession>();
+    public DbSet<LiveAgoraParticipant> LiveAgoraParticipants => Set<LiveAgoraParticipant>();
+    public DbSet<LiveComment> LiveComments => Set<LiveComment>();
+    public DbSet<LiveGiftTransaction> LiveGiftTransactions => Set<LiveGiftTransaction>();
+    public DbSet<LiveModerator> LiveModerators => Set<LiveModerator>();
+    public DbSet<LiveUserRestriction> LiveUserRestrictions => Set<LiveUserRestriction>();
 
     [DbFunction("translate", IsBuiltIn = true)]
     public static string Translate(string value, string matching, string replacement) =>

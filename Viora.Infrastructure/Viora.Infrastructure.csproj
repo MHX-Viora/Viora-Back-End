@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Viora.Application\Viora.Application.csproj" />
     <ProjectReference Include="..\Viora.Domain\Viora.Domain.csproj" />
+    <ProjectReference Include="..\Viora.AgoraTokens\AgoraIO.csproj" />
   </ItemGroup>
 
 </Project>

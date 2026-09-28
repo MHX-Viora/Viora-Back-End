@@ -34,6 +34,8 @@ using Viora.Application.Wallets;
 using Viora.Infrastructure.Wallets;
 using Viora.Application.Advertisements;
 using Viora.Infrastructure.Advertisements;
+using Viora.Application.Live;
+using Viora.Infrastructure.LiveStreaming;
 
 namespace Viora.Infrastructure;
 
@@ -58,6 +60,7 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(20);
         });
         services.AddScoped<IWalletService, WalletService>();
+        services.AddSingleton<IAgoraTokenService, AgoraTokenService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IAdminWalletService, AdminWalletService>();
         services.Configure<WithdrawalOptions>(configuration.GetSection("Wallet"));

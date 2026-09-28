@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Viora.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Viora.Infrastructure.Persistence;
 namespace Viora.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260928054028_AddLiveV1Foundation")]
+    partial class AddLiveV1Foundation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1120,11 +1123,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("HostUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<long>("NextAgoraUid")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(1L);
-
                     b.Property<int>("PeakViewerCount")
                         .HasColumnType("integer");
 
@@ -1175,37 +1173,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "StartedAt");
 
                     b.ToTable("Lives", (string)null);
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.LiveAgoraParticipant", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<long>("AgoraUid")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("LiveId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("LiveId", "AgoraUid")
-                        .IsUnique();
-
-                    b.HasIndex("LiveId", "UserId")
-                        .IsUnique();
-
-                    b.ToTable("LiveAgoraParticipants", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.LiveCategory", b =>
@@ -3029,15 +2996,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<long?>("CoinAmount")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("CoinBalanceAfter")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("CoinBalanceBefore")
-                        .HasColumnType("bigint");
-
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3575,21 +3533,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("Host");
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.LiveAgoraParticipant", b =>
-                {
-                    b.HasOne("Viora.Domain.Entities.Live", null)
-                        .WithMany()
-                        .HasForeignKey("LiveId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Viora.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.LiveComment", b =>

@@ -23,6 +23,9 @@ public sealed class WalletTransaction : CreatedEntity
     public decimal BalanceAfter { get; set; }
     public decimal HeldBefore { get; set; }
     public decimal HeldAfter { get; set; }
+    public long? CoinAmount { get; set; }
+    public long? CoinBalanceBefore { get; set; }
+    public long? CoinBalanceAfter { get; set; }
     public string ReferenceType { get; set; } = null!;
     public string ReferenceId { get; set; } = null!;
     public string? Description { get; set; }
