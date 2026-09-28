@@ -2,7 +2,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using System.Text.Json;
+using Viora.Application.Live;
 using Viora.Domain.Entities;
+using Viora.Infrastructure.LiveStreaming;
 using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.Realtime;
@@ -11,6 +15,8 @@ namespace Viora.Infrastructure.Realtime;
 public sealed class RealtimeHub(
     IConnectionRegistry connections,
     AppDbContext dbContext,
+    ILiveCommentBuffer commentBuffer,
+    IOptions<LiveChatOptions> chatOptions,
     ILogger<RealtimeHub> logger) : Hub
 {
     public override async Task OnConnectedAsync()
@@ -111,10 +117,7 @@ public sealed class RealtimeHub(
         await transaction.CommitAsync();
         await Groups.AddToGroupAsync(Context.ConnectionId, LiveGroup(liveId));
         await Clients.Group(LiveGroup(liveId)).SendAsync("LiveViewerCount", new { liveId, count = live.CurrentViewerCount });
-        var comments = await dbContext.LiveComments.AsNoTracking().Where(x => x.LiveId == liveId && !x.IsDeleted && !x.IsHidden)
-            .OrderByDescending(x => x.CreatedAt).Take(100).OrderBy(x => x.CreatedAt)
-            .Join(dbContext.Users, x => x.UserId, x => x.Id, (comment, user) => new { comment.Id, comment.UserId, name = user.DisplayName, avatarUrl = user.AvatarUrl, text = comment.Text, comment.CreatedAt })
-            .ToListAsync();
+        var comments = commentBuffer.GetRecent(liveId, chatOptions.Value.ClientDisplayLimit);
         return new { viewerCount = live.CurrentViewerCount, comments };
     }
 
@@ -128,23 +131,68 @@ public sealed class RealtimeHub(
     {
         if (!TryGetUserId(out var userId)) throw new HubException("Authentication required.");
         text = text?.Trim() ?? "";
-        if (text.Length is < 1 or > 500) throw new HubException("Comment must be 1 to 500 characters.");
+        if (text.Length < 1 || text.Length > chatOptions.Value.MaxCommentLength) throw new HubException("Comment must be 1 to 500 characters.");
         var live = await dbContext.Lives.AsNoTracking().SingleOrDefaultAsync(x => x.Id == liveId);
         if (live is null || !live.AllowComments || !await CanJoinLive(live, userId)) throw new HubException("Comments unavailable.");
         if (userId != live.HostUserId && !await dbContext.LiveViewerSessions.AnyAsync(x => x.LiveId == liveId && x.UserId == userId && x.ConnectionId == Context.ConnectionId && x.LeftAt == null))
             throw new HubException("Join Live before commenting.");
         if (await dbContext.LiveUserRestrictions.AnyAsync(x => x.LiveId == liveId && x.UserId == userId && x.IsMuted && (x.MutedUntil == null || x.MutedUntil > DateTime.UtcNow)))
             throw new HubException("Commenting is muted.");
-        var last = await dbContext.LiveComments.Where(x => x.LiveId == liveId && x.UserId == userId).OrderByDescending(x => x.CreatedAt).Select(x => (DateTime?)x.CreatedAt).FirstOrDefaultAsync();
-        if (last > DateTime.UtcNow.AddSeconds(-1)) throw new HubException("Please wait before commenting again.");
-        var comment = new LiveComment { LiveId = liveId, UserId = userId, Text = text };
-        dbContext.LiveComments.Add(comment);
-        await dbContext.Lives.Where(x => x.Id == liveId).ExecuteUpdateAsync(x => x.SetProperty(l => l.TotalComments, l => l.TotalComments + 1));
-        await dbContext.SaveChangesAsync();
         var user = await dbContext.Users.AsNoTracking().Where(x => x.Id == userId).Select(x => new { x.DisplayName, x.AvatarUrl }).SingleAsync();
-        var payload = new { comment.Id, comment.UserId, name = user.DisplayName, avatarUrl = user.AvatarUrl, comment.Text, comment.CreatedAt };
+        var payload = new LiveCommentEvent(Guid.NewGuid(), liveId, userId, user.DisplayName, user.AvatarUrl, text, DateTimeOffset.UtcNow);
+        var result = commentBuffer.TryAdd(payload);
+        if (result == LiveCommentAddResult.RateLimited) throw new HubException("Bạn gửi bình luận quá nhanh. Vui lòng thử lại sau.");
+        if (result != LiveCommentAddResult.Added) throw new HubException("Comments unavailable.");
         await Clients.Group(LiveGroup(liveId)).SendAsync("LiveComment", payload);
         return payload;
+    }
+
+    public async Task DeleteLiveComment(Guid liveId, Guid commentId)
+    {
+        if (!TryGetUserId(out var userId) || !await CanModerateLive(liveId, userId)) throw new HubException("Moderator access required.");
+        if (!commentBuffer.Remove(liveId, commentId)) throw new HubException("Comment no longer available.");
+        await Clients.Group(LiveGroup(liveId)).SendAsync("LiveCommentDeleted", new { liveId, commentId });
+    }
+
+    public async Task MuteLiveUser(Guid liveId, Guid targetUserId)
+    {
+        if (!TryGetUserId(out var userId) || !await CanModerateLive(liveId, userId)) throw new HubException("Moderator access required.");
+        var live = await dbContext.Lives.AsNoTracking().SingleAsync(x => x.Id == liveId);
+        if (targetUserId == live.HostUserId || !await dbContext.Users.AnyAsync(x => x.Id == targetUserId)) throw new HubException("Invalid user.");
+        var restriction = await dbContext.LiveUserRestrictions.SingleOrDefaultAsync(x => x.LiveId == liveId && x.UserId == targetUserId);
+        if (restriction is null)
+        {
+            restriction = new LiveUserRestriction { LiveId = liveId, UserId = targetUserId, AppliedByUserId = userId };
+            dbContext.LiveUserRestrictions.Add(restriction);
+        }
+        restriction.IsMuted = true;
+        restriction.MutedUntil = null;
+        restriction.AppliedByUserId = userId;
+        await dbContext.SaveChangesAsync();
+        await Clients.Group(LiveGroup(liveId)).SendAsync("LiveUserMuted", new { liveId, userId = targetUserId });
+    }
+
+    public async Task ReportLiveComment(Guid liveId, Guid commentId, ReportReason reason)
+    {
+        if (!TryGetUserId(out var userId) || !Enum.IsDefined(reason)) throw new HubException("Invalid report.");
+        var live = await dbContext.Lives.AsNoTracking().SingleOrDefaultAsync(x => x.Id == liveId);
+        if (live is null || !await CanJoinLive(live, userId)) throw new HubException("Live unavailable.");
+        var comment = commentBuffer.Find(liveId, commentId);
+        if (comment is null || comment.UserId == userId) throw new HubException("Comment no longer available.");
+        if (await dbContext.Reports.AnyAsync(x => x.ReporterUserId == userId && x.TargetType == ReportTargetType.LiveComment && x.TargetId == commentId)) return;
+        dbContext.Reports.Add(new Report { ReporterUserId = userId, TargetId = commentId, TargetType = ReportTargetType.LiveComment,
+            Reason = reason, Description = JsonSerializer.Serialize(comment) });
+        await dbContext.SaveChangesAsync();
+    }
+
+    private async Task<bool> CanModerateLive(Guid liveId, Guid userId)
+    {
+        var live = await dbContext.Lives.AsNoTracking().Where(x => x.Id == liveId)
+            .Select(x => new { x.Status, x.HostUserId }).SingleOrDefaultAsync();
+        if (live?.Status != LiveStatus.Live ||
+            !await dbContext.Users.AnyAsync(x => x.Id == userId && x.Account.Status == AccountStatus.Active)) return false;
+        return live.HostUserId == userId ||
+            await dbContext.LiveModerators.AnyAsync(x => x.LiveId == liveId && x.UserId == userId);
     }
 
     public async Task ReactToLive(Guid liveId, int count)

@@ -220,6 +220,10 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionRegistry>(provider => provider.GetRequiredService<ConnectionRegistry>());
         services.AddSingleton<IOnlineUserRegistry>(provider => provider.GetRequiredService<ConnectionRegistry>());
         services.AddSingleton<IUserIdProvider, UserIdProvider>();
+        services.Configure<LiveChatOptions>(configuration.GetSection("LiveChat"));
+        services.AddSingleton<ILiveCommentBuffer, InMemoryLiveCommentBuffer>();
+        services.AddSingleton<LiveCommentCountFlusher>();
+        services.AddHostedService(provider => provider.GetRequiredService<LiveCommentCountFlusher>());
         services.AddSingleton<IFirebaseInitializer, FirebaseInitializer>();
         services.AddSingleton<IFirebaseMessagingClientFactory, FirebaseMessagingClientFactory>();
         services.AddScoped<IRealtimeService, SignalRRealtimeService>();

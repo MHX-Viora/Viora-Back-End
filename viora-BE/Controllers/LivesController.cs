@@ -9,12 +9,14 @@ using Viora.Application.Live;
 using Viora.Application.Posts;
 using Viora.Infrastructure.Persistence;
 using Viora.Infrastructure.Realtime;
+using Viora.Infrastructure.LiveStreaming;
 
 namespace viora_BE.Controllers;
 
 [ApiController]
 [Route("api/lives")]
-public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> realtime, IAgoraTokenService agoraTokens, IMediaStorage mediaStorage) : ControllerBase
+public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> realtime, IAgoraTokenService agoraTokens, IMediaStorage mediaStorage,
+    ILiveCommentBuffer commentBuffer, LiveCommentCountFlusher commentCounts) : ControllerBase
 {
     [Authorize]
     [HttpGet("config")]
@@ -130,7 +132,12 @@ public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> re
         var live = await db.Lives.FindAsync([id], cancellationToken);
         if (live is null) return NotFound();
         if (live.HostUserId != userId) return Forbid();
-        if (live.Status is LiveStatus.Ended or LiveStatus.Cancelled) return Ok(new { live.Id, live.Status, live.EndedAt });
+        if (live.Status is LiveStatus.Ended or LiveStatus.Cancelled)
+        {
+            commentBuffer.Close(id);
+            await commentCounts.FlushAsync(id, cancellationToken);
+            return Ok(new { live.Id, live.Status, live.EndedAt });
+        }
         if (live.Status is not (LiveStatus.Preparing or LiveStatus.Live or LiveStatus.Reconnecting))
             return Conflict(new { code = "LIVE_INVALID_STATE" });
         live.Status = live.Status == LiveStatus.Preparing ? LiveStatus.Cancelled : LiveStatus.Ended;
@@ -143,6 +150,8 @@ public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> re
             session.DurationSeconds = Math.Max(0, (int)(live.EndedAt.Value - session.JoinedAt).TotalSeconds);
         }
         await db.SaveChangesAsync(cancellationToken);
+        commentBuffer.Close(id);
+        await commentCounts.FlushAsync(id, cancellationToken);
         await realtime.Clients.Group($"live:{id:N}").SendAsync("LiveEnded", new { live.Id, live.Status, live.EndedAt }, cancellationToken);
         if (live.Privacy == LivePrivacy.Public)
             await realtime.Clients.All.SendAsync("LiveEnded", new { live.Id, live.Status, live.EndedAt }, cancellationToken);
