@@ -9,6 +9,7 @@ COPY ["viora-BE/viora-BE.csproj", "viora-BE/"]
 COPY ["Viora.Application/Viora.Application.csproj", "Viora.Application/"]
 COPY ["Viora.Domain/Viora.Domain.csproj", "Viora.Domain/"]
 COPY ["Viora.Infrastructure/Viora.Infrastructure.csproj", "Viora.Infrastructure/"]
+COPY ["Viora.AgoraTokens/AgoraIO.csproj", "Viora.AgoraTokens/"]
 
 RUN dotnet restore "viora-BE/viora-BE.csproj"
 
