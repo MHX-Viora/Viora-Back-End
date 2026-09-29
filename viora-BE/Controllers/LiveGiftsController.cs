@@ -138,10 +138,12 @@ public sealed class LiveGiftTransactionsController(AppDbContext db, IHubContext<
             .SetProperty(l => l.TotalGiftCount, l => l.TotalGiftCount + body.Quantity)
             .SetProperty(l => l.TotalGiftValue, l => l.TotalGiftValue + total), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        var sender = await db.Users.AsNoTracking().Where(x => x.Id == userId).Select(x => x.DisplayName).SingleAsync(cancellationToken);
+        var sender = await db.Users.AsNoTracking().Where(x => x.Id == userId)
+            .Select(x => new { x.DisplayName, x.AvatarUrl }).SingleAsync(cancellationToken);
         await realtime.Clients.Group($"live:{liveId:N}").SendAsync("LiveGift", new
         {
-            giftTransaction.Id, liveId, senderUserId = userId, senderName = sender,
+            giftTransaction.Id, liveId, senderUserId = userId, senderName = sender.DisplayName,
+            senderAvatarUrl = sender.AvatarUrl,
             giftId = gift.Id, giftName = gift.Name, gift.ImageUrl, gift.AnimationUrl,
             giftTransaction.Quantity, giftTransaction.TotalCoin, giftTransaction.CreatedAt
         }, cancellationToken);
