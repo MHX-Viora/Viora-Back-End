@@ -119,7 +119,7 @@ public sealed class RealtimeHub(
         await Groups.AddToGroupAsync(Context.ConnectionId, LiveGroup(liveId));
         await Clients.Group(LiveGroup(liveId)).SendAsync("LiveViewerCount", new { liveId, count = live.CurrentViewerCount });
         var comments = commentBuffer.GetRecent(liveId, chatOptions.Value.ClientDisplayLimit);
-        return new { viewerCount = live.CurrentViewerCount, reactionCount = live.TotalReactions + reactionBuffer.GetPendingCount(liveId), comments };
+        return new { viewerCount = live.CurrentViewerCount, reactionCount = live.TotalReactions + reactionBuffer.GetPendingCount(liveId), comments, pinnedComment = commentBuffer.GetPinned(liveId) };
     }
 
     public async Task LeaveLive(Guid liveId)
@@ -151,8 +151,22 @@ public sealed class RealtimeHub(
     public async Task DeleteLiveComment(Guid liveId, Guid commentId)
     {
         if (!TryGetUserId(out var userId) || !await CanModerateLive(liveId, userId)) throw new HubException("Moderator access required.");
+        var wasPinned = commentBuffer.GetPinned(liveId)?.Id == commentId;
         if (!commentBuffer.Remove(liveId, commentId)) throw new HubException("Comment no longer available.");
         await Clients.Group(LiveGroup(liveId)).SendAsync("LiveCommentDeleted", new { liveId, commentId });
+        if (wasPinned) await Clients.Group(LiveGroup(liveId)).SendAsync("LiveCommentPinned", new { liveId, comment = (LiveCommentEvent?)null });
+    }
+
+    public async Task SetLivePinnedComment(Guid liveId, Guid? commentId)
+    {
+        if (!TryGetUserId(out var userId)) throw new HubException("Host access required.");
+        var live = await dbContext.Lives.AsNoTracking().Where(x => x.Id == liveId)
+            .Select(x => new { x.Status, x.HostUserId }).SingleOrDefaultAsync();
+        if (live?.Status != LiveStatus.Live || live.HostUserId != userId)
+            throw new HubException("Host access required.");
+        var pinned = commentBuffer.SetPinned(liveId, commentId);
+        if (commentId is not null && pinned is null) throw new HubException("Comment no longer available.");
+        await Clients.Group(LiveGroup(liveId)).SendAsync("LiveCommentPinned", new { liveId, comment = pinned });
     }
 
     public async Task MuteLiveUser(Guid liveId, Guid targetUserId)

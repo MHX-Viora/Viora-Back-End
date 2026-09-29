@@ -87,4 +87,46 @@ public sealed class InMemoryLiveCommentBufferTests
         Assert.Equal(LiveCommentAddResult.Closed, buffer.TryAdd(Comment(liveId, Guid.NewGuid(), 2, DateTimeOffset.UtcNow)));
         Assert.Equal(1, buffer.TakePendingCount(liveId));
     }
+
+    [Fact]
+    public void PinSurvivesRecentCommentEvictionAndCanBeReplacedOrCleared()
+    {
+        var buffer = CreateBuffer();
+        var liveId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var first = Comment(liveId, Guid.NewGuid(), 1, now);
+        var second = Comment(liveId, Guid.NewGuid(), 2, now);
+        buffer.TryAdd(first);
+        buffer.TryAdd(second);
+
+        Assert.Equal(first, buffer.SetPinned(liveId, first.Id));
+        Assert.Null(buffer.GetPinned(Guid.NewGuid()));
+        for (var index = 0; index < 210; index++)
+            buffer.TryAdd(Comment(liveId, Guid.NewGuid(), index + 3, now));
+        Assert.Equal(first, buffer.GetPinned(liveId));
+        Assert.DoesNotContain(buffer.GetRecent(liveId, 200), item => item.Id == first.Id);
+        Assert.Null(buffer.SetPinned(liveId, second.Id)); // second has left the bounded history
+        Assert.Equal(first, buffer.GetPinned(liveId));
+        var newest = buffer.GetRecent(liveId, 1)[0];
+        Assert.Equal(newest, buffer.SetPinned(liveId, newest.Id));
+        Assert.Null(buffer.SetPinned(liveId, null));
+        Assert.Null(buffer.GetPinned(liveId));
+    }
+
+    [Fact]
+    public void DeletingOrClosingAPinnedCommentClearsThePin()
+    {
+        var buffer = CreateBuffer();
+        var liveId = Guid.NewGuid();
+        var comment = Comment(liveId, Guid.NewGuid(), 1, DateTimeOffset.UtcNow);
+        buffer.TryAdd(comment);
+        buffer.SetPinned(liveId, comment.Id);
+        Assert.True(buffer.Remove(liveId, comment.Id));
+        Assert.Null(buffer.GetPinned(liveId));
+        buffer.TryAdd(Comment(liveId, Guid.NewGuid(), 2, DateTimeOffset.UtcNow));
+        var next = buffer.GetRecent(liveId, 1)[0];
+        buffer.SetPinned(liveId, next.Id);
+        buffer.Close(liveId);
+        Assert.Null(buffer.GetPinned(liveId));
+    }
 }

@@ -21,6 +21,8 @@ public interface ILiveCommentBuffer
     LiveCommentAddResult TryAdd(LiveCommentEvent comment);
     IReadOnlyList<LiveCommentEvent> GetRecent(Guid liveId, int limit);
     LiveCommentEvent? Find(Guid liveId, Guid commentId);
+    LiveCommentEvent? GetPinned(Guid liveId);
+    LiveCommentEvent? SetPinned(Guid liveId, Guid? commentId);
     bool Remove(Guid liveId, Guid commentId);
     void Close(Guid liveId);
     IReadOnlyList<Guid> PendingLiveIds();

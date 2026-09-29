@@ -11,6 +11,7 @@ public sealed class InMemoryLiveCommentBuffer(IOptions<LiveChatOptions> options)
         public readonly object Gate = new();
         public readonly List<LiveCommentEvent> Comments = [];
         public readonly Dictionary<Guid, Queue<DateTimeOffset>> SentAt = [];
+        public LiveCommentEvent? PinnedComment;
         public long PendingCount;
         public int AddsSinceRateSweep;
         public DateTimeOffset? ClosedAt;
@@ -58,7 +59,28 @@ public sealed class InMemoryLiveCommentBuffer(IOptions<LiveChatOptions> options)
     public LiveCommentEvent? Find(Guid liveId, Guid commentId)
     {
         if (!rooms.TryGetValue(liveId, out var room)) return null;
-        lock (room.Gate) return room.Comments.Find(item => item.Id == commentId);
+        lock (room.Gate) return room.Comments.Find(item => item.Id == commentId) ??
+            (room.PinnedComment?.Id == commentId ? room.PinnedComment : null);
+    }
+
+    public LiveCommentEvent? GetPinned(Guid liveId)
+    {
+        if (!rooms.TryGetValue(liveId, out var room)) return null;
+        lock (room.Gate) return room.PinnedComment;
+    }
+
+    public LiveCommentEvent? SetPinned(Guid liveId, Guid? commentId)
+    {
+        if (!rooms.TryGetValue(liveId, out var room)) return null;
+        lock (room.Gate)
+        {
+            if (room.ClosedAt is not null) return null;
+            if (commentId is null) return room.PinnedComment = null;
+            var comment = room.Comments.Find(item => item.Id == commentId) ??
+                (room.PinnedComment?.Id == commentId ? room.PinnedComment : null);
+            if (comment is not null) room.PinnedComment = comment;
+            return comment;
+        }
     }
 
     public bool Remove(Guid liveId, Guid commentId)
@@ -67,8 +89,9 @@ public sealed class InMemoryLiveCommentBuffer(IOptions<LiveChatOptions> options)
         lock (room.Gate)
         {
             var index = room.Comments.FindIndex(item => item.Id == commentId);
-            if (index < 0) return false;
-            room.Comments.RemoveAt(index);
+            if (index < 0 && room.PinnedComment?.Id != commentId) return false;
+            if (index >= 0) room.Comments.RemoveAt(index);
+            if (room.PinnedComment?.Id == commentId) room.PinnedComment = null;
             return true;
         }
     }
@@ -80,6 +103,7 @@ public sealed class InMemoryLiveCommentBuffer(IOptions<LiveChatOptions> options)
         {
             room.ClosedAt ??= DateTimeOffset.UtcNow;
             room.Comments.Clear();
+            room.PinnedComment = null;
             room.SentAt.Clear();
         }
     }
