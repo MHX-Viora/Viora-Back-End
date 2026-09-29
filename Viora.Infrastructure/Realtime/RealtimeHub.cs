@@ -16,6 +16,7 @@ public sealed class RealtimeHub(
     IConnectionRegistry connections,
     AppDbContext dbContext,
     ILiveCommentBuffer commentBuffer,
+    ILiveReactionBuffer reactionBuffer,
     IOptions<LiveChatOptions> chatOptions,
     ILogger<RealtimeHub> logger) : Hub
 {
@@ -118,7 +119,7 @@ public sealed class RealtimeHub(
         await Groups.AddToGroupAsync(Context.ConnectionId, LiveGroup(liveId));
         await Clients.Group(LiveGroup(liveId)).SendAsync("LiveViewerCount", new { liveId, count = live.CurrentViewerCount });
         var comments = commentBuffer.GetRecent(liveId, chatOptions.Value.ClientDisplayLimit);
-        return new { viewerCount = live.CurrentViewerCount, comments };
+        return new { viewerCount = live.CurrentViewerCount, reactionCount = live.TotalReactions + reactionBuffer.GetPendingCount(liveId), comments };
     }
 
     public async Task LeaveLive(Guid liveId)
@@ -202,8 +203,8 @@ public sealed class RealtimeHub(
         if (live is null || !await CanJoinLive(live, userId)) throw new HubException("Live unavailable.");
         if (userId != live.HostUserId && !await dbContext.LiveViewerSessions.AnyAsync(x => x.LiveId == liveId && x.UserId == userId && x.ConnectionId == Context.ConnectionId && x.LeftAt == null))
             throw new HubException("Join Live before reacting.");
-        await dbContext.Lives.Where(x => x.Id == liveId).ExecuteUpdateAsync(x => x.SetProperty(l => l.TotalReactions, l => l.TotalReactions + count));
-        await Clients.Group(LiveGroup(liveId)).SendAsync("LiveReaction", new { liveId, count });
+        reactionBuffer.Add(liveId, count);
+        await Clients.OthersInGroup(LiveGroup(liveId)).SendAsync("LiveReaction", new { liveId, count });
     }
 
     private async Task LeaveAllLives()

@@ -224,6 +224,9 @@ public static class DependencyInjection
         services.AddSingleton<ILiveCommentBuffer, InMemoryLiveCommentBuffer>();
         services.AddSingleton<LiveCommentCountFlusher>();
         services.AddHostedService(provider => provider.GetRequiredService<LiveCommentCountFlusher>());
+        services.AddSingleton<ILiveReactionBuffer, InMemoryLiveReactionBuffer>();
+        services.AddSingleton<LiveReactionCountFlusher>();
+        services.AddHostedService(provider => provider.GetRequiredService<LiveReactionCountFlusher>());
         services.Configure<LiveLifecycleOptions>(configuration.GetSection("LiveLifecycle"));
         services.AddScoped<LiveSessionFinalizer>();
         services.AddHostedService<LiveHostTimeoutService>();

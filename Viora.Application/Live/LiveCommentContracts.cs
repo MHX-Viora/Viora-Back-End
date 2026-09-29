@@ -28,3 +28,12 @@ public interface ILiveCommentBuffer
     void RestorePendingCount(Guid liveId, long count);
     void PruneClosed(DateTimeOffset now);
 }
+
+public interface ILiveReactionBuffer
+{
+    void Add(Guid liveId, int count);
+    long GetPendingCount(Guid liveId);
+    IReadOnlyList<Guid> PendingLiveIds();
+    long TakePendingCount(Guid liveId);
+    void RestorePendingCount(Guid liveId, long count);
+}

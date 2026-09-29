@@ -13,6 +13,7 @@ public sealed record LiveEndResult(Guid Id, LiveStatus Status, DateTime? EndedAt
 
 public sealed class LiveSessionFinalizer(AppDbContext db, IHubContext<RealtimeHub> realtime,
     ILiveCommentBuffer commentBuffer, LiveCommentCountFlusher commentCounts,
+    LiveReactionCountFlusher reactionCounts,
     IOptions<LiveLifecycleOptions> lifecycleOptions)
 {
     public async Task<LiveEndResult?> EndAsync(Guid id, bool onlyIfStale, CancellationToken cancellationToken)
@@ -27,6 +28,7 @@ public sealed class LiveSessionFinalizer(AppDbContext db, IHubContext<RealtimeHu
             await transaction.CommitAsync(cancellationToken);
             commentBuffer.Close(id);
             await commentCounts.FlushAsync(id, cancellationToken);
+            await reactionCounts.FlushAsync(id, cancellationToken);
             return new LiveEndResult(id, live.Status, live.EndedAt, false);
         }
         if (live.Status is not (LiveStatus.Preparing or LiveStatus.Live or LiveStatus.Reconnecting) ||
@@ -48,6 +50,7 @@ public sealed class LiveSessionFinalizer(AppDbContext db, IHubContext<RealtimeHu
 
         commentBuffer.Close(id);
         await commentCounts.FlushAsync(id, cancellationToken);
+        await reactionCounts.FlushAsync(id, cancellationToken);
         await realtime.Clients.Group($"live:{id:N}").SendAsync("LiveEnded", new { live.Id, live.Status, live.EndedAt }, cancellationToken);
         if (live.Privacy == LivePrivacy.Public)
             await realtime.Clients.All.SendAsync("LiveEnded", new { live.Id, live.Status, live.EndedAt }, cancellationToken);
