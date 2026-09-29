@@ -21,6 +21,8 @@
 
 ## Verification and limits
 
+- Live Neon dev check (2026-09-23 08:27 UTC): campaign `74020dda-84f4-4325-a70c-516e8aa1a1bf` is Active for Feed, within its UTC window, with 50,000 VND held and zero spend. Its advertiser is the ANKT account shown in the screenshot. `GetDeliveryAsync` returns zero items to that advertiser because self-delivery is excluded, and returns the campaign to another user. Self impression/click tracking is also forbidden, so the advertiser's own viewing cannot raise dashboard metrics. The only other campaign is Cancelled; no active Reels or News campaign exists in this database.
+- Community Feed now reads the advertiser's Active campaigns through the existing `mine` API for a clearly labeled owner preview after two organic posts. The preview does not send impression or click events. On screen focus the Feed reloads, so an approval or campaign change is reflected after returning from management. Charged delivery to other viewers still uses the existing delivery API.
 - SQLite integration coverage exercises Personal-account delivery in all three placements, status and schedule transitions, targeting/visibility/budget filters, impression and click deduplication, wallet spend, CTR, and refunds.
 - Frontend insertion and navigation tests plus TypeScript checks cover the changed contracts. See the completion report for final test counts.
 - No authenticated production campaign, database connection, or browser session was available for checking a specific campaign record. Expo Metro failed to start a browser build in this sandbox with `spawn EPERM`, so visual device inspection remains to be done in a working app environment.
