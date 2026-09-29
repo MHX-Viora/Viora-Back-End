@@ -80,9 +80,12 @@ internal sealed class WalletTransactionConfiguration : IEntityTypeConfiguration<
     {
         builder.ToTable("WalletTransactions", table =>
         {
-            table.HasCheckConstraint("CK_WalletTransactions_Amount", "\"Amount\" <> 0");
+            table.HasCheckConstraint("CK_WalletTransactions_Amount",
+                "(\"Amount\" <> 0 AND \"CoinAmount\" IS NULL) OR (\"Amount\" = 0 AND \"CoinAmount\" IS NOT NULL AND \"CoinAmount\" <> 0)");
             table.HasCheckConstraint("CK_WalletTransactions_Balance", "\"BalanceBefore\" >= 0 AND \"BalanceAfter\" >= 0");
             table.HasCheckConstraint("CK_WalletTransactions_Held", "\"HeldBefore\" >= 0 AND \"HeldAfter\" >= 0");
+            table.HasCheckConstraint("CK_WalletTransactions_CoinBalance",
+                "\"CoinAmount\" IS NULL OR (\"CoinBalanceBefore\" IS NOT NULL AND \"CoinBalanceAfter\" IS NOT NULL AND \"CoinBalanceBefore\" >= 0 AND \"CoinBalanceAfter\" >= 0 AND \"CoinBalanceAfter\" = \"CoinBalanceBefore\" + \"CoinAmount\")");
         });
         builder.HasKey(transaction => transaction.Id);
         builder.Property(transaction => transaction.Amount).HasPrecision(18, 2);
