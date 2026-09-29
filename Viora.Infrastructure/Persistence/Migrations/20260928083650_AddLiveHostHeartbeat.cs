@@ -18,7 +18,7 @@ namespace Viora.Infrastructure.Persistence.Migrations
                 nullable: true);
 
             // Give sessions already active during deployment one full grace period.
-            migrationBuilder.Sql("UPDATE \"Lives\" SET \"HostLastSeenAt\" = NOW() WHERE \"Status\" IN (1, 2, 3)");
+            migrationBuilder.Sql("UPDATE \"Lives\" SET \"HostLastSeenAt\" = NOW() WHERE \"Status\" IN (1, 2, 3);");
         }
 
         /// <inheritdoc />
