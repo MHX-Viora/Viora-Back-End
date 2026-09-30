@@ -16,22 +16,25 @@ public sealed class LiveGiftsController(AppDbContext db) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Active(CancellationToken cancellationToken) => Ok(await db.LiveGifts.AsNoTracking()
         .Where(x => x.IsActive).OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
-        .Select(x => new LiveGiftDto(x.Id, x.Name, x.ImageUrl, x.AnimationUrl, x.PriceCoin, x.AnimationType, x.SortOrder, x.IsActive, db.LiveGiftTransactions.Count(g => g.GiftId == x.Id)))
+        .Select(x => new LiveGiftDto(x.Id, x.Name, x.ImageUrl, x.AnimationUrl, x.PriceCoin, x.AnimationType, x.SortOrder, x.IsActive, db.LiveGiftTransactions.Count(g => g.GiftId == x.Id), x.EffectType, x.EffectTier, x.EffectDurationMs))
         .ToListAsync(cancellationToken));
 
     [Authorize(Roles = "2")]
     [HttpGet("admin")]
     public async Task<IActionResult> All(CancellationToken cancellationToken) => Ok(await db.LiveGifts.AsNoTracking()
         .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
-        .Select(x => new LiveGiftDto(x.Id, x.Name, x.ImageUrl, x.AnimationUrl, x.PriceCoin, x.AnimationType, x.SortOrder, x.IsActive, db.LiveGiftTransactions.Count(g => g.GiftId == x.Id)))
+        .Select(x => new LiveGiftDto(x.Id, x.Name, x.ImageUrl, x.AnimationUrl, x.PriceCoin, x.AnimationType, x.SortOrder, x.IsActive, db.LiveGiftTransactions.Count(g => g.GiftId == x.Id), x.EffectType, x.EffectTier, x.EffectDurationMs))
         .ToListAsync(cancellationToken));
 
     [Authorize(Roles = "2")]
     [HttpPost]
     public async Task<IActionResult> Create(LiveGiftBody body, CancellationToken cancellationToken)
     {
-        if (!Valid(body)) return UnprocessableEntity(new { code = "LIVE_GIFT_INVALID" });
-        var gift = new LiveGift { Name = body.Name.Trim(), ImageUrl = body.ImageUrl.Trim(), AnimationUrl = body.AnimationUrl?.Trim(), PriceCoin = body.PriceCoin, AnimationType = body.AnimationType, SortOrder = body.SortOrder, IsActive = body.IsActive };
+        var effectType = body.EffectType ?? LiveGiftEffectType.None;
+        var effectTier = body.EffectTier ?? 0;
+        var effectDurationMs = body.EffectDurationMs ?? 0;
+        if (!Valid(body, effectType, effectTier, effectDurationMs)) return UnprocessableEntity(new { code = "LIVE_GIFT_INVALID" });
+        var gift = new LiveGift { Name = body.Name.Trim(), ImageUrl = body.ImageUrl.Trim(), AnimationUrl = body.AnimationUrl?.Trim(), PriceCoin = body.PriceCoin, AnimationType = body.AnimationType, SortOrder = body.SortOrder, IsActive = body.IsActive, EffectType = effectType, EffectTier = effectTier, EffectDurationMs = effectDurationMs };
         db.LiveGifts.Add(gift);
         await db.SaveChangesAsync(cancellationToken);
         return Created($"/api/live-gifts/{gift.Id}", Map(gift, 0));
@@ -41,11 +44,15 @@ public sealed class LiveGiftsController(AppDbContext db) : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, LiveGiftBody body, CancellationToken cancellationToken)
     {
-        if (!Valid(body)) return UnprocessableEntity(new { code = "LIVE_GIFT_INVALID" });
         var gift = await db.LiveGifts.FindAsync([id], cancellationToken);
         if (gift is null) return NotFound();
+        var effectType = body.EffectType ?? gift.EffectType;
+        var effectTier = body.EffectTier ?? (body.EffectType == LiveGiftEffectType.None ? (short)0 : gift.EffectTier);
+        var effectDurationMs = body.EffectDurationMs ?? (body.EffectType == LiveGiftEffectType.None ? 0 : gift.EffectDurationMs);
+        if (!Valid(body, effectType, effectTier, effectDurationMs)) return UnprocessableEntity(new { code = "LIVE_GIFT_INVALID" });
         gift.Name = body.Name.Trim(); gift.ImageUrl = body.ImageUrl.Trim(); gift.AnimationUrl = body.AnimationUrl?.Trim();
         gift.PriceCoin = body.PriceCoin; gift.AnimationType = body.AnimationType; gift.SortOrder = body.SortOrder; gift.IsActive = body.IsActive;
+        gift.EffectType = effectType; gift.EffectTier = effectTier; gift.EffectDurationMs = effectDurationMs;
         await db.SaveChangesAsync(cancellationToken);
         return Ok(Map(gift, await db.LiveGiftTransactions.CountAsync(x => x.GiftId == id, cancellationToken)));
     }
@@ -62,15 +69,18 @@ public sealed class LiveGiftsController(AppDbContext db) : ControllerBase
         return NoContent();
     }
 
-    private static bool Valid(LiveGiftBody body) => body.Name is { Length: > 0 and <= 100 } &&
-        body.PriceCoin > 0 && Enum.IsDefined(body.AnimationType) &&
+    private static bool Valid(LiveGiftBody body, LiveGiftEffectType effectType, short effectTier, int effectDurationMs) => body.Name is { Length: > 0 and <= 100 } &&
+        body.PriceCoin > 0 && Enum.IsDefined(body.AnimationType) && Enum.IsDefined(effectType) &&
+        (effectType == LiveGiftEffectType.None
+            ? effectTier == 0 && effectDurationMs == 0
+            : effectTier is >= 1 and <= 3 && effectDurationMs is >= 3000 and <= 5000) &&
         Uri.TryCreate(body.ImageUrl, UriKind.Absolute, out var image) && image.Scheme == Uri.UriSchemeHttps &&
         (body.AnimationUrl is null || Uri.TryCreate(body.AnimationUrl, UriKind.Absolute, out var animation) && animation.Scheme == Uri.UriSchemeHttps);
-    private static LiveGiftDto Map(LiveGift gift, int useCount) => new(gift.Id, gift.Name, gift.ImageUrl, gift.AnimationUrl, gift.PriceCoin, gift.AnimationType, gift.SortOrder, gift.IsActive, useCount);
+    private static LiveGiftDto Map(LiveGift gift, int useCount) => new(gift.Id, gift.Name, gift.ImageUrl, gift.AnimationUrl, gift.PriceCoin, gift.AnimationType, gift.SortOrder, gift.IsActive, useCount, gift.EffectType, gift.EffectTier, gift.EffectDurationMs);
 }
 
-public sealed record LiveGiftBody(string Name, string ImageUrl, string? AnimationUrl, long PriceCoin, LiveGiftAnimationType AnimationType, int SortOrder, bool IsActive);
-public sealed record LiveGiftDto(Guid Id, string Name, string ImageUrl, string? AnimationUrl, long PriceCoin, LiveGiftAnimationType AnimationType, int SortOrder, bool IsActive, int UseCount);
+public sealed record LiveGiftBody(string Name, string ImageUrl, string? AnimationUrl, long PriceCoin, LiveGiftAnimationType AnimationType, int SortOrder, bool IsActive, LiveGiftEffectType? EffectType = null, short? EffectTier = null, int? EffectDurationMs = null);
+public sealed record LiveGiftDto(Guid Id, string Name, string ImageUrl, string? AnimationUrl, long PriceCoin, LiveGiftAnimationType AnimationType, int SortOrder, bool IsActive, int UseCount, LiveGiftEffectType EffectType, short EffectTier, int EffectDurationMs);
 
 [ApiController]
 [Route("api/lives/{liveId:guid}/gifts")]
@@ -145,6 +155,7 @@ public sealed class LiveGiftTransactionsController(AppDbContext db, IHubContext<
             giftTransaction.Id, liveId, senderUserId = userId, senderName = sender.DisplayName,
             senderAvatarUrl = sender.AvatarUrl,
             giftId = gift.Id, giftName = gift.Name, gift.ImageUrl, gift.AnimationUrl,
+            gift.EffectType, gift.EffectTier, gift.EffectDurationMs,
             giftTransaction.Quantity, giftTransaction.TotalCoin, giftTransaction.CreatedAt
         }, cancellationToken);
         return Ok(Map(giftTransaction));

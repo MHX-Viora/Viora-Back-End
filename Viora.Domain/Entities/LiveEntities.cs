@@ -7,6 +7,7 @@ public enum LiveStatus : short
 }
 
 public enum LiveGiftAnimationType : short { Small = 0, Medium = 1, Fullscreen = 2 }
+public enum LiveGiftEffectType : short { None = 0, Firework = 1, Rocket = 2, Crown = 3 }
 public enum LivePrivacy : short { Public = 0, Followers = 1, Friends = 2 }
 
 public sealed class LiveCategory : AuditableEntity
@@ -53,6 +54,9 @@ public sealed class LiveGift : AuditableEntity
     public string? AnimationUrl { get; set; }
     public long PriceCoin { get; set; }
     public LiveGiftAnimationType AnimationType { get; set; }
+    public LiveGiftEffectType EffectType { get; set; }
+    public short EffectTier { get; set; }
+    public int EffectDurationMs { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
 }
