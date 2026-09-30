@@ -73,7 +73,7 @@ public sealed class LiveGiftsController(AppDbContext db) : ControllerBase
         body.PriceCoin > 0 && Enum.IsDefined(body.AnimationType) && Enum.IsDefined(effectType) &&
         (effectType == LiveGiftEffectType.None
             ? effectTier == 0 && effectDurationMs == 0
-            : effectTier is >= 1 and <= 3 && effectDurationMs is >= 3000 and <= 5000) &&
+            : effectTier is >= 1 and <= 3 && effectDurationMs is >= 3000 and <= 7000) &&
         Uri.TryCreate(body.ImageUrl, UriKind.Absolute, out var image) && image.Scheme == Uri.UriSchemeHttps &&
         (body.AnimationUrl is null || Uri.TryCreate(body.AnimationUrl, UriKind.Absolute, out var animation) && animation.Scheme == Uri.UriSchemeHttps);
     private static LiveGiftDto Map(LiveGift gift, int useCount) => new(gift.Id, gift.Name, gift.ImageUrl, gift.AnimationUrl, gift.PriceCoin, gift.AnimationType, gift.SortOrder, gift.IsActive, useCount, gift.EffectType, gift.EffectTier, gift.EffectDurationMs);
