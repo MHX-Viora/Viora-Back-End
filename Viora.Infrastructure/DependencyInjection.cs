@@ -229,6 +229,7 @@ public static class DependencyInjection
         services.AddHostedService(provider => provider.GetRequiredService<LiveReactionCountFlusher>());
         services.Configure<LiveLifecycleOptions>(configuration.GetSection("LiveLifecycle"));
         services.AddScoped<LiveSessionFinalizer>();
+        services.AddScoped<Viora.Infrastructure.LiveStreaming.LiveGiftWalletService>();
         services.AddHostedService<LiveHostTimeoutService>();
         services.AddSingleton<IFirebaseInitializer, FirebaseInitializer>();
         services.AddSingleton<IFirebaseMessagingClientFactory, FirebaseMessagingClientFactory>();

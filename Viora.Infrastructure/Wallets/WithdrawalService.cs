@@ -81,6 +81,7 @@ public sealed class WithdrawalService(
         var wallet = await dbContext.Wallets
             .FromSqlInterpolated($"SELECT * FROM \"Wallets\" WHERE \"Id\" = {walletSummary.Id} FOR UPDATE")
             .SingleAsync(cancellationToken);
+        await dbContext.Entry(wallet).ReloadAsync(cancellationToken);
         if (wallet.Status != WalletStatus.Active)
             throw new WalletConflictException("WALLET_NOT_ACTIVE", "Ví hiện không hoạt động.");
         WalletFinancialRules.RequireSufficientBalance(wallet.AvailableBalance, request.Amount);
@@ -166,6 +167,7 @@ public sealed class WithdrawalService(
         var wallet = await dbContext.Wallets
             .FromSqlInterpolated($"SELECT * FROM \"Wallets\" WHERE \"Id\" = {withdrawal.WalletId} FOR UPDATE")
             .SingleAsync(cancellationToken);
+        await dbContext.Entry(wallet).ReloadAsync(cancellationToken);
         var initialLedger = await dbContext.WalletTransactions.SingleAsync(item => item.Id == withdrawal.LedgerTransactionId, cancellationToken);
         var now = DateTime.UtcNow;
 

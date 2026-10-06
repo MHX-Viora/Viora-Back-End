@@ -98,6 +98,7 @@ internal sealed class WalletTransactionConfiguration : IEntityTypeConfiguration<
         builder.Property(transaction => transaction.Description).HasMaxLength(500);
         builder.Property(transaction => transaction.IdempotencyKey).HasMaxLength(150).IsRequired();
         builder.Property(transaction => transaction.AdjustmentReason).HasMaxLength(500);
+        builder.Property(transaction => transaction.Metadata).HasMaxLength(4000);
         builder.HasIndex(transaction => transaction.IdempotencyKey).IsUnique();
         builder.HasIndex(transaction => new { transaction.WalletId, transaction.CreatedAt });
         builder.HasIndex(transaction => new { transaction.ReferenceType, transaction.ReferenceId });

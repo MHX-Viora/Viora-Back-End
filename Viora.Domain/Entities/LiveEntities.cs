@@ -53,6 +53,7 @@ public sealed class LiveGift : AuditableEntity
     public string ImageUrl { get; set; } = null!;
     public string? AnimationUrl { get; set; }
     public long PriceCoin { get; set; }
+    public long Price { get; set; }
     public LiveGiftAnimationType AnimationType { get; set; }
     public LiveGiftEffectType EffectType { get; set; }
     public short EffectTier { get; set; }
@@ -102,6 +103,15 @@ public sealed class LiveGiftTransaction : CreatedEntity
     public decimal FeePercent { get; set; }
     public long PlatformFee { get; set; }
     public long HostEarning { get; set; }
+    // Nullable VND snapshots preserve historical coin transactions without revaluing them.
+    public long? UnitPrice { get; set; }
+    public long? GrossAmount { get; set; }
+    public long? NetAmount { get; set; }
+    public long? FeeAmount { get; set; }
+    public Guid? ReceiverWalletTransactionId { get; set; }
+    public string? GiftName { get; set; }
+    public string Currency { get; set; } = "COIN";
+    public WalletTransactionStatus Status { get; set; } = WalletTransactionStatus.Completed;
 }
 
 public sealed class LiveModerator : CreatedEntity

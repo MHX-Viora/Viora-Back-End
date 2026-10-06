@@ -55,7 +55,11 @@ internal sealed class LiveGiftConfiguration : IEntityTypeConfiguration<LiveGift>
 {
     public void Configure(EntityTypeBuilder<LiveGift> builder)
     {
-        builder.ToTable("LiveGifts", table => table.HasCheckConstraint("CK_LiveGifts_PriceCoin", "\"PriceCoin\" > 0"));
+        builder.ToTable("LiveGifts", table =>
+        {
+            table.HasCheckConstraint("CK_LiveGifts_PriceCoin", "\"PriceCoin\" > 0");
+            table.HasCheckConstraint("CK_LiveGifts_Price", "\"Price\" > 0 AND \"Price\" <= 9007199254740991");
+        });
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).HasMaxLength(100).IsRequired();
         builder.Property(x => x.ImageUrl).HasMaxLength(2048).IsRequired();
@@ -98,9 +102,32 @@ internal sealed class LiveGiftTransactionConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<LiveGiftTransaction> builder)
     {
-        builder.ToTable("LiveGiftTransactions");
+        builder.ToTable("LiveGiftTransactions", table =>
+        {
+            table.HasCheckConstraint("CK_LiveGiftTransactions_Currency", "\"Currency\" IN ('COIN', 'VND')");
+            table.HasCheckConstraint("CK_LiveGiftTransactions_VndTransfer", """
+                "Currency" <> 'VND' OR (
+                    "UnitPrice" IS NOT NULL AND "UnitPrice" > 0
+                    AND "GrossAmount" IS NOT NULL AND "GrossAmount" > 0 AND "GrossAmount" <= 9007199254740991
+                    AND "NetAmount" IS NOT NULL AND "NetAmount" > 0
+                    AND "FeeAmount" IS NOT NULL AND "FeeAmount" >= 0 AND "FeeAmount" < "GrossAmount"
+                    AND "Quantity" > 0 AND "Quantity" <= 99
+                    AND CAST("GrossAmount" AS numeric) = CAST("UnitPrice" AS numeric) * "Quantity"
+                    AND "NetAmount" = "GrossAmount" - "FeeAmount"
+                    AND "ReceiverWalletTransactionId" IS NOT NULL
+                    AND "ReceiverWalletTransactionId" <> "WalletTransactionId"
+                    AND "WalletTransactionId" <> '00000000-0000-0000-0000-000000000000'
+                    AND "ReceiverWalletTransactionId" <> '00000000-0000-0000-0000-000000000000'
+                    AND "SenderUserId" <> "HostUserId"
+                    AND "GiftName" IS NOT NULL AND length(trim("GiftName")) > 0
+                    AND "Status" = 1)
+                """);
+        });
         builder.HasKey(x => x.Id);
         builder.Property(x => x.FeePercent).HasPrecision(5, 2);
+        builder.Property(x => x.Currency).HasMaxLength(4).HasDefaultValue("COIN").IsRequired();
+        builder.Property(x => x.GiftName).HasMaxLength(100);
+        builder.Property(x => x.Status).HasDefaultValue(WalletTransactionStatus.Completed).HasSentinel(WalletTransactionStatus.Completed);
         builder.HasIndex(x => x.RequestId).IsUnique();
         builder.HasIndex(x => new { x.LiveId, x.CreatedAt });
         builder.HasIndex(x => new { x.SenderUserId, x.CreatedAt });
@@ -110,6 +137,7 @@ internal sealed class LiveGiftTransactionConfiguration : IEntityTypeConfiguratio
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.SenderUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.HostUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<WalletTransaction>().WithOne().HasForeignKey<LiveGiftTransaction>(x => x.WalletTransactionId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<WalletTransaction>().WithOne().HasForeignKey<LiveGiftTransaction>(x => x.ReceiverWalletTransactionId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

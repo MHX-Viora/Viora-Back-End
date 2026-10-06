@@ -32,7 +32,7 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
         {
             WalletHistoryGroup.Deposit => ledgerQuery.Where(item => item.Type == WalletTransactionType.Deposit),
             WalletHistoryGroup.Withdrawal => ledgerQuery.Where(item => item.Type == WalletTransactionType.Withdrawal),
-            WalletHistoryGroup.Payment => ledgerQuery.Where(item => item.Type == WalletTransactionType.Payment || item.Type == WalletTransactionType.TransferOut || item.Type == WalletTransactionType.Capture),
+            WalletHistoryGroup.Payment => ledgerQuery.Where(item => item.Type == WalletTransactionType.Payment || item.Type == WalletTransactionType.TransferOut || item.Type == WalletTransactionType.Capture || item.Type == WalletTransactionType.LiveGiftSent),
             WalletHistoryGroup.Refund => ledgerQuery.Where(item => item.Type == WalletTransactionType.Refund || item.Type == WalletTransactionType.Release),
             _ => ledgerQuery
         };
@@ -180,6 +180,7 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
             ? dbContext.Wallets.FromSqlInterpolated($"SELECT * FROM \"Wallets\" WHERE \"Id\" = {payment.WalletId} FOR UPDATE")
             : dbContext.Wallets.Where(item => item.Id == payment.WalletId);
         var wallet = await walletQuery.SingleAsync(cancellationToken);
+        await dbContext.Entry(wallet).ReloadAsync(cancellationToken);
         EnsureActive(wallet);
         var completedAt = DateTime.UtcNow;
         if (ledger?.Status == WalletTransactionStatus.Completed)
@@ -282,6 +283,7 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
                 ? dbContext.Wallets.FromSqlInterpolated($"SELECT * FROM \"Wallets\" WHERE \"Id\" = {walletId} FOR UPDATE")
                 : dbContext.Wallets.Where(item => item.Id == walletId);
             var wallet = await walletQuery.SingleAsync(cancellationToken);
+            await dbContext.Entry(wallet).ReloadAsync(cancellationToken);
             existing = await FindIdempotentAsync(idempotencyKey, cancellationToken);
             if (existing is not null)
             {
@@ -424,6 +426,8 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
             WalletTransactionType.TransferIn => ("Người gửi", "Ví ANKT"),
             WalletTransactionType.Adjustment when item.Amount >= 0 => ("Điều chỉnh", "Ví ANKT"),
             WalletTransactionType.Adjustment => ("Ví ANKT", "Điều chỉnh"),
+            WalletTransactionType.LiveGiftSent => ("Ví ANKT", "Tặng quà Live"),
+            WalletTransactionType.LiveGiftReceived => ("Quà Live", "Ví ANKT"),
             _ => ("Ví ANKT", "Giao dịch")
         };
         var description = item.Description ?? (item.Type, item.ReferenceType) switch
@@ -433,6 +437,16 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
             (WalletTransactionType.Capture, "AdvertisementEvent") => "Chi phí phát sinh khi quảng cáo được phân phối.",
             _ => null
         };
+        if (item.Type is WalletTransactionType.LiveGiftSent or WalletTransactionType.LiveGiftReceived && item.Metadata is not null)
+        {
+            using var metadata = System.Text.Json.JsonDocument.Parse(item.Metadata);
+            var details = metadata.RootElement;
+            relatedContent = $"{details.GetProperty("giftName").GetString()} ×{details.GetProperty("quantity").GetInt32()}";
+            if (item.Type == WalletTransactionType.LiveGiftSent && details.TryGetProperty("receiverName", out var receiverName))
+                destination = receiverName.GetString();
+            if (item.Type == WalletTransactionType.LiveGiftReceived && details.TryGetProperty("senderName", out var senderName))
+                source = senderName.GetString();
+        }
         return new WalletTransactionResponse(item.Id, item.Type, item.Amount, item.BalanceBefore, item.BalanceAfter,
             item.HeldBefore, item.HeldAfter, item.ReferenceType, item.ReferenceId, description, item.Status,
             withdrawalStatus, paymentStatus, item.CreatedAt, item.CompletedAt, true, source, destination, relatedContent, relatedStatus);

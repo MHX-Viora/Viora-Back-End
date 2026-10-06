@@ -34,6 +34,7 @@ public sealed class WalletTransaction : CreatedEntity
     public DateTime? CompletedAt { get; set; }
     public Guid? AdminId { get; set; }
     public string? AdjustmentReason { get; set; }
+    public string? Metadata { get; set; }
     public Wallet Wallet { get; set; } = null!;
 }
 
