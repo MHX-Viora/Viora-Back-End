@@ -15,6 +15,54 @@ namespace Viora.Application.Tests.Wallets;
 
 public sealed class WalletHistoryIntegrationTests
 {
+    [Theory]
+    [InlineData(WalletTransactionType.LiveGiftSent, "Host", "Viewer")]
+    [InlineData(WalletTransactionType.LiveGiftReceived, "Host", "Viewer")]
+    public async Task Gift_history_and_detail_preserve_valid_presentation(WalletTransactionType type, string receiver, string sender)
+    {
+        await using var scope = await WalletScope.CreateAsync();
+        var transaction = new WalletTransaction
+        {
+            WalletId = (await scope.Db.Wallets.SingleAsync()).Id, Type = type,
+            Amount = type == WalletTransactionType.LiveGiftSent ? -1000m : 1000m,
+            ReferenceType = "LiveGift", ReferenceId = Guid.NewGuid().ToString(),
+            IdempotencyKey = Guid.NewGuid().ToString(), Status = WalletTransactionStatus.Completed,
+            Metadata = JsonSerializer.Serialize(new { giftName = "Rose", quantity = 1, receiverName = receiver, senderName = sender })
+        };
+        scope.Db.WalletTransactions.Add(transaction);
+        await scope.Db.SaveChangesAsync();
+        var history = Assert.Single((await scope.HistoryAsync()).Data);
+        Assert.Equal("Rose ×1", history.RelatedContent);
+        Assert.Equal(type == WalletTransactionType.LiveGiftSent ? receiver : "Ví ANKT", history.Destination);
+        Assert.Equal(type == WalletTransactionType.LiveGiftReceived ? sender : "Ví ANKT", history.Source);
+        var detail = await scope.WalletService.GetTransactionAsync(scope.UserId, transaction.Id, default);
+        Assert.Equal(history, detail);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"giftName\":null,\"quantity\":\"1\"}")]
+    [InlineData("[]")]
+    [InlineData("invalid-json")]
+    public async Task Legacy_gift_metadata_does_not_break_history_or_detail(string metadata)
+    {
+        await using var scope = await WalletScope.CreateAsync();
+        var wallet = await scope.Db.Wallets.SingleAsync();
+        var transaction = new WalletTransaction
+        {
+            WalletId = wallet.Id, Type = WalletTransactionType.LiveGiftReceived, Amount = 1000m,
+            ReferenceType = "LiveGift", ReferenceId = Guid.NewGuid().ToString(),
+            IdempotencyKey = Guid.NewGuid().ToString(), Status = WalletTransactionStatus.Completed,
+            Metadata = metadata
+        };
+        scope.Db.WalletTransactions.Add(transaction);
+        await scope.Db.SaveChangesAsync();
+        Assert.Equal(transaction.Id, Assert.Single((await scope.HistoryAsync()).Data).Id);
+        var detail = await scope.WalletService.GetTransactionAsync(scope.UserId, transaction.Id, default);
+        Assert.Equal(1000m, detail!.Amount);
+        Assert.Equal("Quà Live", detail.Source);
+    }
+
     [Fact]
     public async Task New_deposit_has_one_pending_ledger_and_does_not_change_balance()
     {

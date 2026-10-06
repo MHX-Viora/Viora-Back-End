@@ -194,6 +194,8 @@ public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> re
         var live = (await db.Lives.FromSqlInterpolated($"SELECT * FROM \"Lives\" WHERE \"Id\" = {id} FOR UPDATE")
             .ToListAsync(cancellationToken)).SingleOrDefault();
         if (live is null) return NotFound();
+        if (live.Status is LiveStatus.Ended or LiveStatus.Interrupted or LiveStatus.Cancelled or LiveStatus.Banned)
+            return StatusCode(StatusCodes.Status410Gone, new { code = "LIVE_ENDED", message = "Phiên Live đã kết thúc." });
         var host = live.HostUserId == userId;
         if (host ? live.Status is not (LiveStatus.Preparing or LiveStatus.Live or LiveStatus.Reconnecting)
                  : !await CanJoinAsync(live, userId, cancellationToken))
@@ -218,7 +220,8 @@ public sealed class LivesController(AppDbContext db, IHubContext<RealtimeHub> re
     private async Task<bool> CanSeeAsync(LiveDto live, Guid userId, CancellationToken cancellationToken)
     {
         if (live.HostUserId == userId) return true;
-        if (live.Status != LiveStatus.Live ||
+        // Viewers must still be able to observe a terminal status after media/SignalR disconnects.
+        if (live.Status is not (LiveStatus.Live or LiveStatus.Reconnecting or LiveStatus.Ended or LiveStatus.Interrupted or LiveStatus.Cancelled or LiveStatus.Banned) ||
             await db.LiveUserRestrictions.AnyAsync(x => x.LiveId == live.Id && x.UserId == userId && x.IsBlocked, cancellationToken)) return false;
         return live.Privacy switch
         {

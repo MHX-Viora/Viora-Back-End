@@ -439,13 +439,26 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
         };
         if (item.Type is WalletTransactionType.LiveGiftSent or WalletTransactionType.LiveGiftReceived && item.Metadata is not null)
         {
-            using var metadata = System.Text.Json.JsonDocument.Parse(item.Metadata);
-            var details = metadata.RootElement;
-            relatedContent = $"{details.GetProperty("giftName").GetString()} ×{details.GetProperty("quantity").GetInt32()}";
-            if (item.Type == WalletTransactionType.LiveGiftSent && details.TryGetProperty("receiverName", out var receiverName))
-                destination = receiverName.GetString();
-            if (item.Type == WalletTransactionType.LiveGiftReceived && details.TryGetProperty("senderName", out var senderName))
-                source = senderName.GetString();
+            // Metadata enriches presentation; legacy/incomplete data must not hide the ledger.
+            try
+            {
+                using var metadata = System.Text.Json.JsonDocument.Parse(item.Metadata);
+                var details = metadata.RootElement;
+                if (details.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    if (details.TryGetProperty("giftName", out var giftName) && giftName.ValueKind == System.Text.Json.JsonValueKind.String &&
+                        details.TryGetProperty("quantity", out var quantity) && quantity.ValueKind == System.Text.Json.JsonValueKind.Number &&
+                        quantity.TryGetInt32(out var count) && count > 0)
+                        relatedContent = $"{giftName.GetString()} ×{count}";
+                    if (item.Type == WalletTransactionType.LiveGiftSent && details.TryGetProperty("receiverName", out var receiverName) &&
+                        receiverName.ValueKind == System.Text.Json.JsonValueKind.String && !string.IsNullOrWhiteSpace(receiverName.GetString()))
+                        destination = receiverName.GetString();
+                    if (item.Type == WalletTransactionType.LiveGiftReceived && details.TryGetProperty("senderName", out var senderName) &&
+                        senderName.ValueKind == System.Text.Json.JsonValueKind.String && !string.IsNullOrWhiteSpace(senderName.GetString()))
+                        source = senderName.GetString();
+                }
+            }
+            catch (System.Text.Json.JsonException) { /* Keep the authoritative ledger fields and fallback labels. */ }
         }
         return new WalletTransactionResponse(item.Id, item.Type, item.Amount, item.BalanceBefore, item.BalanceAfter,
             item.HeldBefore, item.HeldAfter, item.ReferenceType, item.ReferenceId, description, item.Status,
