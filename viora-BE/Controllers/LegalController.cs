@@ -49,7 +49,7 @@ public sealed class LegalController(ILegalDocumentRepository repository) : Contr
 
 public sealed record AcceptLegalDocumentRequest(
     Guid DocumentId,
-    [property: Required, MaxLength(20)] string Version,
-    [property: MaxLength(30)] string? AppVersion,
+    [param: Required, MaxLength(20)] string Version,
+    [param: MaxLength(30)] string? AppVersion,
     short? DeviceType);
 

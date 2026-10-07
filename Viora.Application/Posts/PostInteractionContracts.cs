@@ -198,6 +198,7 @@ public interface IPostInteractionRepository
     Task<User?> GetActiveUserAsync(Guid userId, CancellationToken cancellationToken);
     Task<Post?> GetPostForInteractionAsync(Guid postId, CancellationToken cancellationToken);
     Task<Post?> GetPostWithOriginalAsync(Guid postId, CancellationToken cancellationToken);
+    Task DeletePostAndCancelAdvertisementsAsync(Post post, CancellationToken cancellationToken);
     Task<Comment?> GetCommentForReplyAsync(Guid commentId, CancellationToken cancellationToken);
     Task<Comment?> GetCommentForLikeAsync(Guid commentId, CancellationToken cancellationToken);
     Task<Comment?> GetCommentForDeleteAsync(Guid commentId, CancellationToken cancellationToken);

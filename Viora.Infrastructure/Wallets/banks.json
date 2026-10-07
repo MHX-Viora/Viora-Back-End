@@ -1,0 +1,296 @@
+[
+  {
+    "code": "ICB",
+    "name": "Ngân hàng TMCP Công thương Việt Nam",
+    "shortName": "VietinBank",
+    "bin": "970415",
+    "logo": "https://cdn.vietqr.io/img/ICB.png"
+  },
+  {
+    "code": "VCB",
+    "name": "Ngân hàng TMCP Ngoại Thương Việt Nam",
+    "shortName": "Vietcombank",
+    "bin": "970436",
+    "logo": "https://cdn.vietqr.io/img/VCB.png"
+  },
+  {
+    "code": "BIDV",
+    "name": "Ngân hàng TMCP Đầu tư và Phát triển Việt Nam",
+    "shortName": "BIDV",
+    "bin": "970418",
+    "logo": "https://cdn.vietqr.io/img/BIDV.png"
+  },
+  {
+    "code": "VBA",
+    "name": "Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam",
+    "shortName": "Agribank",
+    "bin": "970405",
+    "logo": "https://cdn.vietqr.io/img/VBA.png"
+  },
+  {
+    "code": "OCB",
+    "name": "Ngân hàng TMCP Phương Đông",
+    "shortName": "OCB",
+    "bin": "970448",
+    "logo": "https://cdn.vietqr.io/img/OCB.png"
+  },
+  {
+    "code": "MB",
+    "name": "Ngân hàng TMCP Quân đội",
+    "shortName": "MBBank",
+    "bin": "970422",
+    "logo": "https://cdn.vietqr.io/img/MB.png"
+  },
+  {
+    "code": "TCB",
+    "name": "Ngân hàng TMCP Kỹ thương Việt Nam",
+    "shortName": "Techcombank",
+    "bin": "970407",
+    "logo": "https://cdn.vietqr.io/img/TCB.png"
+  },
+  {
+    "code": "ACB",
+    "name": "Ngân hàng TMCP Á Châu",
+    "shortName": "ACB",
+    "bin": "970416",
+    "logo": "https://cdn.vietqr.io/img/ACB.png"
+  },
+  {
+    "code": "VPB",
+    "name": "Ngân hàng TMCP Việt Nam Thịnh Vượng",
+    "shortName": "VPBank",
+    "bin": "970432",
+    "logo": "https://cdn.vietqr.io/img/VPB.png"
+  },
+  {
+    "code": "TPB",
+    "name": "Ngân hàng TMCP Tiên Phong",
+    "shortName": "TPBank",
+    "bin": "970423",
+    "logo": "https://cdn.vietqr.io/img/TPB.png"
+  },
+  {
+    "code": "STB",
+    "name": "Ngân hàng TMCP Sài Gòn Thương Tín",
+    "shortName": "Sacombank",
+    "bin": "970403",
+    "logo": "https://cdn.vietqr.io/img/STB.png"
+  },
+  {
+    "code": "HDB",
+    "name": "Ngân hàng TMCP Phát triển Thành phố Hồ Chí Minh",
+    "shortName": "HDBank",
+    "bin": "970437",
+    "logo": "https://cdn.vietqr.io/img/HDB.png"
+  },
+  {
+    "code": "VCCB",
+    "name": "Ngân hàng TMCP Bản Việt",
+    "shortName": "VietCapitalBank",
+    "bin": "970454",
+    "logo": "https://cdn.vietqr.io/img/VCCB.png"
+  },
+  {
+    "code": "SCB",
+    "name": "Ngân hàng TMCP Sài Gòn",
+    "shortName": "SCB",
+    "bin": "970429",
+    "logo": "https://cdn.vietqr.io/img/SCB.png"
+  },
+  {
+    "code": "VIB",
+    "name": "Ngân hàng TMCP Quốc tế Việt Nam",
+    "shortName": "VIB",
+    "bin": "970441",
+    "logo": "https://cdn.vietqr.io/img/VIB.png"
+  },
+  {
+    "code": "SHB",
+    "name": "Ngân hàng TMCP Sài Gòn - Hà Nội",
+    "shortName": "SHB",
+    "bin": "970443",
+    "logo": "https://cdn.vietqr.io/img/SHB.png"
+  },
+  {
+    "code": "EIB",
+    "name": "Ngân hàng TMCP Xuất Nhập khẩu Việt Nam",
+    "shortName": "Eximbank",
+    "bin": "970431",
+    "logo": "https://cdn.vietqr.io/img/EIB.png"
+  },
+  {
+    "code": "MSB",
+    "name": "Ngân hàng TMCP Hàng Hải Việt Nam",
+    "shortName": "MSB",
+    "bin": "970426",
+    "logo": "https://cdn.vietqr.io/img/MSB.png"
+  },
+  {
+    "code": "CAKE",
+    "name": "TMCP Việt Nam Thịnh Vượng - Ngân hàng số CAKE by VPBank",
+    "shortName": "CAKE",
+    "bin": "546034",
+    "logo": "https://cdn.vietqr.io/img/CAKE.png"
+  },
+  {
+    "code": "Ubank",
+    "name": "TMCP Việt Nam Thịnh Vượng - Ngân hàng số Ubank by VPBank",
+    "shortName": "Ubank",
+    "bin": "546035",
+    "logo": "https://cdn.vietqr.io/img/UBANK.png"
+  },
+  {
+    "code": "TIMO",
+    "name": "Ngân hàng số Timo by Ban Viet Bank (Timo by Ban Viet Bank)",
+    "shortName": "Timo",
+    "bin": "963388",
+    "logo": "https://vietqr.net/portal-service/resources/icons/TIMO.png"
+  },
+  {
+    "code": "SGICB",
+    "name": "Ngân hàng TMCP Sài Gòn Công Thương",
+    "shortName": "SaigonBank",
+    "bin": "970400",
+    "logo": "https://cdn.vietqr.io/img/SGICB.png"
+  },
+  {
+    "code": "BAB",
+    "name": "Ngân hàng TMCP Bắc Á",
+    "shortName": "BacABank",
+    "bin": "970409",
+    "logo": "https://cdn.vietqr.io/img/BAB.png"
+  },
+  {
+    "code": "momo",
+    "name": "CTCP Dịch Vụ Di Động Trực Tuyến",
+    "shortName": "MoMo",
+    "bin": "971025",
+    "logo": "https://cdn.vietqr.io/img/momo.png"
+  },
+  {
+    "code": "PVDB",
+    "name": "Ngân hàng TMCP Đại Chúng Việt Nam Ngân hàng số",
+    "shortName": "PVcomBank Pay",
+    "bin": "971133",
+    "logo": "https://cdn.vietqr.io/img/PVCB.png"
+  },
+  {
+    "code": "PVCB",
+    "name": "Ngân hàng TMCP Đại Chúng Việt Nam",
+    "shortName": "PVcomBank",
+    "bin": "970412",
+    "logo": "https://cdn.vietqr.io/img/PVCB.png"
+  },
+  {
+    "code": "MBV",
+    "name": "Ngân hàng TNHH MTV Việt Nam Hiện Đại",
+    "shortName": "MBV",
+    "bin": "970414",
+    "logo": "https://cdn.vietqr.io/img/MBV.png"
+  },
+  {
+    "code": "NCB",
+    "name": "Ngân hàng TMCP Quốc Dân",
+    "shortName": "NCB",
+    "bin": "970419",
+    "logo": "https://cdn.vietqr.io/img/NCB.png"
+  },
+  {
+    "code": "SHBVN",
+    "name": "Ngân hàng TNHH MTV Shinhan Việt Nam",
+    "shortName": "ShinhanBank",
+    "bin": "970424",
+    "logo": "https://cdn.vietqr.io/img/SHBVN.png"
+  },
+  {
+    "code": "ABB",
+    "name": "Ngân hàng TMCP An Bình",
+    "shortName": "ABBANK",
+    "bin": "970425",
+    "logo": "https://cdn.vietqr.io/img/ABB.png"
+  },
+  {
+    "code": "VAB",
+    "name": "Ngân hàng TMCP Việt Á",
+    "shortName": "VietABank",
+    "bin": "970427",
+    "logo": "https://cdn.vietqr.io/img/VAB.png"
+  },
+  {
+    "code": "NAB",
+    "name": "Ngân hàng TMCP Nam Á",
+    "shortName": "NamABank",
+    "bin": "970428",
+    "logo": "https://cdn.vietqr.io/img/NAB.png"
+  },
+  {
+    "code": "PGB",
+    "name": "Ngân hàng TMCP Thịnh vượng và Phát triển",
+    "shortName": "PGBank",
+    "bin": "970430",
+    "logo": "https://cdn.vietqr.io/img/PGB.png"
+  },
+  {
+    "code": "VIETBANK",
+    "name": "Ngân hàng TMCP Việt Nam Thương Tín",
+    "shortName": "VietBank",
+    "bin": "970433",
+    "logo": "https://cdn.vietqr.io/img/VIETBANK.png"
+  },
+  {
+    "code": "BVB",
+    "name": "Ngân hàng TMCP Bảo Việt",
+    "shortName": "BaoVietBank",
+    "bin": "970438",
+    "logo": "https://cdn.vietqr.io/img/BVB.png"
+  },
+  {
+    "code": "SEAB",
+    "name": "Ngân hàng TMCP Đông Nam Á",
+    "shortName": "SeABank",
+    "bin": "970440",
+    "logo": "https://cdn.vietqr.io/img/SEAB.png"
+  },
+  {
+    "code": "COOPBANK",
+    "name": "Ngân hàng Hợp tác xã Việt Nam",
+    "shortName": "COOPBANK",
+    "bin": "970446",
+    "logo": "https://cdn.vietqr.io/img/COOPBANK.png"
+  },
+  {
+    "code": "LPB",
+    "name": "Ngân hàng TMCP Lộc Phát Việt Nam",
+    "shortName": "LPBank",
+    "bin": "970449",
+    "logo": "https://cdn.vietqr.io/img/LPB.png"
+  },
+  {
+    "code": "KLB",
+    "name": "Ngân hàng TMCP Kiên Long",
+    "shortName": "KienLongBank",
+    "bin": "970452",
+    "logo": "https://cdn.vietqr.io/img/KLB.png"
+  },
+  {
+    "code": "KBank",
+    "name": "Ngân hàng Đại chúng TNHH Kasikornbank",
+    "shortName": "KBank",
+    "bin": "668888",
+    "logo": "https://cdn.vietqr.io/img/KBANK.png"
+  },
+  {
+    "code": "CIMB",
+    "name": "Ngân hàng TNHH MTV CIMB Việt Nam",
+    "shortName": "CIMB",
+    "bin": "422589",
+    "logo": "https://cdn.vietqr.io/img/CIMB.png"
+  },
+  {
+    "code": "WVN",
+    "name": "Ngân hàng TNHH MTV Woori Việt Nam",
+    "shortName": "Woori",
+    "bin": "970457",
+    "logo": "https://cdn.vietqr.io/img/WVN.png"
+  }
+]

@@ -149,7 +149,8 @@ public sealed record AdminPostDetailResponse(
     int ReportCount,
     DateTime CreatedAt,
     IReadOnlyList<AdminPostMediaResponse> Media,
-    IReadOnlyList<string> Hashtags);
+    IReadOnlyList<string> Hashtags,
+    IReadOnlyList<Viora.Application.Articles.ArticleBlockResponse>? ArticleBlocks = null);
 
 public sealed record AdminPostMediaResponse(Guid Id, string MediaUrl, string? ThumbnailUrl);
 

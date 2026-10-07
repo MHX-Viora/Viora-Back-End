@@ -30,6 +30,12 @@ using Viora.Application.Articles;
 using Viora.Application.MiniApps;
 using Viora.Infrastructure.MiniApps;
 using Viora.Application.Stickers;
+using Viora.Application.Wallets;
+using Viora.Infrastructure.Wallets;
+using Viora.Application.Advertisements;
+using Viora.Infrastructure.Advertisements;
+using Viora.Application.Live;
+using Viora.Infrastructure.LiveStreaming;
 
 namespace Viora.Infrastructure;
 
@@ -48,6 +54,21 @@ public static class DependencyInjection
         }
 
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddHttpClient("payos", client =>
+        {
+            client.BaseAddress = new Uri("https://api-merchant.payos.vn/");
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+        services.AddScoped<IWalletService, WalletService>();
+        services.AddSingleton<IAgoraTokenService, AgoraTokenService>();
+        services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IAdminWalletService, AdminWalletService>();
+        services.Configure<WithdrawalOptions>(configuration.GetSection("Wallet"));
+        services.AddSingleton<IBankAccountProtector, BankAccountProtector>();
+        services.AddScoped<IWithdrawalService, WithdrawalService>();
+        services.Configure<AdvertisementOptions>(configuration.GetSection("Advertisements"));
+        services.AddScoped<IAdvertisementService, AdvertisementService>();
+        services.AddHostedService<AdvertisementLifecycleHostedService>();
         var jwtOptions = new JwtOptions
         {
             Key = configuration["Jwt:Key"] ?? string.Empty,
@@ -199,6 +220,17 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionRegistry>(provider => provider.GetRequiredService<ConnectionRegistry>());
         services.AddSingleton<IOnlineUserRegistry>(provider => provider.GetRequiredService<ConnectionRegistry>());
         services.AddSingleton<IUserIdProvider, UserIdProvider>();
+        services.Configure<LiveChatOptions>(configuration.GetSection("LiveChat"));
+        services.AddSingleton<ILiveCommentBuffer, InMemoryLiveCommentBuffer>();
+        services.AddSingleton<LiveCommentCountFlusher>();
+        services.AddHostedService(provider => provider.GetRequiredService<LiveCommentCountFlusher>());
+        services.AddSingleton<ILiveReactionBuffer, InMemoryLiveReactionBuffer>();
+        services.AddSingleton<LiveReactionCountFlusher>();
+        services.AddHostedService(provider => provider.GetRequiredService<LiveReactionCountFlusher>());
+        services.Configure<LiveLifecycleOptions>(configuration.GetSection("LiveLifecycle"));
+        services.AddScoped<LiveSessionFinalizer>();
+        services.AddScoped<Viora.Infrastructure.LiveStreaming.LiveGiftWalletService>();
+        services.AddHostedService<LiveHostTimeoutService>();
         services.AddSingleton<IFirebaseInitializer, FirebaseInitializer>();
         services.AddSingleton<IFirebaseMessagingClientFactory, FirebaseMessagingClientFactory>();
         services.AddScoped<IRealtimeService, SignalRRealtimeService>();

@@ -91,13 +91,13 @@ public sealed class AuthController(IMediator mediator) : ControllerBase
 
 public sealed record SetForgotPasswordPhoneRequest(
     Guid UserId,
-    [property: MaxLength(20)] string? PhoneNumber,
-    [property: MaxLength(4096)] string? FirebaseToken);
+    [param: MaxLength(20)] string? PhoneNumber,
+    [param: MaxLength(4096)] string? FirebaseToken);
 
 public sealed record ResetForgottenPasswordRequest(
-    [property: MaxLength(4096)] string? FirebaseToken,
-    [property: StringLength(100, MinimumLength = 8)] string? NewPassword,
-    [property: MaxLength(255)] string? Identifier);
+    [param: MaxLength(4096)] string? FirebaseToken,
+    [param: StringLength(100, MinimumLength = 8)] string? NewPassword,
+    [param: MaxLength(255)] string? Identifier);
 
 public sealed record ForgotPasswordErrorResponse(
     bool Success,

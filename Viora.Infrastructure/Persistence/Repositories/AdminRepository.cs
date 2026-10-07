@@ -225,7 +225,9 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
                 dbContext.Reports.Count(r => r.TargetType == ReportTargetType.Post && r.TargetId == x.Id),
                 x.CreatedAt,
                 x.Media.Select(m => new AdminPostMediaResponse(m.Id, m.MediaUrl, m.ThumbnailUrl)).ToList(),
-                dbContext.PostHashtags.Where(h => h.PostId == x.Id).Select(h => h.Hashtag.Name).ToList()))
+                dbContext.PostHashtags.Where(h => h.PostId == x.Id).Select(h => h.Hashtag.Name).ToList(),
+                x.ArticleBlocks.OrderBy(b => b.OrderIndex).Select(b => new Viora.Application.Articles.ArticleBlockResponse(
+                    b.Id, b.OrderIndex, b.BlockType, b.Content, b.MediaUrl, b.ThumbnailUrl, b.Caption, b.CreatedAt, b.UpdatedAt)).ToList()))
             .FirstOrDefaultAsync(cancellationToken);
         return post;
     }
@@ -266,6 +268,7 @@ public sealed class AdminRepository(AppDbContext dbContext) : IAdminRepository
             ReportTargetType.Post => await GetPostDetailAsync(summary.TargetId, null, cancellationToken),
             ReportTargetType.Comment => await dbContext.Comments.AsNoTracking().Where(x => x.Id == summary.TargetId).Select(x => new { x.Id, x.PostId, x.UserId, x.Content, x.Status, x.CreatedAt }).FirstOrDefaultAsync(cancellationToken),
             ReportTargetType.Message => await dbContext.Messages.AsNoTracking().Where(x => x.Id == summary.TargetId).Select(x => new { x.Id, x.ConversationId, x.SenderUserId, x.Content, x.MessageType, x.IsDeleted, x.CreatedAt }).FirstOrDefaultAsync(cancellationToken),
+            ReportTargetType.LiveComment => summary.Description is null ? null : System.Text.Json.JsonSerializer.Deserialize<Viora.Application.Live.LiveCommentEvent>(summary.Description),
             _ => null
         };
         return new AdminReportDetailResponse(id, summary, target);

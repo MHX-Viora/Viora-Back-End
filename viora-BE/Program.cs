@@ -248,6 +248,19 @@ app.UseExceptionHandler(errorApp =>
             return;
         }
 
+        if (exception is Viora.Application.Wallets.WalletConfigurationException walletConfigurationException)
+        {
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                message = walletConfigurationException.PublicMessage,
+                error = new { code = walletConfigurationException.Code, message = walletConfigurationException.PublicMessage },
+                traceId
+            });
+            return;
+        }
+
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new

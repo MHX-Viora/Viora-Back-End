@@ -1,0 +1,12 @@
+# Live chat handoff
+
+- `RealtimeHub.SendLiveComment` validates identity, live state, membership, mute status and text, then adds a `LiveCommentEvent` to `ILiveCommentBuffer` and broadcasts `LiveComment` to `live:{liveId:N}`. It does not read or write `LiveComments`.
+- `InMemoryLiveCommentBuffer` locks per room, retains 200 recent events, enforces 5 comments per user per live per 5 seconds and counts accepted events. `JoinLive` returns the latest 100 after joining the group.
+- `LiveCommentCountFlusher` applies pending increments to `Lives.TotalComments` every 5 seconds and on Live end. Failed writes restore pending counts for retry. Normal comments are never stored in PostgreSQL.
+- `ReactToLive` accepts batches of 1-20, increments `InMemoryLiveReactionBuffer`, and broadcasts to other room members without a database write per tap. `LiveReactionCountFlusher` applies pending totals every stats interval and on Live end; failed writes restore the pending count. `JoinLive` returns the persisted total plus pending reactions so reconnect does not reset the counter.
+- `DeleteLiveComment` and `MuteLiveUser` require host or assigned moderator. Delete removes the buffered event and broadcasts `LiveCommentDeleted`; mute reuses `LiveUserRestrictions`.
+- `ReportLiveComment` persists a snapshot in existing `Reports.Description` JSON, with `TargetType=LiveComment`, `TargetId=commentId`, reporter, reason, status and report timestamp in the report row. The admin detail path reads the snapshot.
+- Ending a Live closes and clears its transient buffer after saving the ended state, then flushes the count. The legacy `LiveComments` table and mapping remain for safe migration compatibility; no migration was added.
+- Frontend viewer and host merge snapshots with events by unique ID and timestamp, keep 100 visible entries, handle deletion and reconnect. On reconnect the client rejoins the group and retries transient join failures; exhausted SignalR reconnects restart the room connection. Viewer scroll follows only when at the bottom.
+- Configure with `LiveChat__*` environment variables in `.env.example`. The interfaces permit Redis-backed implementations later. Current comment delivery and pending comment/reaction counts are per process: multi-instance deployment needs shared buffers and a SignalR backplane; an ungraceful process failure can lose unflushed counts.
+- Gift transactions, wallet, payments and Agora were not changed.

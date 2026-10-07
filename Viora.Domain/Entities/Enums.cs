@@ -59,7 +59,7 @@ public enum NotificationType : short
 }
 public enum NotificationReferenceType : short { User = 0, Post = 1, Comment = 2, Conversation = 3, Message = 4, Identity = 5, Article = 6 }
 public enum DevicePlatform : short { Android = 0, Ios = 1, Web = 2, Other = 3 }
-public enum ReportTargetType : short { User = 0, Post = 1, Comment = 2, Message = 3 }
+public enum ReportTargetType : short { User = 0, Post = 1, Comment = 2, Message = 3, LiveComment = 4 }
 public enum ReportReason : short { Spam = 0, Violence = 1, AdultContent = 2, HateSpeech = 3, FakeNews = 4, Scam = 5, Other = 6 }
 public enum ReportStatus : short { Pending = 0, Approved = 1, Rejected = 2 }
 public enum CallStatus : short { Calling = 0, Accepted = 1, Rejected = 2, Missed = 3, Cancelled = 4, Ended = 5 }
@@ -72,3 +72,59 @@ public enum MiniAppStatus : short { Draft = 0, PendingReview = 1, Active = 2, Su
 public enum DeveloperStatus : short { Pending = 0, Active = 1, Suspended = 2, Rejected = 3 }
 public enum MiniAppPermissionStatus : short { Inactive = 0, Active = 1 }
 public enum MiniAppLaunchStatus : short { Succeeded = 0, Failed = 1 }
+public enum WalletStatus : short { Active = 0, Suspended = 1, Closed = 2 }
+public enum WalletTransactionType : short
+{
+    Deposit = 0,
+    TransferIn = 1,
+    TransferOut = 2,
+    Payment = 3,
+    Hold = 4,
+    Release = 5,
+    Refund = 6,
+    Withdrawal = 7,
+    Adjustment = 8,
+    Capture = 9,
+    LiveGiftSent = 10,
+    LiveGiftReceived = 11
+}
+public enum WalletTransactionStatus : short { Pending = 0, Completed = 1, Failed = 2, Reversed = 3 }
+public enum PaymentStatus : short { Pending = 0, Paid = 1, Failed = 2, Cancelled = 3, Expired = 4 }
+public enum WithdrawalStatus : short
+{
+    Pending = 0,
+    Processing = 1,
+    Completed = 2,
+    Failed = 3,
+    Rejected = 4,
+    Cancelled = 5
+}
+public enum AdvertisementPlacement : short { Feed = 0, Reels = 1, News = 2 }
+public enum AdvertisementObjective : short { Awareness = 0, Traffic = 1, Engagement = 2 }
+public enum AdvertisementDestinationType : short { InAppContent = 0, ExternalUrl = 1 }
+public enum AdvertisementCtaType : short
+{
+    LearnMore = 0,
+    BuyNow = 1,
+    Message = 2,
+    SignUp = 3,
+    Download = 4,
+    ViewProduct = 5,
+    GetOffer = 6,
+    ContactNow = 7,
+    Follow = 8
+}
+public enum AdvertisementTargetingMode : short { Automatic = 0, Custom = 1 }
+public enum AdvertisementStatus : short
+{
+    Draft = 0,
+    Pending = 1,
+    Approved = 2,
+    Active = 3,
+    Paused = 4,
+    Completed = 5,
+    Rejected = 6,
+    Cancelled = 7
+}
+public enum AdvertisementEventType : short { Impression = 0, Click = 1 }
+public enum AdvertisementFeedbackType : short { Hide = 0, NotInterested = 1, Report = 2 }
