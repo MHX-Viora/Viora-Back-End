@@ -329,7 +329,7 @@ public sealed class WithdrawalService(
     private static string NormalizeAccountNumber(string value)
     {
         var normalized = (value ?? string.Empty).Replace(" ", string.Empty).Replace("-", string.Empty);
-        if (normalized.Length is < 6 or > 25 || normalized.Any(character => character is < '0' or > '9'))
+        if (normalized.Length is < 6 or > 19 || normalized.Any(character => character is < '0' or > '9'))
             throw new WalletValidationException("INVALID_ACCOUNT_NUMBER", "Số tài khoản ngân hàng không hợp lệ.");
         return normalized;
     }
@@ -382,14 +382,14 @@ public sealed class WithdrawalService(
         try { number = protector.Unprotect(item.BankAccount.AccountNumberEncrypted); }
         catch (Exception error) when (error is CryptographicException or FormatException or InvalidOperationException) { }
         // Never use a modified recipient account for an existing withdrawal snapshot.
-        if (number is null || number.Length is < 6 or > 25 || number.Any(c => c is < '0' or > '9') || item.BankAccountLast4?.Length != 4 ||
+        if (number is null || number.Length is < 6 or > 19 || number.Any(c => c is < '0' or > '9') || item.BankAccountLast4?.Length != 4 ||
             !number.EndsWith(item.BankAccountLast4, StringComparison.Ordinal) || item.BankAccount.BankCode != item.BankCode) number = null;
         var bank = BankCatalogue.Find(item.BankCode);
         var canTransfer = number is not null && bank is not null && !string.IsNullOrWhiteSpace(item.BankAccountHolderName) &&
             !string.IsNullOrWhiteSpace(item.TransactionCode) && item.TransactionCode.Length <= 25 &&
             item.BankAccount.UserId == item.UserId && item.Amount > 0 && item.Amount <= WalletFinancialRules.MaximumSafeVnd &&
             decimal.Truncate(item.Amount) == item.Amount && item.Fee >= 0 && decimal.Truncate(item.Fee) == item.Fee &&
-            item.NetAmount == item.Amount - item.Fee && item.NetAmount > 0;
+            item.NetAmount == item.Amount - item.Fee && item.NetAmount > 0 && item.NetAmount <= 9_999_999_999_999m;
         var qr = canTransfer && item.Status == WithdrawalStatus.Processing
             ? $"https://img.vietqr.io/image/{bank!.Bin}-{number}-compact2.png?amount={item.NetAmount.ToString("0", CultureInfo.InvariantCulture)}&addInfo={Uri.EscapeDataString(item.TransactionCode)}&accountName={Uri.EscapeDataString(item.BankAccountHolderName)}"
             : null;

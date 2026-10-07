@@ -9,6 +9,43 @@ using Xunit;
 
 public sealed class MoneyAuditIntegrationTests
 {
+    [Fact] public async Task VietQrUnsupportedAccountLengthCannotBeSaved()
+    {
+        await using var f = await Fixture.Create();
+        var error = await Assert.ThrowsAsync<WalletValidationException>(() => f.Service.CreateBankAccountAsync(f.UserId,
+            new("VCB", "ignored", "12345678901234567890", "TEST USER", true), default));
+        Assert.Equal("INVALID_ACCOUNT_NUMBER", error.Code);
+        Assert.Single(await f.Db.BankAccounts.ToListAsync());
+    }
+
+    [Fact] public async Task InvalidProcessingRecipientCanFailAndRefundExactlyOnce()
+    {
+        await using var f = await Fixture.Create();
+        var request = await f.Service.CreateAsync(f.UserId, f.Request(50000), default);
+        var admin = Guid.NewGuid();
+        await f.Service.ChangeStatusAsync(request.Id, WithdrawalStatus.Processing, null, default, admin);
+        var account = await f.Db.BankAccounts.SingleAsync(a => a.Id == f.BankId);
+        var protector = new BankAccountProtector(Options.Create(new WithdrawalOptions { BankAccountEncryptionKey = Convert.ToBase64String(new byte[32]) }));
+        account.AccountNumberEncrypted = protector.Protect("12345678901234567890");
+        account.AccountNumberLast4 = "7890";
+        await f.Db.SaveChangesAsync();
+        var detail = await f.Service.GetAdminDetailAsync(request.Id, default);
+        Assert.False(detail!.CanTransfer);
+        Assert.Null(detail.QrImageUrl);
+        await Assert.ThrowsAsync<WalletValidationException>(() => f.Service.ChangeStatusAsync(request.Id, WithdrawalStatus.Failed, " ", default, admin));
+        const string reason = "Thông tin tài khoản không hợp lệ";
+        await f.Service.ChangeStatusAsync(request.Id, WithdrawalStatus.Failed, reason, default, admin);
+        await f.Service.ChangeStatusAsync(request.Id, WithdrawalStatus.Failed, reason, default, admin);
+        var wallet = await f.Db.Wallets.SingleAsync();
+        Assert.Equal(100000m, wallet.AvailableBalance);
+        Assert.Equal(0m, wallet.HeldBalance);
+        Assert.Equal(2, await f.Db.WalletTransactions.CountAsync());
+        var failed = await f.Service.GetAdminDetailAsync(request.Id, default);
+        Assert.Equal(WithdrawalStatus.Failed, failed!.Withdrawal.Status);
+        Assert.Equal(reason, failed.Withdrawal.FailureReason);
+        Assert.Equal(admin, failed.Timeline.Last().ActorId);
+    }
+
     [Fact] public async Task SavesWithdrawalRecipientWithVietnameseNameAndEncryptsAccountNumber()
     {
         await using var f = await Fixture.Create();
