@@ -29,3 +29,7 @@ Kỳ vọng 204 với Allow-Origin bằng https://mxh.ankt.vn, Allow-Credentials
 Tài liệu: [ASP.NET Core CORS](https://learn.microsoft.com/en-us/aspnet/core/security/cors?view=aspnetcore-8.0), [nginx reverse proxy](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/).
 
 Chưa triển khai server hoặc chỉnh nginx production trong phiên này. Không đổi DB/schema.
+
+## Notification fetch follow-up (2026-10-07)
+
+`/api/notifications?page=1&pageSize=20`: production OPTIONS GET returns 204 without CORS, and unauthenticated GET returns 401 without CORS. This reproduces the browser fetch failure. The existing exact-origin fix must be deployed; nginx must preserve CORS on both preflight and actual/error responses. Added GET preflight and 401 response-header regression coverage. Frontend provides an explicit retry button and Vietnamese connection error. No server changes were made during this follow-up.

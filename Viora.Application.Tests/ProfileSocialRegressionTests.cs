@@ -21,6 +21,7 @@ using Xunit;
 public sealed class ProfileSocialRegressionTests
 {
     [Theory]
+    [InlineData("GET")]
     [InlineData("POST")]
     [InlineData("DELETE")]
     [InlineData("PUT")]
@@ -50,6 +51,24 @@ public sealed class ProfileSocialRegressionTests
         Assert.DoesNotContain("*", origins);
         Assert.DoesNotContain("https://bad.example/path", origins);
         Assert.DoesNotContain("https://mxh.ankt.vn.evil.example", origins);
+    }
+
+    [Fact]
+    public void NotificationUnauthorizedResponseStillIncludesCorsHeaders()
+    {
+        var policy = new CorsPolicyBuilder()
+            .WithOrigins(WebCorsOrigins.Resolve(["https://admin.example.com"]).ToArray())
+            .AllowAnyHeader().AllowAnyMethod().AllowCredentials().Build();
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/api/notifications";
+        context.Request.Headers.Origin = "https://mxh.ankt.vn";
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        var service = new CorsService(Options.Create(new CorsOptions()), NullLoggerFactory.Instance);
+        service.ApplyResult(service.EvaluatePolicy(context, policy), context.Response);
+        Assert.Equal("https://mxh.ankt.vn", context.Response.Headers.AccessControlAllowOrigin.ToString());
+        Assert.Equal("true", context.Response.Headers.AccessControlAllowCredentials.ToString());
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
     }
 
     [Theory]
