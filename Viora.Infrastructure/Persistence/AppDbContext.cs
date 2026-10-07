@@ -61,6 +61,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
     public DbSet<Withdrawal> Withdrawals => Set<Withdrawal>();
+    public DbSet<WithdrawalFeeSettings> WithdrawalFeeSettings => Set<WithdrawalFeeSettings>();
     public DbSet<Advertisement> Advertisements => Set<Advertisement>();
     public DbSet<AdvertisementEvent> AdvertisementEvents => Set<AdvertisementEvent>();
     public DbSet<AdvertisementFeedback> AdvertisementFeedback => Set<AdvertisementFeedback>();

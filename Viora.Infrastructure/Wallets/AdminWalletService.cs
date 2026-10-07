@@ -17,7 +17,7 @@ public sealed class AdminWalletService(AppDbContext dbContext) : IAdminWalletSer
         }
         var total = await query.CountAsync(cancellationToken);
         var data = await query.OrderByDescending(item => item.UpdatedAt).Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(item => new AdminWalletItem(item.Id, item.UserId, item.User.DisplayName, item.AvailableBalance, item.HeldBalance, item.Currency, item.Status, item.CreatedAt, item.UpdatedAt)).ToListAsync(cancellationToken);
+            .Select(item => new AdminWalletItem(item.Id, item.UserId, item.User.DisplayName, item.AvailableBalance, item.HeldBalance, item.Currency, item.Status, item.CreatedAt, item.UpdatedAt, item.AnktCoinBalance)).ToListAsync(cancellationToken);
         return Page(data, page, pageSize, total);
     }
 
@@ -32,7 +32,7 @@ public sealed class AdminWalletService(AppDbContext dbContext) : IAdminWalletSer
         }
         var total = await query.CountAsync(cancellationToken);
         var data = await query.OrderByDescending(item => item.CreatedAt).Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(item => new AdminTransactionItem(item.Id, item.WalletId, item.Wallet.UserId, item.Wallet.User.DisplayName, item.Type, item.Amount, item.Status, item.ReferenceType, item.ReferenceId, item.Description, item.CreatedAt)).ToListAsync(cancellationToken);
+            .Select(item => new AdminTransactionItem(item.Id, item.WalletId, item.Wallet.UserId, item.Wallet.User.DisplayName, item.Type, item.Amount, item.Status, item.ReferenceType, item.ReferenceId, item.Description, item.CreatedAt, item.BalanceBefore, item.BalanceAfter, item.HeldBefore, item.HeldAfter, item.AdminId, item.AdjustmentReason, item.CoinAmount)).ToListAsync(cancellationToken);
         return Page(data, page, pageSize, total);
     }
 

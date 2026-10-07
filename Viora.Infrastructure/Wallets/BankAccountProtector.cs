@@ -25,6 +25,16 @@ public sealed class BankAccountProtector(IOptions<WithdrawalOptions> options) : 
         return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(accountNumber))).ToLowerInvariant();
     }
 
+    public string Unprotect(string encrypted)
+    {
+        var bytes = Convert.FromBase64String(encrypted);
+        if (bytes.Length < 29) throw new CryptographicException("Invalid encrypted bank account.");
+        var plain = new byte[bytes.Length - 28];
+        using var aes = new AesGcm(GetKey(), 16);
+        aes.Decrypt(bytes.AsSpan(0, 12), bytes.AsSpan(28), bytes.AsSpan(12, 16), plain);
+        return Encoding.UTF8.GetString(plain);
+    }
+
     private byte[] GetKey()
     {
         try

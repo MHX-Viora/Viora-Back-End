@@ -24,6 +24,7 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
 
         var ledgerQuery = dbContext.WalletTransactions.AsNoTracking()
             .Where(item => item.WalletId == walletId &&
+                !(item.Type == WalletTransactionType.Capture && item.ReferenceType == "Withdrawal") &&
                 (item.Type != WalletTransactionType.Deposit || item.ReferenceType != "Payment" ||
                  !dbContext.Payments.Any(payment => payment.WalletId == walletId &&
                      (payment.LedgerTransactionId == item.Id || payment.Id.ToString().ToLower() == item.ReferenceId.ToLower()))));
@@ -145,12 +146,13 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
         long providerOrderCode, string providerTransactionId, decimal amount, CancellationToken cancellationToken)
     {
         WalletFinancialRules.RequirePositiveAmount(amount);
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(dbContext.Database.IsNpgsql() ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable, cancellationToken);
         var paymentQuery = dbContext.Database.IsNpgsql()
             ? dbContext.Payments.FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"ProviderOrderCode\" = {providerOrderCode} FOR UPDATE")
             : dbContext.Payments.Where(item => item.ProviderOrderCode == providerOrderCode);
         var payment = await paymentQuery.SingleOrDefaultAsync(cancellationToken)
             ?? throw new WalletNotFoundException();
+        await dbContext.Entry(payment).ReloadAsync(cancellationToken);
         if (payment.Amount != amount)
             throw new WalletConflictException("PAYMENT_AMOUNT_MISMATCH", "Số tiền webhook không khớp payment.");
         var ledger = payment.LedgerTransactionId is Guid ledgerId
@@ -158,6 +160,7 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
             : await dbContext.WalletTransactions.SingleOrDefaultAsync(
                 item => item.Type == WalletTransactionType.Deposit && item.ReferenceType == "Payment" && item.ReferenceId == payment.Id.ToString("D"),
                 cancellationToken);
+        if (ledger is not null) await dbContext.Entry(ledger).ReloadAsync(cancellationToken);
         if (payment.Status == PaymentStatus.Paid)
         {
             if (ledger is null) throw new WalletConflictException("PAYMENT_LEDGER_MISSING", "Payment đã hoàn tất nhưng không tìm thấy bút toán.");
@@ -195,6 +198,7 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
         }
 
         ledger ??= NewTransaction(wallet, WalletTransactionType.Deposit, amount, "Payment", payment.Id.ToString("D"), "Nạp tiền bằng mã QR", PaymentLifecycle.DepositIdempotencyKey(payment.Id), completedAt);
+        WalletFinancialRules.RequireBalances(wallet.AvailableBalance + amount, wallet.HeldBalance);
         ledger.BalanceBefore = wallet.AvailableBalance;
         wallet.AvailableBalance += amount;
         ledger.BalanceAfter = wallet.AvailableBalance;
@@ -248,6 +252,8 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
     public async Task<WalletTransactionResponse> AdjustAsync(Guid userId, Guid adminId, decimal amount, string reason, string idempotencyKey, CancellationToken cancellationToken)
     {
         if (amount == 0) throw new WalletValidationException("INVALID_AMOUNT", "Số tiền điều chỉnh phải khác 0.");
+        if (amount < -WalletFinancialRules.MaximumSafeVnd || amount > WalletFinancialRules.MaximumSafeVnd || decimal.Truncate(amount) != amount)
+            throw new WalletValidationException("INVALID_AMOUNT_PRECISION", "Số tiền điều chỉnh phải là VNĐ nguyên trong giới hạn cho phép.");
         if (string.IsNullOrWhiteSpace(reason)) throw new WalletValidationException("ADJUSTMENT_REASON_REQUIRED", "Lý do điều chỉnh là bắt buộc.");
         if (reason.Trim().Length > 500) throw new WalletValidationException("ADJUSTMENT_REASON_TOO_LONG", "Lý do điều chỉnh không được vượt quá 500 ký tự.");
         if (!await dbContext.Users.AsNoTracking().AnyAsync(user => user.Id == userId, cancellationToken))
@@ -257,25 +263,26 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
             if (amount < 0) WalletFinancialRules.RequireSufficientBalance(wallet.AvailableBalance, -amount);
             wallet.AvailableBalance += amount;
             return amount;
-        }, cancellationToken, adminId, reason.Trim());
+        }, cancellationToken, adminId, reason.Trim(), amount);
     }
 
     private async Task<WalletTransactionResponse> MutateAsync(
         Guid userId, decimal amount, WalletTransactionType type, string referenceType, string referenceId,
         string idempotencyKey, Func<Wallet, decimal, decimal> mutation, CancellationToken cancellationToken,
-        Guid? adminId = null, string? adjustmentReason = null)
+        Guid? adminId = null, string? adjustmentReason = null, decimal? expectedSignedAmount = null)
     {
         WalletFinancialRules.RequirePositiveAmount(amount);
         RequireIdempotencyKey(idempotencyKey);
         var walletId = (await GetOrCreateEntityAsync(userId, cancellationToken)).Id;
         var ownedTransaction = dbContext.Database.CurrentTransaction is null
-            ? await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+            ? await dbContext.Database.BeginTransactionAsync(dbContext.Database.IsNpgsql() ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable, cancellationToken)
             : null;
         try
         {
             var existing = await FindIdempotentAsync(idempotencyKey, cancellationToken);
             if (existing is not null)
             {
+                RequireSameMutation(existing, walletId, amount, type, referenceType, referenceId, adminId, adjustmentReason, expectedSignedAmount);
                 if (ownedTransaction is not null) await ownedTransaction.RollbackAsync(cancellationToken);
                 return Map(existing);
             }
@@ -287,6 +294,7 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
             existing = await FindIdempotentAsync(idempotencyKey, cancellationToken);
             if (existing is not null)
             {
+                RequireSameMutation(existing, walletId, amount, type, referenceType, referenceId, adminId, adjustmentReason, expectedSignedAmount);
                 if (ownedTransaction is not null) await ownedTransaction.RollbackAsync(cancellationToken);
                 return Map(existing);
             }
@@ -294,6 +302,7 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
             var beforeAvailable = wallet.AvailableBalance;
             var beforeHeld = wallet.HeldBalance;
             var signedAmount = mutation(wallet, amount);
+            WalletFinancialRules.RequireBalances(wallet.AvailableBalance, wallet.HeldBalance);
             var completedAt = DateTime.UtcNow;
             var ledger = new WalletTransaction
             {
@@ -308,6 +317,11 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
             await dbContext.SaveChangesAsync(cancellationToken);
             if (ownedTransaction is not null) await ownedTransaction.CommitAsync(cancellationToken);
             return Map(ledger);
+        }
+        catch
+        {
+            if (ownedTransaction is not null) { await ownedTransaction.RollbackAsync(cancellationToken); dbContext.ChangeTracker.Clear(); }
+            throw;
         }
         finally
         {
@@ -361,6 +375,15 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
     private Task<WalletTransaction?> FindIdempotentAsync(string key, CancellationToken cancellationToken) =>
         dbContext.WalletTransactions.AsNoTracking().SingleOrDefaultAsync(item => item.IdempotencyKey == key, cancellationToken);
 
+    private static void RequireSameMutation(WalletTransaction existing, Guid walletId, decimal amount, WalletTransactionType type,
+        string referenceType, string referenceId, Guid? adminId, string? reason, decimal? expectedSignedAmount)
+    {
+        var expected = expectedSignedAmount ?? (type is WalletTransactionType.Hold or WalletTransactionType.Capture ? -amount : amount);
+        if (existing.WalletId != walletId || existing.Type != type || existing.Amount != expected ||
+            existing.ReferenceType != referenceType || existing.ReferenceId != referenceId || existing.AdminId != adminId || existing.AdjustmentReason != reason)
+            throw new WalletConflictException("IDEMPOTENCY_KEY_REUSED", "Mã yêu cầu đã được sử dụng cho giao dịch khác.");
+    }
+
     private static WalletTransaction NewTransaction(Wallet wallet, WalletTransactionType type, decimal amount, string referenceType, string referenceId, string? description, string key, DateTime completedAt) => new()
     {
         WalletId = wallet.Id, Type = type, Amount = amount,
@@ -372,6 +395,8 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
 
     private static void EnsureActive(Wallet wallet)
     {
+        WalletFinancialRules.RequireBalances(wallet.AvailableBalance, wallet.HeldBalance);
+        if (wallet.Currency != "VND") throw new WalletConflictException("INVALID_WALLET_CURRENCY", "Ví không hỗ trợ giao dịch VNĐ.");
         if (wallet.Status != WalletStatus.Active) throw new WalletConflictException("WALLET_NOT_ACTIVE", "Ví hiện không hoạt động.");
     }
 
@@ -437,6 +462,12 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
             (WalletTransactionType.Capture, "AdvertisementEvent") => "Chi phí phát sinh khi quảng cáo được phân phối.",
             _ => null
         };
+        if (item.CoinAmount is long coinAmount)
+        {
+            var counterparty = item.ReferenceType == "LiveGift" ? "Quà Live (coin)" : "Điều chỉnh coin";
+            source = coinAmount > 0 ? counterparty : "Số dư ANKT coin";
+            destination = coinAmount > 0 ? "Số dư ANKT coin" : counterparty;
+        }
         if (item.Type is WalletTransactionType.LiveGiftSent or WalletTransactionType.LiveGiftReceived && item.Metadata is not null)
         {
             // Metadata enriches presentation; legacy/incomplete data must not hide the ledger.
@@ -462,6 +493,6 @@ public sealed class WalletService(AppDbContext dbContext) : IWalletService
         }
         return new WalletTransactionResponse(item.Id, item.Type, item.Amount, item.BalanceBefore, item.BalanceAfter,
             item.HeldBefore, item.HeldAfter, item.ReferenceType, item.ReferenceId, description, item.Status,
-            withdrawalStatus, paymentStatus, item.CreatedAt, item.CompletedAt, true, source, destination, relatedContent, relatedStatus);
+            withdrawalStatus, paymentStatus, item.CreatedAt, item.CompletedAt, true, source, destination, relatedContent, relatedStatus, item.CoinAmount, item.CoinBalanceBefore, item.CoinBalanceAfter);
     }
 }

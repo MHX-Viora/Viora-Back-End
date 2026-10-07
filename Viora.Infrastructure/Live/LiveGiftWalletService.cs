@@ -81,6 +81,8 @@ public sealed class LiveGiftWalletService(AppDbContext db)
                 sender.Currency != "VND" || receiver.Currency != "VND")
                 throw new WalletConflictException("WALLET_UNAVAILABLE", "Ví người gửi hoặc chủ Live không khả dụng.");
             WalletFinancialRules.RequireSufficientBalance(sender.AvailableBalance, total);
+            WalletFinancialRules.RequireBalances(sender.AvailableBalance, sender.HeldBalance);
+            WalletFinancialRules.RequireBalances(receiver.AvailableBalance + total, receiver.HeldBalance);
 
             var names = await db.Users.AsNoTracking().Where(x => x.Id == userId || x.Id == live.HostUserId)
                 .Select(x => new { x.Id, x.DisplayName, x.AvatarUrl }).ToListAsync(cancellationToken);

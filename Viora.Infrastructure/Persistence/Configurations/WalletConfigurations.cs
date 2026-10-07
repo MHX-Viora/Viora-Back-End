@@ -56,6 +56,7 @@ internal sealed class WithdrawalConfiguration : IEntityTypeConfiguration<Withdra
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Amount).HasPrecision(18, 2);
         builder.Property(item => item.Fee).HasPrecision(18, 2);
+        builder.Property(item => item.FeePercent).HasPrecision(5, 2);
         builder.Property(item => item.NetAmount).HasPrecision(18, 2);
         builder.Property(item => item.TransactionCode).HasMaxLength(30).IsRequired();
         builder.Property(item => item.IdempotencyKey).HasMaxLength(140).IsRequired();

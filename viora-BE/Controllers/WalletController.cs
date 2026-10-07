@@ -97,6 +97,9 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
             ? Ok(await withdrawalService.GetBankAccountsAsync(userId, cancellationToken))
             : Unauthorized();
 
+    [HttpGet("banks")]
+    public ActionResult<IReadOnlyList<BankCatalogueItem>> Banks() => Ok(Viora.Infrastructure.Wallets.BankCatalogue.Items);
+
     [HttpPost("bank-accounts")]
     public async Task<ActionResult<BankAccountResponse>> CreateBankAccount(BankAccountBody body, CancellationToken cancellationToken)
     {
@@ -112,9 +115,10 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
     }
 
     [HttpGet("withdrawals/quote")]
-    public ActionResult<WithdrawalQuoteResponse> WithdrawalQuote([FromQuery] decimal amount)
+    public async Task<ActionResult<WithdrawalQuoteResponse>> WithdrawalQuote([FromQuery] decimal amount, CancellationToken cancellationToken)
     {
-        try { return Ok(withdrawalService.Quote(amount)); }
+        Response.Headers.CacheControl = "no-store";
+        try { return Ok(await withdrawalService.QuoteAsync(amount, cancellationToken)); }
         catch (WalletValidationException exception) { return ProblemResult(422, exception.Code, exception.Message); }
     }
 
@@ -124,7 +128,7 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
         if (!TryUserId(out var userId)) return Unauthorized();
         try
         {
-            var result = await withdrawalService.CreateAsync(userId, new(body.Amount, body.BankAccountId, body.IdempotencyKey), cancellationToken);
+            var result = await withdrawalService.CreateAsync(userId, new(body.Amount, body.BankAccountId, body.IdempotencyKey, body.ExpectedFee), cancellationToken);
             return CreatedAtAction(nameof(GetWithdrawal), new { id = result.Id }, result);
         }
         catch (InsufficientWalletBalanceException exception) { return ProblemResult(422, exception.Code, exception.Message); }
@@ -161,7 +165,7 @@ public sealed class WalletController(IWalletService walletService, IPaymentServi
 }
 
 public sealed record DepositBody(
-    [Range(typeof(decimal), "0.01", "9999999999999999")] decimal Amount,
+    [Range(typeof(decimal), "1", "9007199254740991")] decimal Amount,
     [Required, Url] string ReturnUrl,
     [Required, Url] string CancelUrl,
     [Required, StringLength(140, MinimumLength = 8)] string IdempotencyKey);
@@ -174,6 +178,7 @@ public sealed record BankAccountBody(
     bool IsDefault);
 
 public sealed record WithdrawalBody(
-    [Range(typeof(decimal), "0.01", "9999999999999999")] decimal Amount,
+    [Range(typeof(decimal), "1", "9007199254740991")] decimal Amount,
     Guid BankAccountId,
-    [Required, StringLength(140, MinimumLength = 8)] string IdempotencyKey);
+    [Required, StringLength(140, MinimumLength = 8)] string IdempotencyKey,
+    decimal? ExpectedFee = null);

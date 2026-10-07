@@ -311,6 +311,7 @@ public sealed class PaymentService(
             ? dbContext.Payments.FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"Id\" = {paymentId} FOR UPDATE")
             : dbContext.Payments.Where(item => item.Id == paymentId);
         var payment = await paymentQuery.SingleAsync(cancellationToken);
+        await dbContext.Entry(payment).ReloadAsync(cancellationToken);
         if (payment.Status != PaymentStatus.Pending && !(payment.Status == PaymentStatus.Expired && status == PaymentStatus.Failed))
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -338,6 +339,7 @@ public sealed class PaymentService(
             ? dbContext.Payments.FromSqlInterpolated($"SELECT * FROM \"Payments\" WHERE \"Id\" = {paymentId} AND \"UserId\" = {userId} FOR UPDATE")
             : dbContext.Payments.Where(item => item.Id == paymentId && item.UserId == userId);
         var payment = await paymentQuery.SingleOrDefaultAsync(cancellationToken);
+        if (payment is not null) await dbContext.Entry(payment).ReloadAsync(cancellationToken);
         if (payment is null || !PaymentLifecycle.ShouldExpire(payment.Status, payment.ExpiresAt, DateTime.UtcNow))
         {
             await transaction.RollbackAsync(cancellationToken);

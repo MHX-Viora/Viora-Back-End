@@ -86,6 +86,7 @@ public sealed class Withdrawal : AuditableEntity
     public Guid LedgerTransactionId { get; set; }
     public decimal Amount { get; set; }
     public decimal Fee { get; set; }
+    public decimal? FeePercent { get; set; }
     public decimal NetAmount { get; set; }
     public WithdrawalStatus Status { get; set; } = WithdrawalStatus.Pending;
     public string TransactionCode { get; set; } = null!;
@@ -101,4 +102,13 @@ public sealed class Withdrawal : AuditableEntity
     public User User { get; set; } = null!;
     public BankAccount BankAccount { get; set; } = null!;
     public WalletTransaction LedgerTransaction { get; set; } = null!;
+}
+
+public sealed class WithdrawalFeeSettings
+{
+    public int Id { get; set; } = 1;
+    public decimal FeePercent { get; set; } = 10m;
+    public long Version { get; set; } = 1;
+    public DateTime UpdatedAt { get; set; }
+    public Guid? UpdatedBy { get; set; }
 }
