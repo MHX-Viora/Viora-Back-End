@@ -43,6 +43,6 @@ public sealed class BankAccountProtector(IOptions<WithdrawalOptions> options) : 
             if (key.Length == 32) return key;
         }
         catch (FormatException) { }
-        throw new InvalidOperationException("Wallet:BankAccountEncryptionKey must be a base64-encoded 32-byte key.");
+        throw new WalletConfigurationException();
     }
 }

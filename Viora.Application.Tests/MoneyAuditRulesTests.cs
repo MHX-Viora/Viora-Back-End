@@ -7,6 +7,18 @@ using Xunit;
 public sealed class MoneyAuditRulesTests
 {
     [Theory]
+    [InlineData("")]
+    [InlineData("CHANGE_ME_BASE64_KEY")]
+    [InlineData("not-base64")]
+    [InlineData("YWJj")]
+    public void InvalidBankEncryptionKeyReportsConfigurationUnavailable(string key)
+    {
+        var protector = new BankAccountProtector(Options.Create(new WithdrawalOptions { BankAccountEncryptionKey = key }));
+        var error = Assert.Throws<WalletConfigurationException>(() => protector.Protect("35346464634643643"));
+        Assert.Equal("BANK_ACCOUNT_SERVICE_UNAVAILABLE", error.Code);
+    }
+
+    [Theory]
     [InlineData("{}")]
     [InlineData("{\"expectedVersion\":1}")]
     [InlineData("{\"feePercent\":10}")]

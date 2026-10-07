@@ -5,6 +5,12 @@ using Viora.Domain.Entities;
 
 namespace Viora.Application.Wallets;
 
+public sealed class WalletConfigurationException() : InvalidOperationException("Wallet:BankAccountEncryptionKey must be a base64-encoded 32-byte key.")
+{
+    public string Code => "BANK_ACCOUNT_SERVICE_UNAVAILABLE";
+    public string PublicMessage => "Dịch vụ lưu tài khoản ngân hàng chưa sẵn sàng. Vui lòng thử lại sau.";
+}
+
 public class WalletValidationException(string code, string message) : Exception(message)
 {
     public string Code { get; } = code;

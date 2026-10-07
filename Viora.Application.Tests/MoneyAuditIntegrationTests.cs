@@ -9,6 +9,21 @@ using Xunit;
 
 public sealed class MoneyAuditIntegrationTests
 {
+    [Fact] public async Task SavesWithdrawalRecipientWithVietnameseNameAndEncryptsAccountNumber()
+    {
+        await using var f = await Fixture.Create();
+        const string number = "35346464634643643";
+        var saved = await f.Service.CreateBankAccountAsync(f.UserId, new("VCB", "ignored", number, "Trịnh Trọng Quyền", true), default);
+        var stored = await f.Db.BankAccounts.SingleAsync(a => a.Id == saved.Id);
+        var protector = new BankAccountProtector(Options.Create(new WithdrawalOptions { BankAccountEncryptionKey = Convert.ToBase64String(new byte[32]) }));
+        Assert.Equal(number, protector.Unprotect(stored.AccountNumberEncrypted));
+        Assert.NotEqual(number, stored.AccountNumberEncrypted);
+        Assert.Equal("•••• 3643", saved.AccountNumberMasked);
+        Assert.Equal("TRỊNH TRỌNG QUYỀN", saved.AccountHolderName);
+        Assert.Single(await f.Db.BankAccounts.Where(a => a.IsDefault).ToListAsync());
+        Assert.Equal(100000m, (await f.Db.Wallets.SingleAsync()).AvailableBalance);
+    }
+
     [Fact] public async Task WithdrawalReservesOnceAndReplayMustMatch()
     {
         await using var f = await Fixture.Create();
