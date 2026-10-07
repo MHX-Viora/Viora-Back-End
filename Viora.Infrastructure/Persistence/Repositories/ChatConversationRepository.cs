@@ -76,7 +76,11 @@ public sealed class ChatConversationRepository(
                 new CreatePrivateConversationResponse(existingConversationId.Value, false));
         }
 
-        if (!recipient.AllowMessageEveryone)
+        if (!recipient.AllowMessageEveryone && !await dbContext.Friendships.AnyAsync(friendship =>
+                friendship.Status == FriendshipStatus.Accepted &&
+                ((friendship.RequesterUserId == firstUserId && friendship.AddresseeUserId == secondUserId) ||
+                 (friendship.RequesterUserId == secondUserId && friendship.AddresseeUserId == firstUserId)),
+                cancellationToken))
         {
             return ChatResult<CreatePrivateConversationResponse>.Failure(
                 ChatError.Forbidden,

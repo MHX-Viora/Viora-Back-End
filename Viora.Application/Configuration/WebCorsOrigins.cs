@@ -2,6 +2,7 @@ namespace Viora.Application.Configuration;
 
 public static class WebCorsOrigins
 {
+    private const string AppOrigin = "https://mxh.ankt.vn";
     private static readonly string[] DefaultOrigins =
     [
         "http://localhost:5173",
@@ -20,6 +21,7 @@ public static class WebCorsOrigins
         var source = configured.Length > 0 ? configured : DefaultOrigins;
 
         var origins = source
+            .Append(AppOrigin)
             .Select(Normalize)
             .Where(origin => origin is not null)
             .Cast<string>()

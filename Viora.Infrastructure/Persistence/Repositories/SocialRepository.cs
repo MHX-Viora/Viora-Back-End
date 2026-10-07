@@ -1,10 +1,15 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Viora.Application.Notifications;
 using Viora.Application.Social;
 using Viora.Domain.Entities;
 
 namespace Viora.Infrastructure.Persistence.Repositories;
 
-public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
+public sealed class SocialRepository(
+    AppDbContext dbContext,
+    INotificationService notificationService,
+    ILogger<SocialRepository> logger) : ISocialRepository
 {
     public Task<User?> GetActiveUserAsync(Guid userId, CancellationToken cancellationToken) =>
         dbContext.Users
@@ -241,6 +246,7 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
                     .Select(friendship => new
                     {
                         friendship.Status,
+                        friendship.Id,
                         IsRequester = friendship.RequesterUserId == currentUserId
                     })
                     .FirstOrDefault(),
@@ -267,7 +273,7 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
                 item.FriendCount,
                 item.IsFollowing,
                 item.Friendship == null
-                    ? new UserProfileFriendshipResponse("None", false)
+                    ? new UserProfileFriendshipResponse("None", false, null)
                     : new UserProfileFriendshipResponse(
                         item.Friendship.Status == FriendshipStatus.Pending ? "Pending" :
                         item.Friendship.Status == FriendshipStatus.Accepted ? "Accepted" :
@@ -275,7 +281,8 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
                         item.Friendship.Status == FriendshipStatus.Cancelled ? "Cancelled" :
                         item.Friendship.Status == FriendshipStatus.Unfriended ? "Unfriended" :
                         item.Friendship.Status == FriendshipStatus.Blocked ? "Blocked" : "None",
-                        item.Friendship.IsRequester),
+                        item.Friendship.IsRequester,
+                        item.Friendship.Id),
                 (item.User.Settings == null || item.User.Settings.AllowMessageEveryone) ||
                     (item.Friendship != null && item.Friendship.Status == FriendshipStatus.Accepted),
                 item.ConversationId))
@@ -300,9 +307,27 @@ public sealed class SocialRepository(AppDbContext dbContext) : ISocialRepository
 
     public async Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken)
     {
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        await operation(cancellationToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        Notification[] notifications;
+        await using (var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken))
+        {
+            await operation(cancellationToken);
+            notifications = dbContext.ChangeTracker.Entries<Notification>()
+                .Where(entry => entry.State == EntityState.Added)
+                .Select(entry => entry.Entity).ToArray();
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        foreach (var notification in notifications)
+        {
+            try
+            {
+                await notificationService.PublishAsync(notification, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Failed to publish committed social notification {NotificationId}.", notification.Id);
+            }
+        }
     }
 }
