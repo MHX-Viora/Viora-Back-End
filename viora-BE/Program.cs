@@ -206,6 +206,8 @@ if (webOrigins.Length == 0)
     ];
 }
 
+webOrigins = Viora.Application.Configuration.WebCorsOrigins.Resolve(webOrigins).ToArray();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Web", policy =>

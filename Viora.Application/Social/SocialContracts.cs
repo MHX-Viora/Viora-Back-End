@@ -138,7 +138,8 @@ public sealed record UserProfileSummaryResponse(
 
 public sealed record UserProfileFriendshipResponse(
     string Status,
-    bool IsRequester);
+    bool IsRequester,
+    Guid? FriendshipId = null);
 
 public sealed class ToggleFollowValidator : AbstractValidator<ToggleFollowCommand>
 {
