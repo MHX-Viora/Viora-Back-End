@@ -1,70 +1,45 @@
-# ANKT Mini App Integration
+﻿# ANKT Mini App integration
 
-## 1. Register and review
+The platform supports two authentication modes. `Independent` opens the partner website and keeps its existing registration/login/session. `AnktSso` additionally offers explicit ANKT login; the partner still owns its user records and session cookies.
 
-1. Ask an ANKT admin to create/approve your Developer record and link its `AccountId`.
-2. Call `POST /api/developer/mini-apps` with HTTPS `webUrl`, `callbackUrl`, `allowedDomains`, and requested permission codes.
-3. Save the returned `clientId` and one-time `clientSecret` in a server-side secret store. ANKT stores only its hash.
-4. Call `POST /api/developer/mini-apps/{id}/submit-review`. Only an admin can approve it.
-5. Rotate a compromised secret with `POST /api/developer/mini-apps/{id}/rotate-secret`; the old secret stops working immediately.
+## Register and publish
 
-Never put `clientSecret` in browser JavaScript, a mobile app, a URL, logs, or source control.
+1. Open Developer Portal from your personal profile settings in ANKT (`/developer`), register a Developer profile using the current ANKT account and await approval.
+2. Create a Draft in the five-step wizard. Choose authentication mode, HTTPS website, exact origins/callbacks and requested permissions.
+3. Save the one-time client secret on the partner server when using `ClientSecretPost`.
+4. Publish each ownership challenge at `https://<host>/.well-known/ankt-mini-app-verification.txt`, then verify through the portal.
+5. Submit a version for review. Admin approval publishes its immutable snapshot. Later edits require another review.
 
-## 2. Launch and server-to-server exchange
+See the [Developer guide](MINI_APP_DEVELOPER_GUIDE.md) and [admin workflow](MINI_APP_ADMIN_WORKFLOW.md).
 
-ANKT opens your `callbackUrl` with a one-time `code` query value. The code contains no user data, expires after 60 seconds, and can be consumed once. Send it from the callback page to your own backend; your backend exchanges it with ANKT.
+## Launch and SSO
 
-### ASP.NET Core
+Launch creates a host-private runtime session and opens `webUrl`; it does not log the partner user in. Independent apps use their own login immediately.
 
-```csharp
-var response = await http.PostAsJsonAsync("https://api.ankt.vn/api/mini-app-auth/exchange", new {
-    clientId = configuration["ANKT:ClientId"],
-    clientSecret = configuration["ANKT:ClientSecret"],
-    code = launchCode
+For SSO, the partner server starts a browser-session-bound transaction with random state and a PKCE verifier. The embedded page calls:
+
+```javascript
+ANKT.configure({ hostOrigin: 'https://your-ankt-web-host.example' });
+await ANKT.ready();
+const result = await ANKT.requestLogin({
+  redirectUri: transaction.redirectUri,
+  state: transaction.state,
+  codeChallenge: transaction.codeChallenge,
+  codeChallengeMethod: 'S256',
 });
-response.EnsureSuccessStatusCode();
-var identity = await response.Content.ReadFromJsonAsync<AnktIdentity>();
-// Find/create ExternalIdentity(provider: "ANKT", externalSubject: identity.Subject), then issue your session cookie.
+window.location.assign(result.launchUrl);
 ```
 
-### Node.js
+The callback validates state and its initiating browser session. Only the partner server exchanges the code with `POST /api/mini-app-auth/exchange`, supplying `clientId`, secret when required, code, exact `redirectUri`, state and `codeVerifier`. Codes expire after 60 seconds and are consumed once. An old v1 exchange without these binding fields is unsupported.
 
-```js
-const response = await fetch(`${process.env.ANKT_API_URL}/api/mini-app-auth/exchange`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({
-    clientId: process.env.ANKT_CLIENT_ID,
-    clientSecret: process.env.ANKT_CLIENT_SECRET,
-    code: req.body.code,
-  }),
-});
-if (!response.ok) throw new Error("ANKT exchange failed");
-const identity = await response.json();
-// Link identity.subject to a local user and create an HttpOnly, Secure session cookie.
-```
+The returned pairwise `subject` requires `identity.login`. Create/find the partner identity by provider/client/subject, then issue a partner session. Linking to an existing account requires its authenticated login, reauthentication and explicit confirmation. Never match email automatically. Unlinking must preserve data and leave a usable login method.
 
-The response always contains `scopes`. A stable, pairwise `subject` is present only with `identity.login`; `displayName`/`avatarUrl`, `email`, and `phone` appear only when their corresponding scopes were approved and consented. Do not use ANKT `AccountId`; it is never exposed.
+Runnable [Node and ASP.NET examples](../examples/README.md) implement independent login, new SSO account, explicit linking, conflict handling and unlinking. Read the full [SSO contract](MINI_APP_SSO.md) before adapting them.
 
-## 3. Browser SDK
+## Runtime and SDK
 
-Load `/mini-app-sdk/ankt-mini-app.js` from the deployed ANKT API or vendor the same version in your frontend:
+The hosted SDK is `/mini-app-sdk/ankt-mini-app.js`. Its six methods are `getPlatformInfo`, `getAppInfo`, `requestLogin`, `getGrantedPermissions`, `requestPermission` and `closeMiniApp`; see [SDK documentation](MINI_APP_SDK.md).
 
-```html
-<script src="https://api.ankt.vn/mini-app-sdk/ankt-mini-app.js"></script>
-<script>
-  ANKT.ready();
-  const theme = await ANKT.app.getTheme();
-  const session = await ANKT.auth.getSessionStatus();
-</script>
-```
+Native uses an isolated WebView in a rebuilt ANKT binary. Web uses a sandboxed cross-origin iframe; sites blocking embedding or OAuth providers requiring their own browser use the external-tab option. Browser cookie restrictions still apply. ANKT passwords, bearer tokens, runtime secrets and client secrets never enter partner JavaScript.
 
-Available v1 methods: `app.getInfo`, `app.getTheme`, `app.close`, `app.openExternalUrl`, `device.getPlatform`, and `auth.getSessionStatus`. Events from native are `app.resume`, `app.pause`, and `theme.changed`. There is deliberately no JWT/access-token method.
-
-## 4. Test checklist
-
-- Callback and all WebView navigation use HTTPS and match an exact/wildcard allowed domain.
-- A new permission forces new user consent.
-- The same user receives the same subject in this Mini App; a different Mini App receives a different subject.
-- Reusing or delaying a launch code fails; suspending the app/developer blocks new launches immediately.
-- Partner session uses `HttpOnly`, `Secure`, appropriate `SameSite`, and no sensitive `localStorage` token.
+See [security](MINI_APP_SECURITY.md), [testing](MINI_APP_TESTING.md), and [deployment](MINI_APP_DEPLOYMENT.md) for acceptance requirements and remaining verification.

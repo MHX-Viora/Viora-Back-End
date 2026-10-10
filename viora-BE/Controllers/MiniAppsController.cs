@@ -9,11 +9,15 @@ namespace viora_BE.Controllers;
 [ApiController]
 [Route("api/mini-apps")]
 [Tags("Mini Apps")]
-public sealed class MiniAppsController(IMiniAppService service) : ControllerBase
+public sealed class MiniAppsController(IMiniAppService service, IMiniAppManagementService management) : ControllerBase
 {
     [HttpGet]
     [AllowAnonymous]
     public Task<MiniAppListResponse> List(CancellationToken cancellationToken) => service.GetActiveAsync(cancellationToken);
+
+    [HttpGet("categories")]
+    [AllowAnonymous]
+    public Task<IReadOnlyList<MiniAppCategoryDto>> Categories(CancellationToken cancellationToken) => management.GetCategoriesAsync(false, cancellationToken);
 
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
@@ -35,6 +39,38 @@ public sealed class MiniAppsController(IMiniAppService service) : ControllerBase
 
     private bool TryGetAccountId(out Guid accountId) => Guid.TryParse(
         User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out accountId);
+
+    [HttpPost("{id:guid}/sessions/validate")]
+    [Authorize]
+    [EnableRateLimiting("mini-app-launch")]
+    public async Task<ActionResult<ValidateMiniAppSessionResponse>> Validate(Guid id, ValidateMiniAppSessionRequest request, CancellationToken ct)
+    {
+        if (!TryGetAccountId(out var accountId)) return Unauthorized();
+        return Ok(await service.ValidateSessionAsync(accountId, id, request, ct));
+    }
+    [HttpPost("{id:guid}/sessions/close")]
+    [Authorize]
+    public async Task<IActionResult> Close(Guid id, ValidateMiniAppSessionRequest request, CancellationToken ct)
+    {
+        if (!TryGetAccountId(out var accountId)) return Unauthorized();
+        await service.CloseSessionAsync(accountId, id, request, ct); return NoContent();
+    }
+    [HttpPost("{id:guid}/authorize")]
+    [Authorize]
+    [EnableRateLimiting("mini-app-launch")]
+    public async Task<ActionResult<LaunchMiniAppResponse>> Authorize(Guid id, AuthorizeMiniAppRequest request, CancellationToken ct)
+    {
+        if (!TryGetAccountId(out var accountId)) return Unauthorized();
+        return Ok(await service.AuthorizeAsync(accountId, id, request, ct));
+    }
+    [HttpPost("{id:guid}/reports")]
+    [Authorize]
+    [EnableRateLimiting("mini-app-launch")]
+    public async Task<IActionResult> Report(Guid id, MiniAppReportInput request, CancellationToken ct)
+    {
+        if (!TryGetAccountId(out var accountId)) return Unauthorized();
+        await service.ReportAsync(accountId, id, request, ct); return NoContent();
+    }
 }
 
 public sealed record MiniAppErrorResponse(string Code, string Message);

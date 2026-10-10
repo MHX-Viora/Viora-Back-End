@@ -38,6 +38,14 @@ internal sealed class MiniAppConfiguration : IEntityTypeConfiguration<MiniApp>
         builder.Property(x => x.ClientId).HasMaxLength(80).IsRequired();
         builder.Property(x => x.ClientSecretHash).IsRequired();
         builder.Property(x => x.AllowedDomains).HasColumnType("text[]");
+        builder.Property(x => x.CallbackUrls).HasColumnType("text[]");
+        builder.Property(x => x.AllowedOrigins).HasColumnType("text[]");
+        builder.Property(x => x.AuthenticationMode).HasDefaultValue(MiniAppAuthenticationMode.AnktSso).ValueGeneratedNever();
+        builder.Property(x => x.PublishedConfigurationJson).HasColumnType("text");
+        builder.Property(x => x.PendingVersion).IsConcurrencyToken();
+        builder.Property(x => x.PublishedVersion).IsConcurrencyToken();
+        builder.Property(x => x.Status).IsConcurrencyToken();
+        builder.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.Slug).IsUnique();
         builder.HasIndex(x => x.ClientId).IsUnique();
         builder.HasIndex(x => x.DeveloperId);
@@ -113,10 +121,77 @@ internal sealed class MiniAppLaunchCodeConfiguration : IEntityTypeConfiguration<
         builder.ToTable("MiniAppLaunchCodes");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
+        builder.Property(x => x.RedirectUri).HasMaxLength(2048);
+        builder.Property(x => x.StateHash).HasMaxLength(64);
+        builder.Property(x => x.CodeChallenge).HasMaxLength(43);
+        builder.HasOne<MiniAppRuntimeSession>().WithMany().HasForeignKey(x => x.RuntimeSessionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.CodeHash).IsUnique();
         builder.HasIndex(x => x.ExpiresAt);
         builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class MiniAppCategoryConfiguration : IEntityTypeConfiguration<MiniAppCategory>
+{
+    public void Configure(EntityTypeBuilder<MiniAppCategory> builder)
+    {
+        builder.Property(x => x.Name).HasMaxLength(120).IsRequired();
+        builder.Property(x => x.Slug).HasMaxLength(120).IsRequired();
+        builder.HasIndex(x => x.Slug).IsUnique();
+    }
+}
+internal sealed class DeveloperMembershipConfiguration : IEntityTypeConfiguration<DeveloperMembership>
+{
+    public void Configure(EntityTypeBuilder<DeveloperMembership> builder)
+    {
+        builder.HasIndex(x => new { x.DeveloperId, x.AccountId }).IsUnique();
+        builder.HasIndex(x => x.AccountId).IsUnique();
+        builder.HasOne(x => x.Developer).WithMany().HasForeignKey(x => x.DeveloperId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+internal sealed class MiniAppVersionConfiguration : IEntityTypeConfiguration<MiniAppVersion>
+{
+    public void Configure(EntityTypeBuilder<MiniAppVersion> builder)
+    {
+        builder.HasIndex(x => new { x.MiniAppId, x.Version }).IsUnique();
+        builder.Property(x => x.ConfigurationJson).HasColumnType("text").IsRequired();
+        builder.Property(x => x.Reason).HasMaxLength(500);
+        builder.Property(x => x.Status).IsConcurrencyToken();
+        builder.HasOne(x => x.MiniApp).WithMany(x => x.Versions).HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+internal sealed class MiniAppVerifiedDomainConfiguration : IEntityTypeConfiguration<MiniAppVerifiedDomain>
+{
+    public void Configure(EntityTypeBuilder<MiniAppVerifiedDomain> builder)
+    {
+        builder.HasIndex(x => new { x.MiniAppId, x.Host }).IsUnique();
+        builder.Property(x => x.Host).HasMaxLength(253).IsRequired();
+        builder.Property(x => x.ChallengeToken).HasMaxLength(100).IsRequired();
+        builder.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+internal sealed class MiniAppRuntimeSessionConfiguration : IEntityTypeConfiguration<MiniAppRuntimeSession>
+{
+    public void Configure(EntityTypeBuilder<MiniAppRuntimeSession> builder)
+    {
+        builder.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+        builder.HasIndex(x => x.TokenHash).IsUnique();
+        builder.HasIndex(x => x.ExpiresAt);
+        builder.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+internal sealed class MiniAppReportConfiguration : IEntityTypeConfiguration<MiniAppReport>
+{
+    public void Configure(EntityTypeBuilder<MiniAppReport> builder)
+    {
+        builder.Property(x => x.Reason).HasMaxLength(1000).IsRequired();
+        builder.Property(x => x.Resolution).HasMaxLength(500);
+        builder.HasIndex(x => new { x.MiniAppId, x.CreatedAt });
+        builder.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

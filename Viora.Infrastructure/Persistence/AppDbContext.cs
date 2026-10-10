@@ -56,6 +56,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<MiniAppExternalIdentity> MiniAppExternalIdentities => Set<MiniAppExternalIdentity>();
     public DbSet<MiniAppAuditLog> MiniAppAuditLogs => Set<MiniAppAuditLog>();
     public DbSet<MiniAppLaunchLog> MiniAppLaunchLogs => Set<MiniAppLaunchLog>();
+    public DbSet<MiniAppCategory> MiniAppCategories => Set<MiniAppCategory>();
+    public DbSet<DeveloperMembership> DeveloperMemberships => Set<DeveloperMembership>();
+    public DbSet<MiniAppVersion> MiniAppVersions => Set<MiniAppVersion>();
+    public DbSet<MiniAppVerifiedDomain> MiniAppVerifiedDomains => Set<MiniAppVerifiedDomain>();
+    public DbSet<MiniAppRuntimeSession> MiniAppRuntimeSessions => Set<MiniAppRuntimeSession>();
+    public DbSet<MiniAppReport> MiniAppReports => Set<MiniAppReport>();
     public DbSet<Wallet> Wallets => Set<Wallet>();
     public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
     public DbSet<Payment> Payments => Set<Payment>();

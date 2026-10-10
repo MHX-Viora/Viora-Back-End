@@ -239,6 +239,8 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddSingleton<IClientCredentialService, ClientCredentialService>();
         services.AddScoped<IMiniAppService, MiniAppService>();
+        services.AddSingleton<IMiniAppDomainVerifier, MiniAppDomainVerifier>();
+        services.AddHostedService<MiniAppExpiryCleanup>();
         services.AddScoped<MiniAppManagementService>();
         services.AddScoped<IMiniAppManagementService>(provider => provider.GetRequiredService<MiniAppManagementService>());
         services.AddScoped<IDeveloperMiniAppService>(provider => provider.GetRequiredService<MiniAppManagementService>());
