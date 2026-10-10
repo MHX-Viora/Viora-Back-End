@@ -39,6 +39,18 @@ Legacy published websites remain listed/launchable, but trusted iframe/WebView o
 - Keep callback URLs out of access logs, analytics and referrers; retain redacted event logs.
 - Single-process API throttling is not distributed protection. Configure deployment-level rate limits when running multiple API instances.
 
+## Check the deployed SSO contract
+
+An HTTP 200 from the SDK endpoint alone does not confirm that the new SSO release is running.
+
+- The deployed `/mini-app-sdk/ankt-mini-app.js` must expose version `2.0`, `configure`, and `requestLogin`.
+- The request schema for `POST /api/mini-app-auth/exchange` must include `clientId`, `clientSecret`, `code`, `redirectUri`, `state`, and `codeVerifier`.
+- Publish the full backend output, including `wwwroot`; rebuild/restart the deployed service or container and invalidate stale SDK caches. Verify the public endpoint after deployment, including all API replicas.
+- Opening a Mini App creates a runtime session, not a partner login session. For automatic sign-in, the partner must start its server-side state/PKCE transaction when opened inside ANKT without an existing partner session, call `ANKT.requestLogin`, then redeem the callback code on its backend and issue its own session.
+- Keep confirmation for sharing data when the required consent is absent. Do not retry automatically after consent denial or an SSO error; show an explicit retry action.
+
+The Node example starts SSO from a button. It demonstrates the secure exchange but does not automatically sign users in when its home page opens. See [SSO deployment diagnosis](handoffs/mini-app-sso-deployment.md) for the production mismatch observed on 2026-10-10.
+
 ## Acceptance on staging
 
 Register one independent-login app and one SSO app on real verified HTTPS hosts. Test old partner login, fresh ANKT login, linking/unlinking, state/PKCE/redirect mismatch, reused/expired codes, permission revoke and app/Developer suspension. Test web embedding allowed/blocked, external browser OAuth, downloads/uploads and both native permission behavior paths.
