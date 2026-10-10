@@ -88,6 +88,10 @@ public interface IMiniAppService
 
 public interface IMiniAppManagementService
 {
+    Task<MiniAppAdminReviewContext> GetReviewContextAsync(Guid id, CancellationToken cancellationToken);
+    Task<MiniAppDomainVerificationDto> VerifyAdminDomainAsync(Guid actorAccountId, Guid id, Guid domainId, CancellationToken cancellationToken);
+    Task ReviewAppVersionAsync(Guid actorAccountId, Guid id, int? version, bool approve, string? reason, CancellationToken cancellationToken);
+    Task ReactivateAppAsync(Guid actorAccountId, Guid id, CancellationToken cancellationToken);
     Task<MiniAppAdminDashboard> GetDashboardAsync(CancellationToken cancellationToken);
     Task<MiniAppAdminPage<MiniAppAdminListItem>> GetAppsAsync(int page, int pageSize, string? search, MiniAppStatus? status, CancellationToken cancellationToken);
     Task<MiniAppDeveloperView?> GetAppAsync(Guid id, CancellationToken cancellationToken);
@@ -107,6 +111,9 @@ public interface IMiniAppManagementService
     Task<IReadOnlyList<MiniAppVersionDto>> GetVersionsAsync(Guid id, CancellationToken cancellationToken);
     Task<MiniAppCredentialResponse> CreateAdminAppAsync(Guid actorAccountId, Guid developerId, MiniAppConfigurationInput input, CancellationToken cancellationToken);
 }
+
+public sealed record MiniAppDomainVerificationDto(Guid Id, string Host, DateTime? VerifiedAt);
+public sealed record MiniAppAdminReviewContext(DeveloperDto Developer, IReadOnlyList<MiniAppDomainVerificationDto> Domains);
 
 public interface IDeveloperMiniAppService
 {

@@ -46,10 +46,12 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         var app = await AppQuery().SingleOrDefaultAsync(item => item.Id == id && item.DeletedAt == null, cancellationToken)
             ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
         var previousStatus = app.Status;
+        if (status == MiniAppStatus.Active && app.Status == MiniAppStatus.PendingReview && app.PendingVersion is null)
+            throw new MiniAppException("REVIEW_VERSION_REQUIRED", "Ứng dụng cần gửi phiên bản và xác minh domain trước khi được duyệt.", 409);
         var allowed = status switch
         {
-            MiniAppStatus.Active => app.Status is MiniAppStatus.PendingReview or MiniAppStatus.Suspended || app.PendingVersion != null,
-            MiniAppStatus.Rejected => app.PendingVersion != null,
+            MiniAppStatus.Active => app.Status == MiniAppStatus.Suspended || app.Status is MiniAppStatus.Active or MiniAppStatus.PendingReview && app.PendingVersion != null,
+            MiniAppStatus.Rejected => app.PendingVersion != null && app.Status is MiniAppStatus.Active or MiniAppStatus.PendingReview or MiniAppStatus.Suspended,
             MiniAppStatus.Suspended => app.Status == MiniAppStatus.Active,
             MiniAppStatus.Archived => app.Status is MiniAppStatus.Active or MiniAppStatus.Suspended,
             _ => false
@@ -81,6 +83,11 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         if (app.PendingVersion != null) throw new MiniAppException("REVIEW_PENDING", "A submitted version is immutable.", 409);
         await PreserveLegacyPublished(app, cancellationToken);
         await ApplyInput(app, input, true, cancellationToken);
+        if (app.Status == MiniAppStatus.PendingReview && app.PendingVersion is null)
+        {
+            app.Status = app.PublishedVersion > 0 ? MiniAppStatus.Active : MiniAppStatus.Draft;
+            db.MiniAppAuditLogs.Add(new MiniAppAuditLog { ActorAccountId = actorAccountId, MiniAppId = app.Id, DeveloperId = app.DeveloperId, Action = "LegacyReviewReturnedToDraft" });
+        }
         db.MiniAppAuditLogs.Add(new MiniAppAuditLog { ActorAccountId = actorAccountId, MiniAppId = app.Id, DeveloperId = app.DeveloperId, Action = "MiniAppUpdated" });
         await SaveAsync(cancellationToken);
     }

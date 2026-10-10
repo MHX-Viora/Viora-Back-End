@@ -113,15 +113,56 @@ public sealed partial class MiniAppManagementService
     public async Task<MiniAppDomainDto> VerifyDomainAsync(Guid accountId, Guid id, Guid domainId, CancellationToken ct)
     {
         var app = await RequireOwned(accountId, id, ct);
+        return await VerifyDomain(accountId, app, domainId, ct);
+    }
+    private async Task<MiniAppDomainDto> VerifyDomain(Guid actorAccountId, MiniApp app, Guid domainId, CancellationToken ct)
+    {
+        var id = app.Id;
         var domain = await db.MiniAppVerifiedDomains.SingleOrDefaultAsync(d => d.Id == domainId && d.MiniAppId == id, ct) ?? throw new MiniAppException("DOMAIN_NOT_FOUND", "Domain not found.", 404);
         var now = DateTime.UtcNow;
         var attempted = await db.MiniAppVerifiedDomains.Where(d => d.Id == domain.Id && (d.LastAttemptAt == null || d.LastAttemptAt < now.AddSeconds(-30)))
             .ExecuteUpdateAsync(s => s.SetProperty(d => d.LastAttemptAt, now), ct);
         if (attempted != 1) throw new MiniAppException(MiniAppErrorCodes.RateLimited, "Wait before another verification attempt.", 429);
         var verified = domainVerifier is not null && await domainVerifier.VerifyAsync(domain.Host, domain.ChallengeToken, ct);
-        domain.VerifiedAt = verified ? now : null; Audit(accountId, app.DeveloperId, id, verified ? "DomainVerified" : "DomainVerificationFailed"); await SaveAsync(ct);
+        domain.VerifiedAt = verified ? now : null; Audit(actorAccountId, app.DeveloperId, id, verified ? "DomainVerified" : "DomainVerificationFailed"); await SaveAsync(ct);
         if (!verified) throw new MiniAppException("DOMAIN_VERIFICATION_FAILED", "Public HTTPS challenge did not match.", 422);
         return new(domain.Id, domain.Host, domain.VerifiedAt, domain.ChallengeToken);
+    }
+
+    public async Task<MiniAppAdminReviewContext> GetReviewContextAsync(Guid id, CancellationToken ct)
+    {
+        var app = await AppQuery().AsNoTracking().SingleOrDefaultAsync(a => a.Id == id && a.DeletedAt == null, ct)
+            ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
+        var d = app.Developer;
+        var count = await db.MiniApps.CountAsync(a => a.DeveloperId == d.Id && a.DeletedAt == null, ct);
+        var domains = await db.MiniAppVerifiedDomains.AsNoTracking().Where(d => d.MiniAppId == id).OrderBy(d => d.Host)
+            .Select(d => new MiniAppDomainVerificationDto(d.Id, d.Host, d.VerifiedAt)).ToListAsync(ct);
+        return new(new(d.Id, d.AccountId, d.Name, d.CompanyName, d.Email, d.Phone, d.Website, d.Status.ToString(), count, d.CreatedAt, d.UpdatedAt), domains);
+    }
+    public async Task<MiniAppDomainVerificationDto> VerifyAdminDomainAsync(Guid actorAccountId, Guid id, Guid domainId, CancellationToken ct)
+    {
+        var app = await AppQuery().SingleOrDefaultAsync(a => a.Id == id && a.DeletedAt == null, ct)
+            ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
+        var result = await VerifyDomain(actorAccountId, app, domainId, ct);
+        return new(result.Id, result.Host, result.VerifiedAt);
+    }
+    public async Task ReviewAppVersionAsync(Guid actorAccountId, Guid id, int? version, bool approve, string? reason, CancellationToken ct)
+    {
+        var app = await AppQuery().SingleOrDefaultAsync(a => a.Id == id && a.DeletedAt == null, ct)
+            ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
+        if (version is null || version <= 0 || app.PendingVersion != version || !app.Versions.Any(v => v.Version == version && v.Status == MiniAppStatus.PendingReview))
+            throw new MiniAppException("REVIEW_VERSION_REQUIRED", "Phiên bản gửi duyệt đã thay đổi hoặc không tồn tại. Tải lại trước khi quyết định.", 409);
+        if (approve && app.Status is not (MiniAppStatus.Active or MiniAppStatus.PendingReview))
+            throw new MiniAppException("INVALID_STATUS_TRANSITION", "Khôi phục ứng dụng đang tạm ngừng trước khi duyệt phiên bản.", 409);
+        await SetAppStatusAsync(actorAccountId, id, approve ? MiniAppStatus.Active : MiniAppStatus.Rejected, reason, ct);
+    }
+    public async Task ReactivateAppAsync(Guid actorAccountId, Guid id, CancellationToken ct)
+    {
+        var app = await db.MiniApps.SingleOrDefaultAsync(a => a.Id == id && a.DeletedAt == null, ct)
+            ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
+        if (app.Status != MiniAppStatus.Suspended)
+            throw new MiniAppException("INVALID_STATUS_TRANSITION", "Chỉ khôi phục ứng dụng đang tạm ngừng.", 409);
+        await SetAppStatusAsync(actorAccountId, id, MiniAppStatus.Active, null, ct);
     }
     private async Task RequireVerifiedDomains(MiniApp app, MiniAppConfigurationInput configuration, CancellationToken ct)
     {
