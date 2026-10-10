@@ -7,7 +7,7 @@ The platform supports two authentication modes. `Independent` opens the partner 
 1. Open Developer Portal from your personal profile settings in ANKT (`/developer`), register a Developer profile using the current ANKT account and await approval.
 2. Create a Draft in the five-step wizard. Choose authentication mode, HTTPS website, exact origins/callbacks and requested permissions.
 3. Save the one-time client secret on the partner server when using `ClientSecretPost`.
-4. Publish each ownership challenge at `https://<host>/.well-known/ankt-mini-app-verification.txt`, then verify through the portal.
+4. Publish each ownership challenge at `https://<host>/ankt-mini-app-verification.txt`, then verify through the portal.
 5. Submit a version for review. Admin approval publishes its immutable snapshot. Later edits require another review.
 
 See the [Developer guide](MINI_APP_DEVELOPER_GUIDE.md) and [admin workflow](MINI_APP_ADMIN_WORKFLOW.md).

@@ -20,10 +20,10 @@ Store a displayed client secret in your server's secret store immediately. It is
 
 ## Domain ownership
 
-In the Domains screen create a challenge for every registered exact host. Publish its challenge token as UTF-8 plain text at:
+In the Domains screen prepare verification for every registered exact host, then download the prefilled `ankt-mini-app-verification.txt` file. Upload it unchanged to the website root, without creating a subdirectory. It must be available at:
 
 ```text
-https://your-domain.example/.well-known/ankt-mini-app-verification.txt
+https://your-domain.example/ankt-mini-app-verification.txt
 ```
 
 The endpoint must return HTTP 200 directly over valid HTTPS without redirection. It must resolve entirely to public IP addresses. The verifier limits body size, elapsed time and repeat attempts. A verification token proves host ownership; it is not a login credential. Avoid wildcard domains for new registrations because every host must be explicitly verified.

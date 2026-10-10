@@ -34,7 +34,7 @@ public sealed class MiniAppDomainVerifier : IMiniAppDomainVerifier
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(8) };
         try
         {
-            using var response = await client.GetAsync($"https://{host}/.well-known/ankt-mini-app-verification.txt", HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+            using var response = await client.GetAsync($"https://{host}/ankt-mini-app-verification.txt", HttpCompletionOption.ResponseHeadersRead, deadline.Token);
             if (response.StatusCode != HttpStatusCode.OK || response.Content.Headers.ContentLength > 1024) return false;
             await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
             var buffer = new byte[1025]; var count = 0;
