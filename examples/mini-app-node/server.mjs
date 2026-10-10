@@ -2,18 +2,9 @@ import { createServer } from 'node:http';
 import { randomBytes, randomUUID, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { initializeIdentitySchema, resolveIdentity, unlinkIdentity } from './identity-store.mjs';
+import { loadAnktConfig } from './ankt-config.mjs';
 
-const production = process.env.NODE_ENV === 'production';
-const origin = new URL(process.env.MINI_APP_ORIGIN || 'http://127.0.0.1:5310');
-const anktApi = new URL(process.env.ANKT_API_URL || 'http://127.0.0.1:5000');
-const anktHost = new URL(process.env.ANKT_APP_ORIGIN || 'http://127.0.0.1:8081').origin;
-for (const url of [origin, anktApi, new URL(anktHost)]) {
-  if (url.username || url.password || (url.protocol !== 'https:' && (production || url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname)))) throw new Error('HTTPS is required outside localhost development');
-}
-const clientId = process.env.ANKT_CLIENT_ID;
-const clientSecret = process.env.ANKT_CLIENT_SECRET;
-if (!clientId) throw new Error('Configure ANKT_CLIENT_ID; ANKT_CLIENT_SECRET is required for confidential clients');
-const callback = `${origin.origin}/auth/ankt/callback`;
+const { production, origin, anktApi, anktHost, clientId, clientSecret, callback, callbackPath } = loadAnktConfig(process.env);
 const db = new DatabaseSync(process.env.MINI_APP_DATABASE || 'mini-app.sqlite');
 initializeIdentitySchema(db);
 const token = () => randomBytes(32).toString('base64url');
@@ -100,7 +91,7 @@ const server = createServer(async (req, res) => {
         const state = token(); const verifier = token();
         db.prepare('INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?)').run(hash(state), current.id_hash, verifier, intent, intent === 'link' ? user.id : null, Date.now() + 300000);
         const params = JSON.stringify({redirectUri: callback, state, codeChallenge: hash(verifier), codeChallengeMethod: 'S256'}).replace(/</g, '\\u003c');
-        return page(res, current, '<h1>Tiếp tục với ANKT</h1><p>Xác nhận quyền trong ANKT để tiếp tục.</p><button id="continue">Tiếp tục</button><p id="error" role="alert"></p><a href="/">Quay lại</a>', `ANKT.configure({hostOrigin:${JSON.stringify(anktHost)}});document.getElementById('continue').onclick=async()=>{try{if(!window.ANKT)throw new Error('Mở mini app này trong ANKT để đăng nhập.');const result=await ANKT.requestLogin(${params});const target=new URL(result.launchUrl);if(target.origin!==location.origin||target.pathname!=='/auth/ankt/callback')throw new Error('Invalid callback');location.replace(target.href)}catch(error){document.getElementById('error').textContent=error.message}};`);
+        return page(res, current, '<h1>Tiếp tục với ANKT</h1><p>Xác nhận quyền trong ANKT để tiếp tục.</p><button id="continue">Tiếp tục</button><p id="error" role="alert"></p><a href="/">Quay lại</a>', `ANKT.configure({hostOrigin:${JSON.stringify(anktHost)}});document.getElementById('continue').onclick=async()=>{try{if(!window.ANKT)throw new Error('Mở mini app này trong ANKT để đăng nhập.');const result=await ANKT.requestLogin(${params});const target=new URL(result.launchUrl);if(target.origin!==location.origin||target.pathname!==${JSON.stringify(callbackPath)})throw new Error('Invalid callback');location.replace(target.href)}catch(error){document.getElementById('error').textContent=error.message}};`);
       }
       if (url.pathname === '/account/unlink') {
         if (!user || !verifyPassword(input.get('password'), user.password_hash)) throw Object.assign(new Error('Reauthenticate to unlink'), {status: 401});
@@ -108,7 +99,7 @@ const server = createServer(async (req, res) => {
       }
       if (url.pathname === '/logout') { rotateSession(res, current, null); return redirect(res); }
     }
-    if (req.method === 'GET' && url.pathname === '/auth/ankt/callback') {
+    if (req.method === 'GET' && url.pathname === callbackPath) {
       rateLimit(req);
       const state = url.searchParams.get('state'); const code = url.searchParams.get('code');
       if (!state || !code || state.length > 256 || code.length > 256) throw Object.assign(new Error('Invalid callback'), {status: 400});
