@@ -91,7 +91,7 @@ Committed changes relative to the prior repository baselines. Restored files ide
 - `viora-BE/wwwroot/mini-app-sdk/ankt-mini-app.d.ts`
 - `viora-BE/wwwroot/mini-app-sdk/ankt-mini-app.js`
 
-## viora (69 files)
+## viora (70 files)
 
 - `.env.example`
 - `.github/workflows/deploy.yml`
@@ -130,6 +130,7 @@ Committed changes relative to the prior repository baselines. Restored files ide
 - `features/developers/docs.test.mjs`
 - `features/developers/document-screen.tsx`
 - `features/developers/document-screen.web.tsx`
+- `features/developers/integration-panel.tsx`
 - `features/developers/mini-app.ts`
 - `features/developers/oauth-request.d.mts`
 - `features/developers/oauth-request.mjs`
