@@ -1,37 +1,12 @@
 # Developer registration and publishing
 
-## Access
+Open /developers in ANKT, or Personal profile → Settings → Dành cho nhà phát triển. /developers/register and /developers/console use your existing ANKT account. Detailed setup: [SETUP.md](mini-app-partner/SETUP.md).
 
-In ANKT open **Personal profile → Settings and activity → Developer Portal**. This opens `/developer` inside ANKT using the current signed-in account, without a second login or admin access. Submit a Developer profile with name, contact email and optional company/phone/public HTTPS website. Admin approval activates the profile before app creation.
+1. Save Individual/Business profile, verify contact email, accept current terms and submit review. Admin approval enables app management; membership role controls capabilities.
+2. Create Mini App draft: name/slug/category, HTTPS entry, domains/origins, media, support/privacy/terms and approved capabilities. Independent keeps your website login; AnktSso enables maintained OIDC. Optional/Required and Auto Login do not silently grant permission.
+3. Verify each domain using the Console HTTPS proof file. Register callback exactly, including path/case/trailing slash. Run technical checks, submit immutable version and wait for Admin review.
+4. Publish the approved version. Draft edits do not change the live snapshot. Mini App appears below Wallet in Utilities when available; Admin controls catalog visibility/banners/featured and may suspend app/developer.
+5. Client secret is shown only on confidential client creation/rotation; store it on your backend. Public clients use None + mandatory PKCE. Obtain issuer/host metadata from your ANKT operator; never guess deployment readiness or place tokens/secrets in frontend variables.
+6. Integrate Node/ASP.NET BFF and React/SDK examples linked in setup. Test denied/revoked consent, callback replay, account switch, blocked cookies and app suspension before production. User can revoke consent through Ứng dụng đã kết nối.
 
-The in-app interface provides owned app list/create/edit, authentication mode/permissions, exact domain proof, version submission/status/history, SSO integration/client credentials and usage/audit. The separately deployed Vite web application also retains its developer-only portal with team management; its Developer login does not grant admin rights.
-
-An administrator may instead create a Developer from the Developers page and link the owner's ANKT AccountId. Team invitations use an existing account ID; only the owner can add/remove members. An account belongs to one Developer. Team membership grants access to that Developer's apps, not administrative approval rights.
-
-## Create wizard
-
-1. Identity: name, slug, icon/logo URL, description and category.
-2. Website and domains: public HTTPS website; register exact domain names. SSO additionally needs exact callback URLs and bridge origins.
-3. Authentication: `Independent` keeps your existing login. `AnktSso` enables the explicit identity exchange.
-4. Permissions: request only necessary available scopes. `identity.login` is required for ANKT identity. Profile email/phone require separate approved grants.
-5. Preview and create a draft. Complete domain verification before submitting review.
-
-Store a displayed client secret in your server's secret store immediately. It is returned once, never placed in frontend code or URLs. Rotation invalidates the previous secret. Public clients use authentication method `None` and must use S256 PKCE; confidential clients additionally authenticate with their secret.
-
-## Domain ownership
-
-In the Domains screen prepare verification for every registered exact host, then download the prefilled `ankt-mini-app-verification.txt` file. Upload it unchanged to the website root, without creating a subdirectory. It must be available at:
-
-```text
-https://your-domain.example/ankt-mini-app-verification.txt
-```
-
-The endpoint must return HTTP 200 directly over valid HTTPS without redirection. It must resolve entirely to public IP addresses. The verifier limits body size, elapsed time and repeat attempts. A verification token proves host ownership; it is not a login credential. Avoid wildcard domains for new registrations because every host must be explicitly verified.
-
-## Review and updates
-
-Submit the draft for review. The reviewer checks identity, domains, callback/origin boundaries and each requested permission. Rejection includes a reason; edit and resubmit. Published app configuration changes create a new reviewable version. Only approval publishes the submitted snapshot; unpublished edits never expand user access.
-
-Suspended developers/apps cannot launch. Emergency suspension also invalidates runtime validation. Archived apps disappear from discovery. Usage analytics show recent launches/failures and unique users; audit/version history records administrative and developer actions.
-
-See [SSO integration](MINI_APP_SSO.md), [SDK](MINI_APP_SDK.md), [admin workflow](MINI_APP_ADMIN_WORKFLOW.md).
+Console includes application versions/domains, technical tests, publication, credentials, team and real usage analytics. No developer account login on Admin. Custom legacy exchange is retired; use OIDC discovery/token/JWKS and your backend's /auth/ankt/* routes.
