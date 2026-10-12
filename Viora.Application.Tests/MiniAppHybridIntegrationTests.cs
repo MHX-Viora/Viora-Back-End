@@ -9,6 +9,17 @@ using Xunit;
 
 public sealed class MiniAppHybridIntegrationTests
 {
+    [Fact] public async Task AutoLoginUsesPublishedPolicyAndIndependentAppsCannotEnableIt()
+    {
+        await using var f = await Fixture.Create(true);
+        await Assert.ThrowsAsync<MiniAppException>(() => f.Management.CreateAsync(f.Owner.Id, f.Input() with { AutoLogin = true }, default));
+        f.Db.ChangeTracker.Clear(); // The failed HTTP request would dispose its scoped context.
+        var app = await f.Publish(f.SsoInput() with { AutoLogin = true });
+        Assert.True((await f.Runtime.GetActiveDetailAsync(app.Id, default))!.AutoLogin);
+        await f.Management.UpdateOwnedAsync(f.Owner.Id, app.Id, f.SsoInput() with { AutoLogin = false }, default);
+        Assert.True((await f.Runtime.GetActiveDetailAsync(app.Id, default))!.AutoLogin);
+        Assert.False((await f.Management.GetOwnedAsync(f.Owner.Id, app.Id, default))!.AutoLogin);
+    }
     [Fact] public async Task RegistrationBindsAuthenticatedOwnerAndNeedsAdminApproval()
     {
         await using var f = await Fixture.Create();
@@ -45,12 +56,12 @@ public sealed class MiniAppHybridIntegrationTests
     {
         await using var f = await Fixture.Create(true); var created = await f.Management.CreateAsync(f.Owner.Id, f.Input(), default);
         var error = await Assert.ThrowsAsync<MiniAppException>(() => f.Management.SubmitReviewAsync(f.Owner.Id, created.Id, default)); Assert.Equal("DOMAIN_NOT_VERIFIED", error.Code);
-        await f.Verify(created.Id); await f.Management.SubmitReviewAsync(f.Owner.Id, created.Id, default);
+        await f.Verify(created.Id); await f.Submit(created.Id);
         await Assert.ThrowsAsync<MiniAppException>(() => f.Management.UpdateOwnedAsync(f.Owner.Id, created.Id, f.Input() with { Name = "Changed" }, default));
         await f.Management.SetAppStatusAsync(f.Other.Id, created.Id, MiniAppStatus.Rejected, "Needs changes", default);
         var versions = await f.Management.GetVersionsAsync(created.Id, default); Assert.Equal("Needs changes", Assert.Single(versions).Reason);
         await f.Management.UpdateOwnedAsync(f.Owner.Id, created.Id, f.Input() with { Name = "Fixed" }, default);
-        await f.Management.SubmitReviewAsync(f.Owner.Id, created.Id, default);
+        await f.Submit(created.Id);
         await f.Management.SetAppStatusAsync(f.Other.Id, created.Id, MiniAppStatus.Active, null, default);
         Assert.Equal("Fixed", (await f.Runtime.GetActiveDetailAsync(created.Id, default))!.Name);
     }
@@ -60,12 +71,12 @@ public sealed class MiniAppHybridIntegrationTests
         await f.Management.UpdateOwnedAsync(f.Owner.Id, app.Id, f.Input() with { Name = "New draft", WebUrl = "https://example.com/new" }, default);
         Assert.Equal("Example app", (await f.Runtime.GetActiveDetailAsync(app.Id, default))!.Name);
         Assert.Equal("https://example.com/app", (await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default)).LaunchUrl);
-        await f.Management.SubmitReviewAsync(f.Owner.Id, app.Id, default);
+        await f.Submit(app.Id);
         await f.Management.SetAppStatusAsync(f.Other.Id, app.Id, MiniAppStatus.Rejected, "Rejected update", default);
         Assert.Equal("Active", (await f.Management.GetAppAsync(app.Id, default))!.Status);
         Assert.Equal("Example app", (await f.Runtime.GetActiveDetailAsync(app.Id, default))!.Name);
         await f.Management.UpdateOwnedAsync(f.Owner.Id, app.Id, f.Input() with { Name = "Approved update" }, default);
-        await f.Management.SubmitReviewAsync(f.Owner.Id, app.Id, default); await f.Management.SetAppStatusAsync(f.Other.Id, app.Id, MiniAppStatus.Active, null, default);
+        await f.Submit(app.Id); await f.Management.SetAppStatusAsync(f.Other.Id, app.Id, MiniAppStatus.Active, null, default);
         Assert.Equal("Approved update", (await f.Runtime.GetActiveDetailAsync(app.Id, default))!.Name);
     }
     [Fact] public async Task ConsentIsRequiredOnExplicitLoginAndGrantsAreProjected()
@@ -217,20 +228,33 @@ public sealed class MiniAppHybridIntegrationTests
         public required Account Other { get; init; }
         public required MiniAppManagementService Management { get; init; }
         public required MiniAppService Runtime { get; init; }
-        public MiniAppConfigurationInput Input() => new("Example app", "example-app", "Description", null, null, "https://example.com/app", "", ["example.com"], []);
+        public MiniAppConfigurationInput Input() => new("Example app", "example-app", "Description", null, null, "https://example.com/app", "", ["example.com"], [], SupportEmail: "support@example.com", PrivacyPolicyUrl: "https://example.com/privacy");
         public MiniAppConfigurationInput SsoInput() => Input() with { CallbackUrl = "https://example.com/callback", CallbackUrls = ["https://example.com/callback"], AuthenticationMode = "AnktSso", Permissions = ["identity.login", "profile.basic"] };
         public AuthorizeMiniAppRequest Auth(LaunchMiniAppResponse launch) => new(launch.SessionId!.Value, launch.SessionToken!, "https://example.com/callback", State, MiniAppSecurityPolicy.CreatePkceChallenge(Verifier), "S256");
         public async Task Verify(Guid id) { var d = await Management.AddDomainAsync(Owner.Id, id, new("example.com"), default); await Management.VerifyDomainAsync(Owner.Id, id, d.Id, default); }
-        public async Task<MiniAppCredentialResponse> Publish(MiniAppConfigurationInput input) { var a = await Management.CreateAsync(Owner.Id, input, default); await Verify(a.Id); await Management.SubmitReviewAsync(Owner.Id, a.Id, default); await Management.SetAppStatusAsync(Other.Id, a.Id, MiniAppStatus.Active, null, default); return a; }
+        public async Task Submit(Guid id)
+        {
+            // A prior run belongs to another configuration. Advance its persisted
+            // cooldown for deterministic fixtures instead of sleeping or bypassing checks.
+            await Db.MiniAppTechnicalTests.Where(t => t.MiniAppId == id).ExecuteUpdateAsync(s => s.SetProperty(t => t.CreatedAt, DateTime.UtcNow.AddMinutes(-1)));
+            Assert.True((await Management.RunTechnicalTestAsync(Owner.Id, id, default)).Passed);
+            await Management.SubmitReviewAsync(Owner.Id, id, default);
+        }
+        public async Task<MiniAppCredentialResponse> Publish(MiniAppConfigurationInput input) { var a = await Management.CreateAsync(Owner.Id, input, default); await Verify(a.Id); await Submit(a.Id); await Management.SetAppStatusAsync(Other.Id, a.Id, MiniAppStatus.Active, null, default); return a; }
         public static async Task<Fixture> Create(bool developer = false)
         {
             var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); connection.CreateFunction("char_length", (string value) => value.Length);
             var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options); await db.Database.EnsureCreatedAsync();
             var owner = new Account { Email = "owner@example.com" }; var other = new Account { Email = "other@example.com" }; db.AddRange(owner, other, new User { AccountId = owner.Id, DisplayName = "Owner" });
             if (developer) db.Developers.Add(new Developer { Name = "Developer", Email = "dev@example.com", AccountId = owner.Id, Status = DeveloperStatus.Active }); await db.SaveChangesAsync();
-            var credentials = new ClientCredentialService(); return new() { Connection = connection, Db = db, Owner = owner, Other = other, Management = new(db, credentials, new FakeVerifier()), Runtime = new(db, credentials) };
+            var credentials = new ClientCredentialService(); return new() { Connection = connection, Db = db, Owner = owner, Other = other, Management = new(db, credentials, new FakeVerifier(), new FakeTechnicalProbe()), Runtime = new(db, credentials) };
         }
         public async ValueTask DisposeAsync() { await Db.DisposeAsync(); await Connection.DisposeAsync(); }
+        private sealed class FakeTechnicalProbe : IMiniAppTechnicalProbe
+        {
+            public Task<MiniAppTechnicalCheckDto> CheckAsync(string code, string url, CancellationToken ct)
+                => Task.FromResult(new MiniAppTechnicalCheckDto(code, true, "Fixture HTTPS reachable", 200, 1));
+        }
     }
     private sealed class FakeVerifier : IMiniAppDomainVerifier { public Task<bool> VerifyAsync(string host, string challengeToken, CancellationToken cancellationToken) => Task.FromResult(true); }
     private sealed class RejectingVerifier : IMiniAppDomainVerifier { public Task<bool> VerifyAsync(string host, string challengeToken, CancellationToken cancellationToken) => Task.FromResult(false); }

@@ -53,9 +53,12 @@ public sealed class AdminMiniAppsController(IMiniAppManagementService service) :
     public Task Update(Guid id, MiniAppConfigurationInput input, CancellationToken cancellationToken) => service.UpdateAppAsync(AccountId(), id, input, cancellationToken);
 
     [HttpPost("{id:guid}/approve")]
-    public Task Approve(Guid id, StatusReasonRequest request, CancellationToken cancellationToken) => service.ReviewAppVersionAsync(AccountId(), id, request.Version, true, request.Reason, cancellationToken);
+    [Obsolete("Use review-decision followed by developer publication for the explicit lifecycle.")]
+    public Task Approve(Guid id, StatusReasonRequest request, CancellationToken cancellationToken) => service.DecideVersionAsync(AccountId(), id, new(request.Version ?? 0, "Approved", request.Reason), cancellationToken);
     [HttpPost("{id:guid}/reject")]
     public Task Reject(Guid id, StatusReasonRequest request, CancellationToken cancellationToken) => service.ReviewAppVersionAsync(AccountId(), id, request.Version, false, request.Reason, cancellationToken);
+    [HttpPost("{id:guid}/review-decision")]
+    public Task DecideVersion(Guid id, MiniAppReviewDecisionInput input, CancellationToken ct) => service.DecideVersionAsync(AccountId(), id, input, ct);
     [HttpPost("{id:guid}/suspend")]
     public Task Suspend(Guid id, StatusReasonRequest request, CancellationToken cancellationToken) => service.SetAppStatusAsync(AccountId(), id, MiniAppStatus.Suspended, request.Reason, cancellationToken);
     [HttpPost("{id:guid}/reactivate")]

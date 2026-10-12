@@ -26,6 +26,8 @@ public sealed class MiniAppExpiryCleanup(IServiceScopeFactory scopes, ILogger<Mi
     {
         // Codes reference sessions, so delete expired codes before orphan sessions.
         await db.MiniAppLaunchCodes.Where(c => c.ExpiresAt < retentionCutoff).ExecuteDeleteAsync(ct);
+        await db.DeveloperReauths.Where(p => p.ExpiresAt < retentionCutoff).ExecuteDeleteAsync(ct);
+        await db.DeveloperEmailVerifications.Where(p => p.ExpiresAt < retentionCutoff && p.VerifiedAt == null).ExecuteDeleteAsync(ct);
         await db.MiniAppRuntimeSessions.Where(s => s.ExpiresAt < retentionCutoff && !db.MiniAppLaunchCodes.Any(c => c.RuntimeSessionId == s.Id)).ExecuteDeleteAsync(ct);
     }
 }

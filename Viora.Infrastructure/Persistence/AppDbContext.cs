@@ -48,6 +48,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<LegalDocument> LegalDocuments => Set<LegalDocument>();
     public DbSet<UserLegalAcceptance> UserLegalAcceptances => Set<UserLegalAcceptance>();
     public DbSet<Developer> Developers => Set<Developer>();
+    public DbSet<DeveloperReauth> DeveloperReauths => Set<DeveloperReauth>();
+    public DbSet<DeveloperApplication> DeveloperApplications => Set<DeveloperApplication>();
+    public DbSet<DeveloperReviewHistory> DeveloperReviewHistory => Set<DeveloperReviewHistory>();
+    public DbSet<DeveloperEmailVerification> DeveloperEmailVerifications => Set<DeveloperEmailVerification>();
+    public DbSet<MiniAppTechnicalTest> MiniAppTechnicalTests => Set<MiniAppTechnicalTest>();
     public DbSet<MiniApp> MiniApps => Set<MiniApp>();
     public DbSet<MiniAppPermission> MiniAppPermissions => Set<MiniAppPermission>();
     public DbSet<MiniAppPermissionMapping> MiniAppPermissionMappings => Set<MiniAppPermissionMapping>();

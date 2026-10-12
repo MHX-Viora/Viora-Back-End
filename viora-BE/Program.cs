@@ -164,6 +164,7 @@ builder.Services.AddRateLimiter(options =>
 });
 builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration);
+var partnerOpenApi = builder.AddPartnerOpenApi();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -221,6 +222,8 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+if (partnerOpenApi.Enabled) app.UseForwardedHeaders();
+app.UsePartnerOpenApiBoundary(partnerOpenApi);
 app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
 
 app.UseExceptionHandler(errorApp =>
@@ -278,18 +281,19 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseCors("Web");
-app.UseSwagger();
-app.UseSwaggerUI(options =>
+if (app.Environment.IsDevelopment())
 {
-	options.RoutePrefix = string.Empty;
-	options.SwaggerEndpoint(
-		"/swagger/v1/swagger.json",
-		"Viora API v1"
-	);
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.RoutePrefix = string.Empty;
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Viora API v1");
+    });
+}
 
-app.UseRateLimiter();
 app.UseAuthentication();
+app.UsePartnerOpenApiPrincipalLimits(partnerOpenApi);
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new

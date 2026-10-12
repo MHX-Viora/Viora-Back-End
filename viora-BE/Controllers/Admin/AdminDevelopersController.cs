@@ -10,7 +10,7 @@ namespace viora_BE.Controllers.Admin;
 [Authorize(Roles = "2")]
 [Route("api/admin/developers")]
 [Tags("Admin - Developers")]
-public sealed class AdminDevelopersController(IMiniAppManagementService service) : ControllerBase
+public sealed class AdminDevelopersController(IMiniAppManagementService service, IDeveloperPlatformService platform) : ControllerBase
 {
     [HttpGet]
     public Task<MiniAppAdminPage<DeveloperDto>> List([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] DeveloperStatus? status = null, CancellationToken cancellationToken = default) =>
@@ -20,12 +20,16 @@ public sealed class AdminDevelopersController(IMiniAppManagementService service)
     public async Task<ActionResult<DeveloperDto>> Create(DeveloperInput input, CancellationToken cancellationToken) =>
         Created(string.Empty, await service.CreateDeveloperAsync(AccountId(), input, cancellationToken));
 
+    [HttpGet("{id:guid}/application")]
+    public Task<DeveloperProfileDto> Application(Guid id, CancellationToken ct) => platform.GetAdminApplicationAsync(id, ct);
+    [HttpPost("{id:guid}/review")]
+    public Task<DeveloperProfileDto> Review(Guid id, DeveloperReviewInput input, CancellationToken ct) => platform.ReviewAsync(AccountId(), id, input, ct);
     [HttpPost("{id:guid}/approve")]
-    public Task Approve(Guid id, CancellationToken cancellationToken) => service.SetDeveloperStatusAsync(AccountId(), id, DeveloperStatus.Active, cancellationToken);
+    public Task<DeveloperProfileDto> Approve(Guid id, DeveloperReviewInput input, CancellationToken ct) => platform.ReviewAsync(AccountId(), id, input with { Status = "Approved" }, ct);
     [HttpPost("{id:guid}/suspend")]
-    public Task Suspend(Guid id, CancellationToken cancellationToken) => service.SetDeveloperStatusAsync(AccountId(), id, DeveloperStatus.Suspended, cancellationToken);
+    public Task<DeveloperProfileDto> Suspend(Guid id, DeveloperReviewInput input, CancellationToken ct) => platform.ReviewAsync(AccountId(), id, input with { Status = "Suspended" }, ct);
     [HttpPost("{id:guid}/reject")]
-    public Task Reject(Guid id, CancellationToken cancellationToken) => service.SetDeveloperStatusAsync(AccountId(), id, DeveloperStatus.Rejected, cancellationToken);
+    public Task<DeveloperProfileDto> Reject(Guid id, DeveloperReviewInput input, CancellationToken ct) => platform.ReviewAsync(AccountId(), id, input with { Status = "Rejected" }, ct);
 
     private Guid AccountId() => Guid.Parse(User.FindFirstValue("sub")!);
 }

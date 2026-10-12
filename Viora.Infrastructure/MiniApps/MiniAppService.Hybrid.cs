@@ -35,7 +35,7 @@ public sealed partial class MiniAppService
             s.ExpiresAt > DateTime.UtcNow && s.ClosedAt == null && s.Account.Status == AccountStatus.Active && s.Account.DeletedAt == null, ct);
         if (session is null) return new(false, [], null);
         var app = await ActiveAppQuery().AsNoTracking().SingleOrDefaultAsync(a => a.Id == miniAppId, ct);
-        return app is null ? new(false, [], session.ExpiresAt) : new(true, await GrantedPermissions(accountId, app, ct), session.ExpiresAt);
+        return app is null || app.PublishedVersion != session.PublishedVersion ? new(false, [], session.ExpiresAt) : new(true, await GrantedPermissions(accountId, app, ct), session.ExpiresAt);
     }
 
     public async Task CloseSessionAsync(Guid accountId, Guid miniAppId, ValidateMiniAppSessionRequest request, CancellationToken ct)

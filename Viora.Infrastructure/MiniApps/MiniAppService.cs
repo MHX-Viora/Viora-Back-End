@@ -13,7 +13,7 @@ public sealed partial class MiniAppService(AppDbContext db, IClientCredentialSer
     {
         var apps = await ActiveAppQuery().AsNoTracking().OrderByDescending(app => app.IsFeatured).ThenBy(app => app.Name).ToListAsync(cancellationToken);
         var categories = await db.MiniAppCategories.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
-        var items = apps.Select(app => { var c = MiniAppConfigurationSnapshot.Published(app); return new MiniAppListItemDto(app.Id, c.Name, c.Slug, c.Description, c.IconUrl, c.CoverUrl, c.IsFeatured, app.Developer.Name, c.CategoryId, c.CategoryId is Guid categoryId ? categories.GetValueOrDefault(categoryId) : null, c.AuthenticationMode, app.PublishedVersion); }).ToArray();
+        var items = apps.Select(app => { var c = MiniAppConfigurationSnapshot.Published(app); return new MiniAppListItemDto(app.Id, c.Name, c.Slug, c.Description, c.IconUrl, c.CoverUrl, c.IsFeatured, app.Developer.Name, c.CategoryId, c.CategoryId is Guid categoryId ? categories.GetValueOrDefault(categoryId) : null, c.AuthenticationMode, app.PublishedVersion, c.AuthenticationMode == "AnktSso" && c.AutoLogin); }).ToArray();
         return new(items);
     }
 
@@ -25,7 +25,7 @@ public sealed partial class MiniAppService(AppDbContext db, IClientCredentialSer
         var category = c.CategoryId is Guid categoryId ? await db.MiniAppCategories.Where(x => x.Id == categoryId).Select(x => x.Name).SingleOrDefaultAsync(cancellationToken) : null;
         var verifiedHosts = await db.MiniAppVerifiedDomains.Where(d => d.MiniAppId == id && d.VerifiedAt != null).Select(d => d.Host).ToListAsync(cancellationToken);
         var bridgeOrigins = (c.AllowedOrigins ?? []).Where(o => verifiedHosts.Contains(new Uri(o).IdnHost)).ToArray();
-        return new(app.Id, c.Name, c.Slug, c.Description, c.IconUrl, c.CoverUrl, app.Developer.Name, await ApprovedPermissions(app, cancellationToken), app.Status.ToString(), c.WebUrl, c.AllowedDomains, bridgeOrigins, c.CallbackUrls, c.CategoryId, category, c.AuthenticationMode, app.PublishedVersion);
+        return new(app.Id, c.Name, c.Slug, c.Description, c.IconUrl, c.CoverUrl, app.Developer.Name, await ApprovedPermissions(app, cancellationToken), app.Status.ToString(), c.WebUrl, c.AllowedDomains, bridgeOrigins, c.CallbackUrls, c.CategoryId, category, c.AuthenticationMode, app.PublishedVersion, app.ClientId, c.AuthenticationMode == "AnktSso" && c.AutoLogin);
     }
 
     public async Task<LaunchMiniAppResponse> LaunchAsync(Guid accountId, Guid miniAppId, CancellationToken cancellationToken)
@@ -45,7 +45,7 @@ public sealed partial class MiniAppService(AppDbContext db, IClientCredentialSer
         if (!MiniAppSecurityPolicy.IsAllowedHttpsUrl(configuration.WebUrl, domains))
             return await FailLaunch(accountId, app.Id, MiniAppErrorCodes.DomainNotAllowed, "Invalid registered domain.", cancellationToken);
         var token = credentials.CreateLaunchCode();
-        var session = new MiniAppRuntimeSession { MiniAppId = app.Id, AccountId = accountId, TokenHash = credentials.HashLaunchCode(token), ExpiresAt = DateTime.UtcNow.AddMinutes(30) };
+        var session = new MiniAppRuntimeSession { MiniAppId = app.Id, AccountId = accountId, PublishedVersion = app.PublishedVersion, TokenHash = credentials.HashLaunchCode(token), ExpiresAt = DateTime.UtcNow.AddMinutes(30) };
         db.MiniAppRuntimeSessions.Add(session);
         db.MiniAppLaunchLogs.Add(new MiniAppLaunchLog { AccountId = accountId, MiniAppId = app.Id, Status = MiniAppLaunchStatus.Succeeded });
         await db.SaveChangesAsync(cancellationToken);

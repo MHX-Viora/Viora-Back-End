@@ -13,7 +13,7 @@ public sealed class MiniAppAdminReviewTests
         await using var f = await MiniAppHybridIntegrationTests.Fixture.Create(true);
         var created = await f.Management.CreateAsync(f.Owner.Id, f.Input(), default);
         await Assert.ThrowsAsync<MiniAppException>(() => f.Management.ReviewAppVersionAsync(f.Other.Id, created.Id, 1, true, null, default));
-        await f.Verify(created.Id); await f.Management.SubmitReviewAsync(f.Owner.Id, created.Id, default);
+        await f.Verify(created.Id); await f.Submit(created.Id);
         await Assert.ThrowsAsync<MiniAppException>(() => f.Management.ReviewAppVersionAsync(f.Other.Id, created.Id, 2, true, null, default));
         await Assert.ThrowsAsync<MiniAppException>(() => f.Management.ReviewAppVersionAsync(f.Other.Id, created.Id, null, false, "Wrong", default));
         Assert.Equal(0, (await f.Management.GetAppAsync(created.Id, default))!.PublishedVersion);
@@ -36,7 +36,7 @@ public sealed class MiniAppAdminReviewTests
     {
         await using var f = await MiniAppHybridIntegrationTests.Fixture.Create(true);
         var created = await f.Management.CreateAsync(f.Owner.Id, f.Input(), default);
-        await f.Verify(created.Id); await f.Management.SubmitReviewAsync(f.Owner.Id, created.Id, default);
+        await f.Verify(created.Id); await f.Submit(created.Id);
         var domain = await f.Db.MiniAppVerifiedDomains.SingleAsync(d => d.MiniAppId == created.Id);
         await f.Db.MiniAppVerifiedDomains.ExecuteUpdateAsync(s => s.SetProperty(d => d.LastAttemptAt, DateTime.UtcNow.AddMinutes(-1)));
         var rejecting = new MiniAppManagementService(f.Db, new ClientCredentialService(), new RejectingVerifier());
@@ -54,7 +54,7 @@ public sealed class MiniAppAdminReviewTests
         await using var f = await MiniAppHybridIntegrationTests.Fixture.Create(true);
         var created = await f.Publish(f.Input());
         await f.Management.UpdateOwnedAsync(f.Owner.Id, created.Id, f.Input() with { Name = "Update" }, default);
-        await f.Management.SubmitReviewAsync(f.Owner.Id, created.Id, default);
+        await f.Submit(created.Id);
         await f.Management.SetAppStatusAsync(f.Other.Id, created.Id, MiniAppStatus.Suspended, "Review later", default);
         await Assert.ThrowsAsync<MiniAppException>(() => f.Management.ReviewAppVersionAsync(f.Other.Id, created.Id, 2, true, null, default));
         await f.Management.ReactivateAppAsync(f.Other.Id, created.Id, default);
@@ -82,7 +82,7 @@ public sealed class MiniAppAdminReviewTests
         await f.Management.UpdateAppAsync(f.Other.Id, app.Id, f.Input(), default);
         Assert.Equal(MiniAppStatus.Draft, app.Status);
         Assert.Equal(0, app.PublishedVersion);
-        await f.Verify(app.Id); await f.Management.SubmitReviewAsync(f.Owner.Id, app.Id, default);
+        await f.Verify(app.Id); await f.Submit(app.Id);
         await f.Management.ReviewAppVersionAsync(f.Other.Id, app.Id, 1, true, null, default);
         Assert.Equal(1, app.PublishedVersion);
     }

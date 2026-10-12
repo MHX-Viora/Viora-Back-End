@@ -15,6 +15,7 @@ public sealed partial class MiniAppManagementService
     public async Task<IReadOnlyList<MiniAppPermissionDto>> GetAdminPermissionsAsync(CancellationToken ct) => await db.MiniAppPermissions.AsNoTracking().OrderBy(p => p.Code).Select(p => new MiniAppPermissionDto(p.Code, p.Name, p.Description, p.IsSensitive, p.Status == MiniAppPermissionStatus.Active)).ToListAsync(ct);
     private async Task<Developer> RequireDeveloper(Guid accountId, bool ownerOnly, CancellationToken ct)
     {
+        await RequireActiveAccount(accountId, ct);
         var developer = await db.Developers.SingleOrDefaultAsync(d => d.AccountId == accountId ||
             db.DeveloperMemberships.Any(m => m.DeveloperId == d.Id && m.AccountId == accountId && (!ownerOnly || m.Role == DeveloperMembershipRole.Owner)), ct)
             ?? throw new MiniAppException("DEVELOPER_NOT_FOUND", "Developer access denied.", 403);
@@ -76,19 +77,26 @@ public sealed partial class MiniAppManagementService
     }
     public async Task<DeveloperTeamDto> AddTeamAsync(Guid accountId, DeveloperTeamInput input, CancellationToken ct)
     {
-        var d = await RequireDeveloper(accountId, true, ct);
-        if (input.Role != "Member" || input.AccountId == accountId) throw new MiniAppException("VALIDATION_ERROR", "Only member invitations are supported.", 422);
+        var d = await RequireDeveloper(accountId, false, ct);
+        await RequireCapability(accountId, d, "manage", ct);
+        if (!Enum.TryParse<DeveloperMembershipRole>(input.Role, out var role) || !Enum.IsDefined(role) || role == DeveloperMembershipRole.Owner || input.AccountId == accountId)
+            throw new MiniAppException("VALIDATION_ERROR", "Vai trò thành viên không hợp lệ; không thể cấp quyền Owner.", 422);
+        if (role == DeveloperMembershipRole.Admin && await RoleFor(accountId, d, ct) != DeveloperMembershipRole.Owner)
+            throw new MiniAppException("OWNER_REQUIRED", "Chỉ Owner được cấp quyền Admin.", 403);
         if (!await db.Accounts.AnyAsync(a => a.Id == input.AccountId && a.Status == AccountStatus.Active && a.DeletedAt == null, ct)) throw new MiniAppException("ACCOUNT_NOT_FOUND", "Account unavailable.", 404);
         if (await db.Developers.AnyAsync(x => x.AccountId == input.AccountId, ct) || await db.DeveloperMemberships.AnyAsync(m => m.AccountId == input.AccountId, ct)) throw new MiniAppException("MEMBERSHIP_EXISTS", "Account already belongs to a developer.", 409);
-        var member = new DeveloperMembership { AccountId = input.AccountId, DeveloperId = d.Id, Role = DeveloperMembershipRole.Member };
+        var member = new DeveloperMembership { AccountId = input.AccountId, DeveloperId = d.Id, Role = role };
         db.DeveloperMemberships.Add(member); Audit(accountId, d.Id, null, "TeamMemberAdded"); await SaveAsync(ct);
         return new(member.Id, member.AccountId, member.Role.ToString(), member.CreatedAt);
     }
     public async Task RemoveTeamAsync(Guid accountId, Guid membershipId, CancellationToken ct)
     {
-        var d = await RequireDeveloper(accountId, true, ct);
+        var d = await RequireDeveloper(accountId, false, ct);
+        await RequireCapability(accountId, d, "manage", ct);
         var member = await db.DeveloperMemberships.SingleOrDefaultAsync(m => m.Id == membershipId && m.DeveloperId == d.Id, ct) ?? throw new MiniAppException("MEMBERSHIP_NOT_FOUND", "Member not found.", 404);
         if (member.Role == DeveloperMembershipRole.Owner || member.AccountId == d.AccountId) throw new MiniAppException("OWNER_REQUIRED", "The owner cannot be removed.", 409);
+        if (member.Role == DeveloperMembershipRole.Admin && await RoleFor(accountId, d, ct) != DeveloperMembershipRole.Owner)
+            throw new MiniAppException("OWNER_REQUIRED", "Chỉ Owner được xóa Admin.", 403);
         db.DeveloperMemberships.Remove(member); Audit(accountId, d.Id, null, "TeamMemberRemoved"); await SaveAsync(ct);
     }
 
@@ -100,6 +108,7 @@ public sealed partial class MiniAppManagementService
     public async Task<MiniAppDomainDto> AddDomainAsync(Guid accountId, Guid id, MiniAppDomainInput input, CancellationToken ct)
     {
         var app = await RequireOwned(accountId, id, ct);
+        await RequireCapability(accountId, app.Developer, "edit", ct);
         var hosts = MiniAppSecurityPolicy.NormalizeDomains([input.Host]);
         if (hosts.Length != 1 || !MiniAppSecurityPolicy.IsPublicHost(hosts[0]) || hosts[0].Contains('*')) throw new MiniAppException("VALIDATION_ERROR", "An exact public hostname is required.", 422);
         var domain = await db.MiniAppVerifiedDomains.SingleOrDefaultAsync(d => d.MiniAppId == id && d.Host == hosts[0], ct);
@@ -113,6 +122,7 @@ public sealed partial class MiniAppManagementService
     public async Task<MiniAppDomainDto> VerifyDomainAsync(Guid accountId, Guid id, Guid domainId, CancellationToken ct)
     {
         var app = await RequireOwned(accountId, id, ct);
+        await RequireCapability(accountId, app.Developer, "edit", ct);
         return await VerifyDomain(accountId, app, domainId, ct);
     }
     private async Task<MiniAppDomainDto> VerifyDomain(Guid actorAccountId, MiniApp app, Guid domainId, CancellationToken ct)
@@ -193,7 +203,8 @@ public sealed partial class MiniAppManagementService
     public async Task<IReadOnlyList<MiniAppVersionDto>> GetOwnedVersionsAsync(Guid accountId, Guid id, CancellationToken ct) { await RequireOwned(accountId, id, ct); return await GetVersionsAsync(id, ct); }
     public async Task<MiniAppAnalyticsDto> GetAnalyticsAsync(Guid accountId, Guid id, CancellationToken ct)
     {
-        await RequireOwned(accountId, id, ct);
+        var app = await RequireOwned(accountId, id, ct);
+        await RequireCapability(accountId, app.Developer, "analytics", ct);
         var logs = await db.MiniAppLaunchLogs.AsNoTracking().Where(l => l.MiniAppId == id && l.CreatedAt >= DateTime.UtcNow.AddDays(-30)).ToListAsync(ct);
         return new(logs.Count(l => l.Status == MiniAppLaunchStatus.Succeeded), logs.Count(l => l.Status == MiniAppLaunchStatus.Failed), logs.Where(l => l.AccountId != null).Select(l => l.AccountId).Distinct().Count(),
             logs.GroupBy(l => l.CreatedAt.ToString("yyyy-MM-dd")).OrderBy(g => g.Key).Select(g => new MiniAppUsageDay(g.Key, g.Count(l => l.Status == MiniAppLaunchStatus.Succeeded), g.Count(l => l.Status == MiniAppLaunchStatus.Failed))).ToArray());

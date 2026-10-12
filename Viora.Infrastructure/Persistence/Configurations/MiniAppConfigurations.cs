@@ -9,6 +9,17 @@ internal sealed class DeveloperConfiguration : IEntityTypeConfiguration<Develope
     public void Configure(EntityTypeBuilder<Developer> builder)
     {
         builder.ToTable("Developers");
+        builder.Property(x => x.PartnerType).HasMaxLength(32);
+        builder.Property(x => x.LegalName).HasMaxLength(200);
+        builder.Property(x => x.TradingName).HasMaxLength(200);
+        builder.Property(x => x.BusinessRegistrationNumber).HasMaxLength(80);
+        builder.Property(x => x.Country).HasMaxLength(80);
+        builder.Property(x => x.Address).HasMaxLength(500);
+        builder.Property(x => x.RepresentativeName).HasMaxLength(120);
+        builder.Property(x => x.DraftApplicationJson).HasColumnType("text");
+        builder.Property(x => x.RegistrationStatus).HasMaxLength(32);
+        builder.Property(x => x.ConcurrencyStamp).IsConcurrencyToken();
+        builder.Property(x => x.Status).IsConcurrencyToken();
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).HasMaxLength(120).IsRequired();
         builder.Property(x => x.CompanyName).HasMaxLength(160);
@@ -27,6 +38,14 @@ internal sealed class MiniAppConfiguration : IEntityTypeConfiguration<MiniApp>
     public void Configure(EntityTypeBuilder<MiniApp> builder)
     {
         builder.ToTable("MiniApps");
+        builder.Property(x => x.SupportEmail).HasMaxLength(255);
+        builder.Property(x => x.PrivacyPolicyUrl).HasMaxLength(2048);
+        builder.Property(x => x.TermsUrl).HasMaxLength(2048);
+        builder.Property(x => x.DevelopmentUrl).HasMaxLength(2048);
+        builder.Property(x => x.AgeRating).HasMaxLength(32);
+        builder.Property(x => x.ReleaseRegions).HasColumnType("text[]");
+        builder.Property(x => x.IntegrationType).HasMaxLength(32);
+        builder.Property(x => x.SsoMode).HasMaxLength(32);
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).HasMaxLength(120).IsRequired();
         builder.Property(x => x.Slug).HasMaxLength(120).IsRequired();
@@ -155,6 +174,9 @@ internal sealed class MiniAppVersionConfiguration : IEntityTypeConfiguration<Min
 {
     public void Configure(EntityTypeBuilder<MiniAppVersion> builder)
     {
+        builder.Property(x => x.ReviewState).HasMaxLength(32).IsConcurrencyToken();
+        builder.Property(x => x.TechnicalTestJson).HasColumnType("text");
+        builder.Property(x => x.ConfigurationHash).HasMaxLength(64);
         builder.HasIndex(x => new { x.MiniAppId, x.Version }).IsUnique();
         builder.Property(x => x.ConfigurationJson).HasColumnType("text").IsRequired();
         builder.Property(x => x.Reason).HasMaxLength(500);

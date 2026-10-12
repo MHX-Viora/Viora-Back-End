@@ -8,9 +8,9 @@ function fixture(native = false) {
   const listeners = {}, sent = [], parent = {}, timers = new Map(); let timerId = 0;
   const window = {
     parent, addEventListener(type, callback) { listeners[type] = callback; },
-    ReactNativeWebView: native ? { postMessage(raw) { sent.push(JSON.parse(raw)); } } : undefined,
+    ReactNativeWebView: native ? { postMessage(raw) { const data = JSON.parse(raw); if (data.type === 'ANKT_MINI_APP_REQUEST') sent.push(data); } } : undefined,
   };
-  parent.postMessage = (message, origin) => sent.push({ ...message, targetOrigin: origin });
+  parent.postMessage = (message, origin) => { if (message.type === 'ANKT_MINI_APP_REQUEST') sent.push({ ...message, targetOrigin: origin }); };
   vm.runInNewContext(sdk, { window, URL, Set, Map, Date, Promise, Error, Object, JSON,
     setTimeout(callback) { const id = ++timerId; timers.set(id, callback); return id; }, clearTimeout(id) { timers.delete(id); } });
   const binding = { type: 'ANKT_MINI_APP_READY', appId: 'app_1', sessionId: 'session_1', nonce: 'nonce_abcdefghijklmnop' };

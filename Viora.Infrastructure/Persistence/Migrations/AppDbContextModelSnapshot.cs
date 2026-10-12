@@ -17,7 +17,7 @@ namespace Viora.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.11")
+                .HasAnnotation("ProductVersion", "8.0.30")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -736,29 +736,74 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("AccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("BusinessRegistrationNumber")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<string>("CompanyName")
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
+                    b.Property<Guid>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DraftApplicationJson")
+                        .HasColumnType("text");
 
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<string>("LegalName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<string>("PartnerType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("RegistrationStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("RegistrationVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RepresentativeName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
                     b.Property<short>("Status")
+                        .IsConcurrencyToken()
                         .HasColumnType("smallint");
+
+                    b.Property<string>("TradingName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -778,6 +823,109 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("Developers", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.DeveloperApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConfigurationJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeveloperId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("EmailVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SubmittedByAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("TermsAcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TermsVersion")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmittedByAccountId");
+
+                    b.HasIndex("DeveloperId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("DeveloperApplications", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.DeveloperEmailVerification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("DeliverySucceeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("RequestWindow")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("AccountId", "CreatedAt");
+
+                    b.HasIndex("AccountId", "RequestWindow")
+                        .IsUnique();
+
+                    b.ToTable("DeveloperEmailVerifications", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.DeveloperMembership", b =>
@@ -807,6 +955,96 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("DeveloperMemberships");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.DeveloperReauth", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("ProofHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("MiniAppId");
+
+                    b.HasIndex("ProofHash")
+                        .IsUnique();
+
+                    b.ToTable("DeveloperReauths", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.DeveloperReviewHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeveloperId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InternalNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("PreviousStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ReviewerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewerAccountId");
+
+                    b.HasIndex("DeveloperId", "CreatedAt");
+
+                    b.ToTable("DeveloperReviewHistory", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.DeviceToken", b =>
@@ -1779,6 +2017,11 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AgeRating")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string[]>("AllowedDomains")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -1790,6 +2033,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<short>("AuthenticationMode")
                         .HasColumnType("smallint")
                         .HasDefaultValue((short)1);
+
+                    b.Property<bool>("AutoLogin")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("CallbackUrl")
                         .IsRequired()
@@ -1832,9 +2078,18 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("DeveloperId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DevelopmentUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<string>("IconUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("IntegrationType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<bool>("IsFeatured")
                         .HasColumnType("boolean");
@@ -1848,12 +2103,20 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("integer");
 
+                    b.Property<string>("PrivacyPolicyUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<string>("PublishedConfigurationJson")
                         .HasColumnType("text");
 
                     b.Property<int>("PublishedVersion")
                         .IsConcurrencyToken()
                         .HasColumnType("integer");
+
+                    b.Property<string[]>("ReleaseRegions")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.Property<DateTime?>("SecretRotatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1863,9 +2126,22 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<string>("SsoMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<short>("Status")
                         .IsConcurrencyToken()
                         .HasColumnType("smallint");
+
+                    b.Property<string>("SupportEmail")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("TermsUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2266,6 +2542,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("MiniAppId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("PublishedVersion")
+                        .HasColumnType("integer");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -2283,6 +2562,42 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("MiniAppRuntimeSessions");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppTechnicalTest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConfigurationHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Passed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TestedByAccountId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TestedByAccountId");
+
+                    b.HasIndex("MiniAppId", "CreatedAt");
+
+                    b.ToTable("MiniAppTechnicalTests", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppUserConsent", b =>
@@ -2374,6 +2689,10 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ConfigurationHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("ConfigurationJson")
                         .IsRequired()
                         .HasColumnType("text");
@@ -2388,6 +2707,12 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("ReviewState")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2397,6 +2722,12 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<short>("Status")
                         .IsConcurrencyToken()
                         .HasColumnType("smallint");
+
+                    b.Property<string>("TechnicalTestJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("TestedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Version")
                         .HasColumnType("integer");
@@ -3863,6 +4194,36 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("Account");
                 });
 
+            modelBuilder.Entity("Viora.Domain.Entities.DeveloperApplication", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Developer", "Developer")
+                        .WithMany()
+                        .HasForeignKey("DeveloperId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Entities.Account", "SubmittedByAccount")
+                        .WithMany()
+                        .HasForeignKey("SubmittedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Developer");
+
+                    b.Navigation("SubmittedByAccount");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.DeveloperEmailVerification", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+                });
+
             modelBuilder.Entity("Viora.Domain.Entities.DeveloperMembership", b =>
                 {
                     b.HasOne("Viora.Domain.Entities.Account", "Account")
@@ -3880,6 +4241,39 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("Account");
 
                     b.Navigation("Developer");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.DeveloperReauth", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Entities.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.DeveloperReviewHistory", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Developer", "Developer")
+                        .WithMany()
+                        .HasForeignKey("DeveloperId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Entities.Account", "ReviewerAccount")
+                        .WithMany()
+                        .HasForeignKey("ReviewerAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Developer");
+
+                    b.Navigation("ReviewerAccount");
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.DeviceToken", b =>
@@ -4322,6 +4716,25 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("Account");
 
                     b.Navigation("MiniApp");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppTechnicalTest", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.MiniApp", "MiniApp")
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Entities.Account", "TestedByAccount")
+                        .WithMany()
+                        .HasForeignKey("TestedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("MiniApp");
+
+                    b.Navigation("TestedByAccount");
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppUserConsent", b =>

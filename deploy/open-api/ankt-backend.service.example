@@ -1,0 +1,25 @@
+# Review alongside the existing backend unit; this is the SAME backend, not a second API/DB.
+[Unit]
+Description=ANKT backend with opt-in Open API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ankt
+Group=ankt
+WorkingDirectory=/opt/ankt/backend
+ExecStart=/usr/bin/dotnet /opt/ankt/backend/viora-BE.dll
+EnvironmentFile=/etc/ankt/backend.env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# Adapt this to existing uploads, DataProtection and background workers before installing.
+ReadWritePaths=/var/lib/ankt /opt/ankt/backend/wwwroot
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

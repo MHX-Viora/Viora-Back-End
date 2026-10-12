@@ -25,9 +25,9 @@ public sealed class MiniAppException(string code, string message, int statusCode
 }
 
 public sealed record MiniAppPermissionDto(string Code, string Name, string? Description, bool IsSensitive, bool IsActive = true);
-public sealed record MiniAppListItemDto(Guid Id, string Name, string Slug, string? Description, string? IconUrl, string? CoverUrl, bool IsFeatured, string Developer = "", Guid? CategoryId = null, string? Category = null, string AuthenticationMode = "AnktSso", int PublishedVersion = 0);
+public sealed record MiniAppListItemDto(Guid Id, string Name, string Slug, string? Description, string? IconUrl, string? CoverUrl, bool IsFeatured, string Developer = "", Guid? CategoryId = null, string? Category = null, string AuthenticationMode = "AnktSso", int PublishedVersion = 0, bool AutoLogin = false);
 public sealed record MiniAppListResponse(IReadOnlyList<MiniAppListItemDto> Items);
-public sealed record MiniAppDetailDto(Guid Id, string Name, string Slug, string? Description, string? IconUrl, string? CoverUrl, string Developer, IReadOnlyList<MiniAppPermissionDto> Permissions, string Status, string WebUrl = "", IReadOnlyList<string>? AllowedDomains = null, IReadOnlyList<string>? AllowedOrigins = null, IReadOnlyList<string>? CallbackUrls = null, Guid? CategoryId = null, string? Category = null, string AuthenticationMode = "AnktSso", int PublishedVersion = 0);
+public sealed record MiniAppDetailDto(Guid Id, string Name, string Slug, string? Description, string? IconUrl, string? CoverUrl, string Developer, IReadOnlyList<MiniAppPermissionDto> Permissions, string Status, string WebUrl = "", IReadOnlyList<string>? AllowedDomains = null, IReadOnlyList<string>? AllowedOrigins = null, IReadOnlyList<string>? CallbackUrls = null, Guid? CategoryId = null, string? Category = null, string AuthenticationMode = "AnktSso", int PublishedVersion = 0, string? ClientId = null, bool AutoLogin = false);
 public sealed record LaunchMiniAppResponse(bool RequiresConsent, IReadOnlyList<MiniAppPermissionDto> Permissions, string? LaunchUrl, int? ExpiresIn, IReadOnlyList<string>? AllowedDomains, Guid? SessionId = null, string? SessionToken = null);
 public sealed record GrantConsentRequest(IReadOnlyList<string> Permissions, bool Granted);
 public sealed record ExchangeLaunchCodeRequest(string ClientId, string? ClientSecret, string Code, string? RedirectUri = null, string? State = null, string? CodeVerifier = null);
@@ -42,7 +42,9 @@ public sealed record MiniAppConfigurationInput(
     string WebUrl, string? CallbackUrl, IReadOnlyList<string> AllowedDomains,
     IReadOnlyList<string> Permissions, bool IsFeatured = false, Guid? CategoryId = null,
     string AuthenticationMode = "Independent", IReadOnlyList<string>? CallbackUrls = null,
-    IReadOnlyList<string>? AllowedOrigins = null, string ClientAuthenticationMethod = "ClientSecretPost", int? Version = null);
+    IReadOnlyList<string>? AllowedOrigins = null, string ClientAuthenticationMethod = "ClientSecretPost", int? Version = null,
+    string? SupportEmail = null, string? PrivacyPolicyUrl = null, string? TermsUrl = null, string? DevelopmentUrl = null,
+    string AgeRating = "Everyone", IReadOnlyList<string>? ReleaseRegions = null, string IntegrationType = "Website", string SsoMode = "Optional", bool AutoLogin = false);
 public sealed record MiniAppCredentialResponse(Guid Id, string ClientId, string ClientSecret);
 public sealed record MiniAppDeveloperView(
     Guid Id, string Name, string Slug, string Developer, string? Description, string? IconUrl, string? CoverUrl,
@@ -51,14 +53,24 @@ public sealed record MiniAppDeveloperView(
     bool IsFeatured, DateTime CreatedAt, DateTime UpdatedAt, Guid? CategoryId = null, string? Category = null,
     string AuthenticationMode = "AnktSso", IReadOnlyList<string>? CallbackUrls = null,
     IReadOnlyList<string>? AllowedOrigins = null, string ClientAuthenticationMethod = "ClientSecretPost",
-    int PublishedVersion = 0, int? PendingVersion = null);
-public sealed record DeveloperInput(string Name, string? CompanyName, string Email, string? Phone, string? Website, Guid? AccountId);
+    int PublishedVersion = 0, int? PendingVersion = null,
+    string? SupportEmail = null, string? PrivacyPolicyUrl = null, string? TermsUrl = null, string? DevelopmentUrl = null,
+    string AgeRating = "Everyone", IReadOnlyList<string>? ReleaseRegions = null, string IntegrationType = "Website", string SsoMode = "Optional",
+    int? ApprovedVersion = null, string ReviewState = "Draft", string PublicationStatus = "Draft", bool AutoLogin = false);
+public sealed record DeveloperInput(string Name, string? CompanyName, string Email, string? Phone, string? Website, Guid? AccountId, string PartnerType = "Individual", string? LegalName = null,
+    string? TradingName = null, string? BusinessRegistrationNumber = null, string? Country = null,
+    string? Address = null, string? RepresentativeName = null, int? Version = null);
 public sealed record DeveloperDto(Guid Id, Guid? AccountId, string Name, string? CompanyName, string Email, string? Phone, string? Website, string Status, int MiniAppCount, DateTime CreatedAt, DateTime UpdatedAt);
 public sealed record MiniAppAdminListItem(Guid Id, string Name, string Slug, string Developer, string WebUrl, string Status, bool IsFeatured, DateTime CreatedAt, int? PendingVersion = null);
 public sealed record MiniAppAdminDashboard(int TotalMiniApps, int Active, int PendingReview, int Suspended, int Developers, int SuccessfulLaunches, int FailedLaunches);
 public sealed record MiniAppAdminPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 public sealed record MiniAppAuditDto(Guid Id, Guid? MiniAppId, Guid? DeveloperId, Guid? ActorAccountId, string Action, string? Detail, DateTime CreatedAt);
-public sealed record DeveloperProfileDto(Guid Id, Guid? AccountId, string Name, string? CompanyName, string Email, string? Phone, string? Website, string Status, int MiniAppCount, DateTime CreatedAt, DateTime UpdatedAt, string MembershipRole);
+public sealed record DeveloperProfileDto(Guid Id, Guid? AccountId, string Name, string? CompanyName, string Email, string? Phone, string? Website, string Status, int MiniAppCount, DateTime CreatedAt, DateTime UpdatedAt, string MembershipRole, string PartnerType = "Individual", string? LegalName = null,
+    string? TradingName = null, string? BusinessRegistrationNumber = null, string? Country = null,
+    string? Address = null, string? RepresentativeName = null, string RegistrationStatus = "Legacy",
+    int RegistrationVersion = 0, DateTime? SubmittedAt = null, string? PublicReason = null,
+    bool ContactEmailVerified = false, string? TermsAcceptedVersion = null, DateTime? TermsAcceptedAt = null,
+    IReadOnlyList<DeveloperReviewHistoryDto>? ReviewHistory = null);
 public sealed record DeveloperTeamInput(Guid AccountId, string Role = "Member");
 public sealed record DeveloperTeamDto(Guid Id, Guid AccountId, string Role, DateTime CreatedAt);
 public sealed record MiniAppCategoryDto(Guid Id, string Name, string Slug, bool IsActive = true);
@@ -66,7 +78,13 @@ public sealed record MiniAppCategoryInput(string Name, string Slug, bool IsActiv
 public sealed record MiniAppPermissionInput(string Code, string Name, string? Description, bool IsSensitive, bool IsActive = true);
 public sealed record MiniAppDomainInput(string Host);
 public sealed record MiniAppDomainDto(Guid Id, string Host, DateTime? VerifiedAt, string ChallengeToken);
-public sealed record MiniAppVersionDto(Guid Id, int Version, string Status, string? Reason, DateTime CreatedAt, DateTime? ReviewedAt, MiniAppConfigurationInput Configuration);
+public sealed record MiniAppVersionDto(Guid Id, int Version, string Status, string? Reason, DateTime CreatedAt, DateTime? ReviewedAt, MiniAppConfigurationInput Configuration,
+    string ReviewState = "Submitted", DateTime? TestedAt = null, string? ConfigurationHash = null, MiniAppTechnicalTestDto? TechnicalTest = null);
+public sealed record MiniAppTechnicalCheckDto(string Code, bool Passed, string Message, int? HttpStatus = null, long? DurationMs = null);
+public sealed record MiniAppTechnicalTestDto(string RequestId, DateTime CheckedAt, string ConfigurationHash, bool Passed, string Mode, IReadOnlyList<MiniAppTechnicalCheckDto> Checks);
+public sealed record PublishMiniAppRequest(int Version);
+public sealed record MiniAppReviewDecisionInput(int Version, string Decision, string? Reason = null);
+public sealed record DeveloperTeamRoleInput(string Role);
 public sealed record MiniAppUsageDay(string Date, int Launches, int Failures);
 public sealed record MiniAppAnalyticsDto(int SuccessfulLaunches, int FailedLaunches, int UniqueUsers, IReadOnlyList<MiniAppUsageDay> Daily);
 public sealed record MiniAppReportInput(string Reason);
@@ -92,6 +110,7 @@ public interface IMiniAppManagementService
     Task<MiniAppDomainVerificationDto> VerifyAdminDomainAsync(Guid actorAccountId, Guid id, Guid domainId, CancellationToken cancellationToken);
     Task ReviewAppVersionAsync(Guid actorAccountId, Guid id, int? version, bool approve, string? reason, CancellationToken cancellationToken);
     Task ReactivateAppAsync(Guid actorAccountId, Guid id, CancellationToken cancellationToken);
+    Task DecideVersionAsync(Guid actorAccountId, Guid id, MiniAppReviewDecisionInput input, CancellationToken cancellationToken);
     Task<MiniAppAdminDashboard> GetDashboardAsync(CancellationToken cancellationToken);
     Task<MiniAppAdminPage<MiniAppAdminListItem>> GetAppsAsync(int page, int pageSize, string? search, MiniAppStatus? status, CancellationToken cancellationToken);
     Task<MiniAppDeveloperView?> GetAppAsync(Guid id, CancellationToken cancellationToken);
@@ -130,6 +149,11 @@ public interface IDeveloperMiniAppService
     Task<IReadOnlyList<DeveloperTeamDto>> GetTeamAsync(Guid accountId, CancellationToken cancellationToken);
     Task<DeveloperTeamDto> AddTeamAsync(Guid accountId, DeveloperTeamInput input, CancellationToken cancellationToken);
     Task RemoveTeamAsync(Guid accountId, Guid membershipId, CancellationToken cancellationToken);
+    Task<DeveloperTeamDto> UpdateTeamRoleAsync(Guid accountId, Guid membershipId, DeveloperTeamRoleInput input, CancellationToken cancellationToken);
+    Task<MiniAppTechnicalTestDto> RunTechnicalTestAsync(Guid accountId, Guid id, CancellationToken cancellationToken);
+    Task<MiniAppTechnicalTestDto?> GetTechnicalTestAsync(Guid accountId, Guid id, CancellationToken cancellationToken);
+    Task PublishOwnedAsync(Guid accountId, Guid id, int version, CancellationToken cancellationToken);
+    Task UnpublishOwnedAsync(Guid accountId, Guid id, CancellationToken cancellationToken);
     Task<IReadOnlyList<MiniAppDomainDto>> GetDomainsAsync(Guid accountId, Guid id, CancellationToken cancellationToken);
     Task<MiniAppDomainDto> AddDomainAsync(Guid accountId, Guid id, MiniAppDomainInput input, CancellationToken cancellationToken);
     Task<MiniAppDomainDto> VerifyDomainAsync(Guid accountId, Guid id, Guid domainId, CancellationToken cancellationToken);

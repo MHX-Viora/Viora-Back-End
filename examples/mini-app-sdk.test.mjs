@@ -6,8 +6,8 @@ import { runInNewContext } from 'node:vm';
 const source = readFileSync(new URL('../viora-BE/wwwroot/mini-app-sdk/ankt-mini-app.js', import.meta.url), 'utf8');
 function fixture(native = false) {
   const handlers = new Map(); const sent = []; const timers = new Map(); let sequence = 0;
-  const parent = {postMessage: (value, origin) => sent.push({value,origin})};
-  const window = {parent, addEventListener: (type, handler) => handlers.set(type,handler), ...(native ? {ReactNativeWebView:{postMessage: value => sent.push({value:JSON.parse(value)})}} : {})};
+  const parent = {postMessage: (value, origin) => value.type === "ANKT_MINI_APP_REQUEST" && sent.push({value,origin})};
+  const window = {parent, addEventListener: (type, handler) => handlers.set(type,handler), ...(native ? {ReactNativeWebView:{postMessage: value => JSON.parse(value).type === "ANKT_MINI_APP_REQUEST" && sent.push({value:JSON.parse(value)})}} : {})};
   runInNewContext(source, {window, URL, Map, Set, Date, Promise, Object, Error, JSON, setTimeout: callback => {timers.set(++sequence,callback);return sequence;}, clearTimeout: id => timers.delete(id)});
   const context = {type:'ANKT_MINI_APP_READY',appId:'app-1',sessionId:'session-1',nonce:'fresh-nonce'};
   const message = (data, origin = 'https://ankt.example', eventSource = parent) => handlers.get('message')({data,origin,source:eventSource});

@@ -6,7 +6,7 @@ using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.MiniApps;
 
-public sealed partial class MiniAppManagementService(AppDbContext db, IClientCredentialService credentials, IMiniAppDomainVerifier? domainVerifier = null) : IMiniAppManagementService, IDeveloperMiniAppService
+public sealed partial class MiniAppManagementService(AppDbContext db, IClientCredentialService credentials, IMiniAppDomainVerifier? domainVerifier = null, IMiniAppTechnicalProbe? technicalProbe = null) : IMiniAppManagementService, IDeveloperMiniAppService
 {
     public async Task<MiniAppAdminDashboard> GetDashboardAsync(CancellationToken cancellationToken) => new(
         await db.MiniApps.CountAsync(app => app.DeletedAt == null, cancellationToken),
@@ -67,12 +67,14 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
                 await RequireVerifiedDomains(app, System.Text.Json.JsonSerializer.Deserialize<MiniAppConfigurationInput>(version.ConfigurationJson)!, cancellationToken);
                 app.PublishedConfigurationJson = version.ConfigurationJson; app.PublishedVersion = version.Version;
             }
-            version.Status = status; version.Reason = SafeDetail(reason); version.ReviewedAt = DateTime.UtcNow; version.ReviewedByAccountId = actorAccountId;
+            version.Status = status; version.ReviewState = status == MiniAppStatus.Active ? "Approved" : "Rejected";
+            version.Reason = SafeDetail(reason); version.ReviewedAt = DateTime.UtcNow; version.ReviewedByAccountId = actorAccountId;
             app.PendingVersion = null;
             app.Status = app.PublishedVersion > 0 ? app.Status == MiniAppStatus.Suspended ? MiniAppStatus.Suspended : MiniAppStatus.Active : status;
         }
         else app.Status = status;
         db.MiniAppAuditLogs.Add(new MiniAppAuditLog { ActorAccountId = actorAccountId, MiniAppId = app.Id, DeveloperId = app.DeveloperId, Action = status switch { MiniAppStatus.Active when previousStatus == MiniAppStatus.Suspended => "MiniAppRestored", MiniAppStatus.Active => "MiniAppApproved", MiniAppStatus.Rejected => "MiniAppRejected", MiniAppStatus.Archived => "MiniAppArchived", _ => "MiniAppSuspended" }, Detail = SafeDetail(reason) });
+        await NotifyOwner(app, $"Mini App: {status}", SafeDetail(reason) ?? "Trạng thái ứng dụng đã được cập nhật.", cancellationToken);
         await SaveAsync(cancellationToken);
     }
 
@@ -162,6 +164,7 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
     public async Task<MiniAppCredentialResponse> CreateAsync(Guid accountId, MiniAppConfigurationInput input, CancellationToken cancellationToken)
     {
         var developer = await RequireDeveloper(accountId, false, cancellationToken);
+        await RequireCapability(accountId, developer, "edit", cancellationToken);
         if (developer.Status != DeveloperStatus.Active) throw new MiniAppException(MiniAppErrorCodes.DeveloperSuspended, "Developer chưa hoạt động.", 403);
         var secret = credentials.CreateSecret();
         var app = new MiniApp { DeveloperId = developer.Id, ClientId = credentials.CreateClientId(), ClientSecretHash = credentials.HashSecret(secret), Status = MiniAppStatus.Draft };
@@ -172,11 +175,15 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         return new(app.Id, app.ClientId, secret);
     }
 
-    public async Task<IReadOnlyList<MiniAppDeveloperView>> GetOwnedAsync(Guid accountId, CancellationToken cancellationToken) =>
-        (await AppQuery().AsNoTracking().Where(app => (app.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == app.DeveloperId && m.AccountId == accountId)) && app.DeletedAt == null).OrderByDescending(app => app.CreatedAt).ToListAsync(cancellationToken)).Select(ToView).ToArray();
+    public async Task<IReadOnlyList<MiniAppDeveloperView>> GetOwnedAsync(Guid accountId, CancellationToken cancellationToken)
+    {
+        await RequireActiveAccount(accountId, cancellationToken);
+        return (await AppQuery().AsNoTracking().Where(app => (app.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == app.DeveloperId && m.AccountId == accountId)) && app.DeletedAt == null).OrderByDescending(app => app.CreatedAt).ToListAsync(cancellationToken)).Select(ToView).ToArray();
+    }
 
     public async Task<MiniAppDeveloperView?> GetOwnedAsync(Guid accountId, Guid id, CancellationToken cancellationToken)
     {
+        await RequireActiveAccount(accountId, cancellationToken);
         var app = await AppQuery().AsNoTracking().SingleOrDefaultAsync(item => item.Id == id && (item.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == item.DeveloperId && m.AccountId == accountId)) && item.DeletedAt == null, cancellationToken);
         return app is null ? null : ToView(app);
     }
@@ -194,16 +201,19 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
     public async Task SubmitReviewAsync(Guid accountId, Guid id, CancellationToken cancellationToken)
     {
         var app = await OwnedEditable(accountId, id, cancellationToken);
-        if (app.Status is not (MiniAppStatus.Draft or MiniAppStatus.Active or MiniAppStatus.Rejected)) throw new MiniAppException("INVALID_STATUS_TRANSITION", "App cannot be submitted.", 409);
+        if (app.Status is not (MiniAppStatus.Draft or MiniAppStatus.Active or MiniAppStatus.Rejected or MiniAppStatus.Unpublished)) throw new MiniAppException("INVALID_STATUS_TRANSITION", "App cannot be submitted.", 409);
         ValidateUrls(app);
         await PreserveLegacyPublished(app, cancellationToken);
         await RequireVerifiedDomains(app, MiniAppConfigurationSnapshot.Draft(app), cancellationToken);
+        var technicalTest = await RequireTechnicalTest(app, cancellationToken);
         var next = app.Versions.Count == 0 ? 1 : app.Versions.Max(v => v.Version) + 1;
-        var submitted = new MiniAppVersion { MiniAppId = app.Id, Version = next, ConfigurationJson = MiniAppConfigurationSnapshot.Serialize(app) };
+        var submitted = new MiniAppVersion { MiniAppId = app.Id, Version = next, ConfigurationJson = MiniAppConfigurationSnapshot.Serialize(app),
+            TechnicalTestJson = technicalTest.ResultJson, TestedAt = technicalTest.CreatedAt, ConfigurationHash = technicalTest.ConfigurationHash, ReviewState = "Submitted" };
         db.MiniAppVersions.Add(submitted);
         app.PendingVersion = next;
         if (app.PublishedVersion == 0) app.Status = MiniAppStatus.PendingReview;
         Audit(accountId, app.DeveloperId, id, "VersionSubmitted", next.ToString());
+        await NotifyOwner(app, "Mini App đã gửi xét duyệt", $"Phiên bản {next} đang chờ Admin kiểm tra.", cancellationToken);
         await SaveAsync(cancellationToken);
     }
 
@@ -211,7 +221,8 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
     {
         var app = await AppQuery().SingleOrDefaultAsync(item => item.Id == id && (item.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == item.DeveloperId && m.AccountId == accountId)) && item.DeletedAt == null, cancellationToken)
             ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
-        await RequireDeveloper(accountId, true, cancellationToken);
+        await RequireDeveloper(accountId, false, cancellationToken);
+        await RequireCapability(accountId, app.Developer, "manage", cancellationToken);
         var secret = credentials.CreateSecret();
         app.ClientSecretHash = credentials.HashSecret(secret);
         app.SecretRotatedAt = DateTime.UtcNow;
@@ -235,6 +246,7 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
             ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
         if (app.PendingVersion != null || app.Status is MiniAppStatus.PendingReview or MiniAppStatus.Suspended or MiniAppStatus.Archived) throw new MiniAppException("MINI_APP_NOT_EDITABLE", "Mini App không thể sửa ở trạng thái hiện tại.", 409);
         await RequireDeveloper(accountId, false, cancellationToken);
+        await RequireCapability(accountId, app.Developer, "edit", cancellationToken);
         return app;
     }
 
@@ -257,6 +269,20 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
             !Enum.TryParse<MiniAppClientAuthenticationMethod>(input.ClientAuthenticationMethod, out var authMethod) || !Enum.IsDefined(authMethod))
             throw new MiniAppException("VALIDATION_ERROR", "Invalid authentication configuration.", 422);
         app.AuthenticationMode = mode; app.ClientAuthenticationMethod = authMethod;
+        if (!string.IsNullOrWhiteSpace(input.SupportEmail) && (!System.Net.Mail.MailAddress.TryCreate(input.SupportEmail, out var support) || support.Address != input.SupportEmail || input.SupportEmail.Length > 255) ||
+            input.IntegrationType is not ("Website" or "Sso" or "Sdk") || input.SsoMode is not ("Disabled" or "Optional" or "Required") || input.AgeRating is not ("Everyone" or "13+" or "16+" or "18+") ||
+            input.ReleaseRegions?.Count > 100 || (input.ReleaseRegions ?? []).Any(region => region.Length != 2 || !region.All(char.IsAsciiLetter)))
+            throw new MiniAppException("VALIDATION_ERROR", "Thông tin hỗ trợ, loại tích hợp, độ tuổi hoặc khu vực phát hành không hợp lệ.", 422);
+        foreach (var policy in new[] { input.PrivacyPolicyUrl, input.TermsUrl, input.DevelopmentUrl }.Where(value => !string.IsNullOrWhiteSpace(value)))
+            if (policy!.Length > 2048 || !Uri.TryCreate(policy, UriKind.Absolute, out var policyUri) || !MiniAppSecurityPolicy.IsAllowedHttpsUrl(policy, [policyUri.IdnHost]))
+                throw new MiniAppException("VALIDATION_ERROR", "URL chính sách và kiểm thử phải là HTTPS công khai.", 422);
+        if (mode == MiniAppAuthenticationMode.Independent && (input.IntegrationType == "Sso" || input.SsoMode == "Required" || input.AutoLogin))
+            throw new MiniAppException("VALIDATION_ERROR", "Website không sử dụng SSO không thể yêu cầu đăng nhập ANKT.", 422);
+        app.SupportEmail = input.SupportEmail?.Trim(); app.PrivacyPolicyUrl = input.PrivacyPolicyUrl?.Trim(); app.TermsUrl = input.TermsUrl?.Trim(); app.DevelopmentUrl = input.DevelopmentUrl?.Trim();
+        app.AgeRating = input.AgeRating; app.ReleaseRegions = (input.ReleaseRegions ?? []).Select(region => region.ToUpperInvariant()).Distinct().ToArray();
+        app.IntegrationType = input.IntegrationType; app.SsoMode = mode == MiniAppAuthenticationMode.Independent ? "Disabled" : input.SsoMode;
+        if (input.AutoLogin && input.SsoMode == "Disabled") throw new MiniAppException("VALIDATION_ERROR", "Auto Login yêu cầu bật SSO.", 422);
+        app.AutoLogin = input.AutoLogin;
         app.CallbackUrls = (input.CallbackUrls ?? (string.IsNullOrWhiteSpace(app.CallbackUrl) ? [] : [app.CallbackUrl])).Distinct(StringComparer.Ordinal).ToArray();
         app.AllowedOrigins = (input.AllowedOrigins ?? [new Uri(app.WebUrl).GetLeftPart(UriPartial.Authority)]).Distinct(StringComparer.Ordinal).ToArray();
         app.CategoryId = input.CategoryId;
@@ -287,7 +313,14 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
             throw new MiniAppException(MiniAppErrorCodes.DomainNotAllowed, "WebUrl/CallbackUrl phải dùng HTTPS và thuộc AllowedDomains.", 422);
     }
 
-    private static MiniAppDeveloperView ToView(MiniApp app) => new(app.Id, app.Name, app.Slug, app.Developer.Name, app.Description, app.IconUrl, app.CoverUrl, app.WebUrl, app.CallbackUrl, app.AllowedDomains, app.PermissionMappings.Select(mapping => new MiniAppPermissionDto(mapping.Permission.Code, mapping.Permission.Name, mapping.Permission.Description, mapping.Permission.IsSensitive, mapping.Permission.Status == MiniAppPermissionStatus.Active)).OrderBy(permission => permission.Code).ToArray(), app.ClientId, app.Status.ToString(), app.IsFeatured, app.CreatedAt, app.UpdatedAt, app.CategoryId, app.Category?.Name, app.AuthenticationMode.ToString(), app.CallbackUrls, app.AllowedOrigins, app.ClientAuthenticationMethod.ToString(), app.PublishedVersion, app.PendingVersion);
+    private static MiniAppDeveloperView ToView(MiniApp app) => new(app.Id, app.Name, app.Slug, app.Developer.Name, app.Description, app.IconUrl, app.CoverUrl,
+        app.WebUrl, app.CallbackUrl, app.AllowedDomains, app.PermissionMappings.Select(mapping => new MiniAppPermissionDto(mapping.Permission.Code, mapping.Permission.Name,
+            mapping.Permission.Description, mapping.Permission.IsSensitive, mapping.Permission.Status == MiniAppPermissionStatus.Active)).OrderBy(permission => permission.Code).ToArray(),
+        app.ClientId, app.Status.ToString(), app.IsFeatured, app.CreatedAt, app.UpdatedAt, app.CategoryId, app.Category?.Name, app.AuthenticationMode.ToString(),
+        app.CallbackUrls, app.AllowedOrigins, app.ClientAuthenticationMethod.ToString(), app.PublishedVersion, app.PendingVersion,
+        app.SupportEmail, app.PrivacyPolicyUrl, app.TermsUrl, app.DevelopmentUrl, app.AgeRating, app.ReleaseRegions, app.IntegrationType, app.SsoMode,
+        app.Versions.Where(v => v.ReviewState == "Approved").Select(v => (int?)v.Version).Max(),
+        app.Versions.OrderByDescending(v => v.Version).Select(v => v.ReviewState).FirstOrDefault() ?? "Draft", app.Status == MiniAppStatus.Active ? "Published" : app.Status.ToString(), app.AutoLogin);
     private static (int Page, int PageSize) NormalizePage(int page, int pageSize) => (Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
     private static string? SafeDetail(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim()[..Math.Min(value.Trim().Length, 500)];
     [GeneratedRegex("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.CultureInvariant)]

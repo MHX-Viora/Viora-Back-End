@@ -2,6 +2,18 @@ namespace Viora.Domain.Entities;
 
 public sealed class Developer : AuditableEntity
 {
+    public string PartnerType { get; set; } = "Individual";
+    public string? LegalName { get; set; }
+    public string? TradingName { get; set; }
+    public string? BusinessRegistrationNumber { get; set; }
+    public string? Country { get; set; }
+    public string? Address { get; set; }
+    public string? RepresentativeName { get; set; }
+    public int RegistrationVersion { get; set; }
+    public string? DraftApplicationJson { get; set; }
+    public string RegistrationStatus { get; set; } = "Legacy";
+    public Guid ConcurrencyStamp { get; set; } = Guid.NewGuid();
+
     public Guid? AccountId { get; set; }
     public string Name { get; set; } = null!;
     public string? CompanyName { get; set; }
@@ -15,6 +27,16 @@ public sealed class Developer : AuditableEntity
 
 public sealed class MiniApp : AuditableEntity
 {
+    public string? SupportEmail { get; set; }
+    public string? PrivacyPolicyUrl { get; set; }
+    public string? TermsUrl { get; set; }
+    public string? DevelopmentUrl { get; set; }
+    public string AgeRating { get; set; } = "Everyone";
+    public string[] ReleaseRegions { get; set; } = [];
+    public string IntegrationType { get; set; } = "Website";
+    public string SsoMode { get; set; } = "Optional";
+    public bool AutoLogin { get; set; }
+
     public string Name { get; set; } = null!;
     public string Slug { get; set; } = null!;
     public string? Description { get; set; }
@@ -108,6 +130,11 @@ public sealed class DeveloperMembership : CreatedEntity
 
 public sealed class MiniAppVersion : CreatedEntity
 {
+    public string ReviewState { get; set; } = "Submitted";
+    public string? TechnicalTestJson { get; set; }
+    public DateTime? TestedAt { get; set; }
+    public string? ConfigurationHash { get; set; }
+
     public Guid MiniAppId { get; set; }
     public int Version { get; set; }
     public MiniAppStatus Status { get; set; } = MiniAppStatus.PendingReview;
@@ -130,6 +157,7 @@ public sealed class MiniAppVerifiedDomain : AuditableEntity
 
 public sealed class MiniAppRuntimeSession : CreatedEntity
 {
+    public int PublishedVersion { get; set; }
     public Guid MiniAppId { get; set; }
     public Guid AccountId { get; set; }
     public string TokenHash { get; set; } = null!;

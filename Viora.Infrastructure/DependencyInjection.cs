@@ -241,6 +241,11 @@ public static class DependencyInjection
         services.AddScoped<IMiniAppService, MiniAppService>();
         services.AddSingleton<IMiniAppDomainVerifier, MiniAppDomainVerifier>();
         services.AddHostedService<MiniAppExpiryCleanup>();
+        services.Configure<DeveloperVerificationOptions>(configuration.GetSection("DeveloperVerification"));
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<IDeveloperVerificationMailer, DeveloperVerificationMailer>();
+        services.AddScoped<IDeveloperPlatformService, DeveloperPlatformService>();
+        services.AddScoped<IDeveloperReauthenticationService, DeveloperReauthenticationService>();
         services.AddScoped<MiniAppManagementService>();
         services.AddScoped<IMiniAppManagementService>(provider => provider.GetRequiredService<MiniAppManagementService>());
         services.AddScoped<IDeveloperMiniAppService>(provider => provider.GetRequiredService<MiniAppManagementService>());
