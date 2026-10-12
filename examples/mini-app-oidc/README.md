@@ -1,10 +1,10 @@
 # ANKT OAuth/OIDC partner BFF
 
-Hướng dẫn setup hai phía: [SETUP.md](../../docs/mini-app-partner/SETUP.md). Prompt để tích hợp vào website hiện có: [PROMPT-WEB-DOI-TAC.md](../../docs/mini-app-partner/PROMPT-WEB-DOI-TAC.md). Trong ANKT, mở `/developer/guide` → Chọn cách đăng nhập → ANKT SSO để xem hướng dẫn và sao chép prompt.
+Hướng dẫn setup hai phía: [SETUP.md](../../docs/mini-app-partner/SETUP.md). Prompt để tích hợp vào website hiện có: [PROMPT-WEB-DOI-TAC.md](../../docs/mini-app-partner/PROMPT-WEB-DOI-TAC.md). Trong ANKT, mở `/developers/docs` → Chọn cách đăng nhập → ANKT SSO để xem hướng dẫn và sao chép prompt.
 
 Ví dụ chạy được, dùng `openid-client` 6.8.8 thay cho API đổi code riêng của SDK 2.0. Backend giữ Client Secret, PKCE verifier, access token và session; trình duyệt chỉ nhận cookie HttpOnly và thông tin giao dịch công khai. SDK 2.2 hỗ trợ `ANKT.auth.autoLogin()` và `ANKT.auth.login()`.
 
-## 1. Chuẩn bị trong Developer Portal
+## 1. Chuẩn bị trong Developer Console
 
 1. Hồ sơ Developer được duyệt.
 2. Mini App chọn đăng nhập ANKT, domain đã xác minh, callback đăng ký chính xác `https://<website>/auth/ankt/callback`.

@@ -1,9 +1,9 @@
 (function (global) {
   "use strict";
-  if (global.ANKT && global.ANKT.version === "2.2") return;
+  if (global.ANKT && global.ANKT.version === "2.2.1") return;
   var pending = new Map(), binding = null, hostOrigin = null, sequence = 0;
   var nativeBridge = !!global.ReactNativeWebView;
-  var methods = new Set(["getPlatformInfo", "getAppInfo", "requestLogin", "requestOAuthLogin", "getGrantedPermissions", "requestPermission", "closeMiniApp", "reportSsoStatus"]);
+  var methods = new Set(["getPlatformInfo", "getAppInfo", "requestLogin", "requestOAuthLogin", "getGrantedPermissions", "requestPermission", "closeMiniApp", "reportSsoStatus", "openExternalUrl"]);
   var requestTimes = [];
   var readyWaiters = [];
   var bff = null;
@@ -102,10 +102,13 @@
   }
   function validParams(method, params) {
     if (!params || typeof params !== "object" || Array.isArray(params)) return false;
+    if (method === "openExternalUrl") {
+      try { var url = new URL(params.url); return params.url.length <= 2048 && url.protocol === "https:" && !url.username && !url.password && Object.keys(params).length === 1; } catch (_) { return false; }
+    }
     if (method === "reportSsoStatus") return params.status === "authenticated" || params.status === "failed";
-    if (method === "requestOAuthLogin" && (typeof params.nonce !== "string" || !/^[\w~-]{16,256}$/.test(params.nonce) || !Array.isArray(params.scopes) || !params.scopes.includes("openid") || params.scopes.length > 4 || params.scopes.some(function (scope) { return !["openid", "profile", "email", "phone"].includes(scope); }))) return false;
+    if (method === "requestOAuthLogin" && (typeof params.nonce !== "string" || !/^[A-Za-z0-9._~+/=-]{16,256}$/.test(params.nonce) || !Array.isArray(params.scopes) || !params.scopes.includes("openid") || params.scopes.length > 4 || params.scopes.some(function (scope) { return !["openid", "profile", "email", "phone"].includes(scope); }))) return false;
     if (method === "requestLogin" || method === "requestOAuthLogin") return typeof params.redirectUri === "string" && params.redirectUri.length <= 2048 &&
-      typeof params.state === "string" && params.state.length >= 16 && params.state.length <= 512 &&
+      typeof params.state === "string" && params.state.length >= 16 && params.state.length <= 4096 &&
       typeof params.codeChallenge === "string" && /^[A-Za-z0-9_-]{43}$/.test(params.codeChallenge) && params.codeChallengeMethod === "S256";
     if (method === "requestPermission") return typeof params.permission === "string" && params.permission.length <= 100 && /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/.test(params.permission);
     return Object.keys(params).length === 0;
@@ -151,15 +154,21 @@
     readyWaiters.splice(0).forEach(function (waiter) { clearTimeout(waiter.timer); waiter.reject(fail("SESSION_CLOSED", "Mini App navigated or closed")); });
   });
   global.ANKT = Object.freeze({
-    version: "2.2", configure: configure, ready: ready,
+    version: "2.2.1", configure: configure, ready: ready,
+    initialize: function (options) { configure(options); return nativeBridge || hostWindow ? ready() : Promise.resolve(); },
+    getEnvironment: function () { return { embedded: !!binding, ready: !!binding, transport: nativeBridge ? "native" : hostWindow ? "web" : "standalone" }; },
     getPlatformInfo: function () { return request("getPlatformInfo"); },
     getAppInfo: function () { return request("getAppInfo"); },
     requestLogin: function (params) { return request("requestLogin", params); },
     requestOAuthLogin: function (params) { return request("requestOAuthLogin", params); },
-    auth: Object.freeze({ login: login, autoLogin: autoLogin, logout: logout, getPermissions: function () { return request("getGrantedPermissions"); } }),
-    user: Object.freeze({ getProfile: function () { if (!bff) return Promise.reject(fail("BFF_REQUIRED", "Configure this website's backend session integration")); return bffRequest(bff.profilePath); } }),
+    auth: Object.freeze({ login: login, autoLogin: autoLogin, logout: logout, getSession: function () { if (!bff) return Promise.reject(fail("BFF_REQUIRED", "Configure this website's backend session integration")); return bffRequest(bff.sessionPath); }, getPermissions: function () { return request("getGrantedPermissions"); } }),
+    user: Object.freeze({ getProfile: function () { if (!bff) return Promise.reject(fail("BFF_REQUIRED", "Configure this website's backend session integration")); return bffRequest(bff.profilePath); }, getBasicProfile: function () { if (!bff) return Promise.reject(fail("BFF_REQUIRED", "Configure this website's backend session integration")); return bffRequest(bff.profilePath); } }),
+    permissions: Object.freeze({ request: function (permission) { return request("requestPermission", { permission: permission }); } }),
+    app: Object.freeze({ close: function () { return request("closeMiniApp"); } }),
+    navigation: Object.freeze({ openExternal: function (url) { return request("openExternalUrl", { url: url }); } }),
     getGrantedPermissions: function () { return request("getGrantedPermissions"); },
     requestPermission: function (permission) { return request("requestPermission", typeof permission === "string" ? { permission: permission } : permission); },
+    openExternalUrl: function (url) { return request("openExternalUrl", { url: url }); },
     closeMiniApp: function () { return request("closeMiniApp"); }
   });
 })(window);

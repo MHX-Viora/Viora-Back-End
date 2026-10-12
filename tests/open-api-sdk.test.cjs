@@ -5,15 +5,15 @@ test('late SDK loading initiates exact-origin HELLO and completes handshake befo
  const listeners={}, sent=[], parent={}; const window={parent,addEventListener:(type,handler)=>listeners[type]=handler};
  const binding={appId:'app-a',sessionId:'session-a',nonce:'nonce-a',type:'ANKT_MINI_APP_READY'};
  parent.postMessage=(data,origin)=>{sent.push({data,origin}); if(data.type==='ANKT_MINI_APP_HELLO')listeners.message({data:binding,source:parent,origin});else if(data.type==='ANKT_MINI_APP_REQUEST') listeners.message({data:{...binding,type:'ANKT_MINI_APP_RESPONSE',id:data.id,result:{name:'App'}},source:parent,origin});};
- const ankt=load(window); ankt.configure({hostOrigin:'https://host.example'});
+ const ankt=load(window); await ankt.initialize({hostOrigin:'https://host.example'}); assert.equal(ankt.getEnvironment().embedded,true); assert.equal(ankt.getEnvironment().transport,'web');
  assert.equal((await ankt.getAppInfo()).name,'App'); assert.equal(sent[0].data.type,'ANKT_MINI_APP_HELLO');assert.ok(sent.every(x=>x.origin==='https://host.example'));
  assert.doesNotMatch(JSON.stringify(sent),/accessToken|sessionToken|clientSecret/);
 });
 test('BFF login/profile/logout remain same-origin, CSRF bound, and never fetch internal APIs',async()=>{
- const calls=[],navigations=[];const params={clientId:'client-a',redirectUri:'https://partner.example/auth/ankt/callback',state:'state-abcdefghijklmnop',nonce:'nonce-abcdefghijklmnop',codeChallenge:'a'.repeat(43),codeChallengeMethod:'S256',scopes:['openid','profile']};
+ const calls=[],navigations=[];const params={clientId:'client-a',redirectUri:'https://partner.example/auth/ankt/callback',state:'s'.repeat(1200),nonce:'638965863321.abcdefghijklmnop+/=',codeChallenge:'a'.repeat(43),codeChallengeMethod:'S256',scopes:['openid','profile']};
  const url=new URL('https://openapi.example/oauth/authorize');for(const [key,value]of Object.entries({client_id:params.clientId,redirect_uri:params.redirectUri,state:params.state,nonce:params.nonce,code_challenge:params.codeChallenge,code_challenge_method:'S256',response_type:'code',scope:'openid profile'}))url.searchParams.set(key,value);
  const window={addEventListener:()=>{},location:{origin:'https://partner.example',assign:value=>navigations.push(value)},fetch:async(path,options)=>{calls.push({path,options});return {ok:true,json:async()=>path.endsWith('session')?{csrfToken:'csrf-abcdefghijklmnop',issuer:'https://openapi.example'}:path.endsWith('start')?{sdkParams:params,authorizeUrl:url.href}:path.endsWith('profile')?{sub:'pairwise-sub'}:{loggedOut:true}};}};window.parent=window;
- const ankt=load(window);ankt.configure({hostOrigin:'https://host.example',bff:true});await ankt.auth.login();assert.equal(navigations[0],url.href);assert.equal((await ankt.user.getProfile()).sub,'pairwise-sub');assert.equal((await ankt.auth.logout()).loggedOut,true);
+ const ankt=load(window);ankt.configure({hostOrigin:'https://host.example',bff:true});await ankt.auth.login();assert.equal(navigations[0],url.href);assert.equal((await ankt.user.getBasicProfile()).sub,'pairwise-sub');assert.equal((await ankt.auth.getSession()).csrfToken,'csrf-abcdefghijklmnop');assert.equal((await ankt.auth.logout()).loggedOut,true);
  assert.ok(calls.every(x=>x.path.startsWith('/auth/ankt/')&&x.options.credentials==='same-origin'&&x.options.redirect==='error'));
  assert.ok(calls.filter(x=>x.options.method==='POST').every(x=>x.options.headers['X-CSRF-Token']==='csrf-abcdefghijklmnop'));
  assert.doesNotMatch(JSON.stringify(calls),/access_token|id_token|client_secret|code_verifier/);

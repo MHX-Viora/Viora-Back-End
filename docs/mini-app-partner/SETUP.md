@@ -20,7 +20,7 @@ Tải SDK 2.2 từ issuer đã cấp và configure BFF. Trong runtime ANKT, luô
 
 ## 5. Setup HTTPS và trình duyệt
 
-Reverse proxy các route /auth/ankt/* về backend website, không trả trang SPA thay cho callback. Cho phép tải SDK trong CSP. ANKT Web mở cửa sổ đối tác từ thao tác người dùng; chính sách COOP phải giữ được opener để SDK handshake. Native dùng WebView riêng. Kiểm tra cookie Secure/HttpOnly và callback thực tế; không phụ thuộc cookie ANKT hoặc cookie bên thứ ba trong iframe.
+Reverse proxy các route /auth/ankt/* về backend website, không trả trang SPA thay cho callback. Cho phép tải SDK trong CSP và iframe từ origin ANKT trong frame-ancestors. ANKT Web dùng iframe có sandbox; nếu CSP/cookie chặn, người dùng mở website bên ngoài bằng liên kết an toàn rồi dùng nút login OIDC. Native dùng WebView riêng. Kiểm tra cookie Secure/HttpOnly và callback thực tế; không phụ thuộc cookie phiên chính ANKT hay giả định cookie bên thứ ba luôn được phép.
 
 ## 6. Kiểm tra trước khi phát hành
 
@@ -103,9 +103,13 @@ npm start
 
 Demo nghe 127.0.0.1:4310; đặt reverse proxy HTTPS với callback đã đăng ký. Xem [README của demo](../../examples/mini-app-oidc/README.md). Tích hợp server.mjs/oidc.mjs/client.mjs vào kiến trúc website hiện có; production thay Map RAM bằng database/session store dùng chung.
 
+Frontend React chạy với cùng contract BFF: [mini-app-react](../../examples/mini-app-react/README.md). Backend ASP.NET dùng middleware OIDC chuẩn: [mini-app-oidc-dotnet](../../examples/mini-app-oidc-dotnet/README.md). Hướng dẫn setup phía ANKT, context/migrations và hostname: [PLATFORM-SETUP.md](PLATFORM-SETUP.md). Các thư mục `mini-app-node`, `mini-app-dotnet` cũ chỉ giữ làm tham chiếu kiểm thử lịch sử; endpoint exchange tùy chỉnh đã trả HTTP 410, không dùng cho tích hợp mới.
+
+SDK TypeScript có package nội bộ [@ankt/mini-app-sdk](../../packages/ankt-mini-app-sdk/README.md), version 2.2.1, chưa publish registry. Các API mục tiêu `initialize/getEnvironment`, `auth.login/getSession/logout`, `user.getBasicProfile`, `permissions.request`, `app.close`, `navigation.openExternal` giữ cùng cơ chế BFF/bridge được kiểm tra như API 2.2.
+
 ## Prompt cho lập trình viên
 
-Dùng [PROMPT-WEB-DOI-TAC.md](./PROMPT-WEB-DOI-TAC.md). Trang /developer/guide trong ANKT cũng hiển thị prompt có thể chọn và sao chép ở bước Chọn cách đăng nhập → Đăng nhập bằng ANKT SSO.
+Dùng [PROMPT-WEB-DOI-TAC.md](./PROMPT-WEB-DOI-TAC.md). Trang /developers/docs trong ANKT cũng hiển thị prompt có thể chọn và sao chép ở bước Chọn cách đăng nhập → Đăng nhập bằng ANKT SSO.
 
 ## Chẩn đoán nhanh
 

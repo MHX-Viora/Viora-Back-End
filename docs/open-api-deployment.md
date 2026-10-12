@@ -1,5 +1,7 @@
 # ANKT Open API: local verification and VPS rollout
 
+Current platform reintroduction: follow [PLATFORM-SETUP.md](mini-app-partner/PLATFORM-SETUP.md) first. Its bounded SQL starts after the applied retirement migration and recreates the platform tables; older additive-column scripts below are historical and must not be applied to absent tables. No production migration/deployment was performed in the reintroduction task.
+
 The new issuer is `https://openapi.mxh.ankt.vn/`. It runs inside the existing .NET backend, uses the same database, and is disabled by default. These are reviewable configuration templates; DNS, certificate issuance, database changes, service restarts and production rollout require operator approval. No such actions have been run.
 
 ## 1. What the operator receives

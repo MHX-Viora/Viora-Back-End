@@ -1,7 +1,13 @@
-﻿# Mini App platform handoff
+# ANKT Mini App Platform handoff — 2026-10-12
 
-The former v1 handoff incorrectly claimed the mobile runtime was already implemented. The audit recorded in [mini-app-verification.md](mini-app-verification.md) found only a placeholder in the Expo app.
+Implemented in existing ANKT FE/BE/Admin. Discovery sits below Wallet in Utilities: bounded Vietnamese search/categories, favorites/order, 90-day recents, seven-day distinct-user popularity, recommendations, scheduled banners/featured and detail/runtime overlays. Developer Console uses ANKT login; Admin handles registration/version review and editorial controls. Public docs retain 13 routes.
 
-The hybrid implementation now extends the existing backend with a Developer Portal, admin review/version management, marketplace and guarded native/web runtime. Independent partner login and opt-in ANKT SSO are separate modes.
+BE reuses membership/verification/review, immutable published snapshots, verified domains, technical tests, consent/revocation and OpenIddict 7.7.1. Catalog reads published metadata; apps without published snapshots cannot list/launch/authorize. Partner tokens cannot access social/wallet/Admin; custom legacy exchange/authorize return 410. Swagger authorization filter stays removed.
 
-Use [mini-app-hybrid.md](mini-app-hybrid.md) for the current implementation inventory and verification status, [integration](../MINI_APP_INTEGRATION.md) for the contract, and [testing](../MINI_APP_TESTING.md) for commands and unverified environments. Build/test success is not a production deployment or device verification.
+Schema: AppDbContext adds four discovery entities and published media/projections; two additive migrations follow retirement. OpenApiDbContext uses four protocol tables, the same connection and separate __OpenApiMigrationsHistory. Full app/protocol history exercised on local PostgreSQL; deleted historical platform rows are not recovered. SQL/operator steps: [PLATFORM-SETUP.md](../mini-app-partner/PLATFORM-SETUP.md).
+
+Host: native WebView and sandbox iframe/external fallback on web. Source/origin/app/session/nonce-bound bridge has size/rate/replay checks, explicit consent and session invalidation. ANKT JWT/runtime secret never reaches partner JS. Node/ASP.NET BFF use maintained code/S256 OIDC; React example and locally packed TypeScript SDK supplied. Node demo sessions/mapping use RAM; ASP.NET tickets RAM and mapping SQLite; production needs persistent/shared stores.
+
+Verification logs: local .diagnostics/platform-*.log, not committed. Final BE with real local PostgreSQL: 193 passed, no skips. SDK/BFF: 49 passed; FE developer docs/OAuth: 22 passed; bridge: 2 passed; Admin: 22 passed. Scoped ESLint and TypeScript clean; FE web export/13 HTML pages, Admin, React, SDK package and ASP.NET example builds succeeded. Browser verified real local login/Console, Admin banner save, Wallet/catalog placement, published name, paging, favorite order/detail and linked-app empty state. At mobile 320px, four 64px tiles and no document overflow; native device verification remains separate.
+
+Limits: no production migration, push/deploy, DNS/TLS/email delivery or native device execution. Staging must verify domain proof/email, full HTTPS embedded/independent OIDC, denied/revoked consent, suspend, blocked cookies and account switch. SDK built/packed locally; npm registry publication not performed. Current setup supersedes historical hybrid/deployment claims.
