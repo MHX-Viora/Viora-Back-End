@@ -6,6 +6,15 @@ namespace Viora.Infrastructure.MiniApps;
 
 internal static class MiniAppConfigurationSnapshot
 {
+    public static void RefreshCatalog(MiniApp app)
+    {
+        var snapshot = Published(app);
+        app.CatalogName = snapshot.Name;
+        app.CatalogCategoryId = snapshot.CategoryId;
+        var search = MiniAppCatalogService.Fold($"{snapshot.Name} {snapshot.Slug} {snapshot.Description}");
+        app.CatalogSearchText = search[..Math.Min(6000, search.Length)];
+        app.PublishedAt = DateTime.UtcNow;
+    }
     public static MiniAppConfigurationInput Draft(MiniApp app) => new(app.Name, app.Slug, app.Description, app.IconUrl, app.CoverUrl,
         app.WebUrl, app.CallbackUrl, app.AllowedDomains, app.PermissionMappings.Select(m => m.Permission.Code).Order().ToArray(),
         app.IsFeatured, app.CategoryId, app.AuthenticationMode.ToString(), app.CallbackUrls.Length > 0 ? app.CallbackUrls :
@@ -13,7 +22,7 @@ internal static class MiniAppConfigurationSnapshot
         app.AllowedOrigins.Length > 0 ? app.AllowedOrigins : [new Uri(app.WebUrl).GetLeftPart(UriPartial.Authority)],
         app.ClientAuthenticationMethod.ToString(), SupportEmail: app.SupportEmail, PrivacyPolicyUrl: app.PrivacyPolicyUrl,
         TermsUrl: app.TermsUrl, DevelopmentUrl: app.DevelopmentUrl, AgeRating: app.AgeRating, ReleaseRegions: app.ReleaseRegions,
-        IntegrationType: app.IntegrationType, SsoMode: app.SsoMode, AutoLogin: app.AutoLogin);
+        IntegrationType: app.IntegrationType, SsoMode: app.SsoMode, AutoLogin: app.AutoLogin, Screenshots: app.Screenshots);
 
     public static MiniAppConfigurationInput Published(MiniApp app) => app.PublishedConfigurationJson is null ? Draft(app) :
         JsonSerializer.Deserialize<MiniAppConfigurationInput>(app.PublishedConfigurationJson)!;

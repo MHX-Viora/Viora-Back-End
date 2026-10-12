@@ -30,7 +30,7 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         }
         var total = await query.CountAsync(cancellationToken);
         var items = await query.OrderByDescending(app => app.CreatedAt).Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(app => new MiniAppAdminListItem(app.Id, app.Name, app.Slug, app.Developer.Name, app.WebUrl, app.Status.ToString(), app.IsFeatured, app.CreatedAt, app.PendingVersion))
+            .Select(app => new MiniAppAdminListItem(app.Id, app.Name, app.Slug, app.Developer.Name, app.WebUrl, app.Status.ToString(), app.IsFeatured, app.CreatedAt, app.PendingVersion, app.HiddenFromCatalog))
             .ToListAsync(cancellationToken);
         return new(items, total, page, pageSize);
     }
@@ -66,6 +66,7 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
             {
                 await RequireVerifiedDomains(app, System.Text.Json.JsonSerializer.Deserialize<MiniAppConfigurationInput>(version.ConfigurationJson)!, cancellationToken);
                 app.PublishedConfigurationJson = version.ConfigurationJson; app.PublishedVersion = version.Version;
+                MiniAppConfigurationSnapshot.RefreshCatalog(app);
             }
             version.Status = status; version.ReviewState = status == MiniAppStatus.Active ? "Approved" : "Rejected";
             version.Reason = SafeDetail(reason); version.ReviewedAt = DateTime.UtcNow; version.ReviewedByAccountId = actorAccountId;
@@ -283,6 +284,11 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         app.IntegrationType = input.IntegrationType; app.SsoMode = mode == MiniAppAuthenticationMode.Independent ? "Disabled" : input.SsoMode;
         if (input.AutoLogin && input.SsoMode == "Disabled") throw new MiniAppException("VALIDATION_ERROR", "Auto Login yêu cầu bật SSO.", 422);
         app.AutoLogin = input.AutoLogin;
+        if (input.Screenshots?.Count > 8) throw new MiniAppException("VALIDATION_ERROR", "Maximum eight screenshots.", 422);
+        foreach (var screenshot in input.Screenshots ?? [])
+            if (screenshot.Length > 2048 || !Uri.TryCreate(screenshot, UriKind.Absolute, out var image) || !MiniAppSecurityPolicy.IsAllowedHttpsUrl(screenshot, [image.IdnHost]))
+                throw new MiniAppException("VALIDATION_ERROR", "Screenshot requires a public HTTPS URL.", 422);
+        app.Screenshots = (input.Screenshots ?? []).Distinct().ToArray();
         app.CallbackUrls = (input.CallbackUrls ?? (string.IsNullOrWhiteSpace(app.CallbackUrl) ? [] : [app.CallbackUrl])).Distinct(StringComparer.Ordinal).ToArray();
         app.AllowedOrigins = (input.AllowedOrigins ?? [new Uri(app.WebUrl).GetLeftPart(UriPartial.Authority)]).Distinct(StringComparer.Ordinal).ToArray();
         app.CategoryId = input.CategoryId;
@@ -320,7 +326,7 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         app.CallbackUrls, app.AllowedOrigins, app.ClientAuthenticationMethod.ToString(), app.PublishedVersion, app.PendingVersion,
         app.SupportEmail, app.PrivacyPolicyUrl, app.TermsUrl, app.DevelopmentUrl, app.AgeRating, app.ReleaseRegions, app.IntegrationType, app.SsoMode,
         app.Versions.Where(v => v.ReviewState == "Approved").Select(v => (int?)v.Version).Max(),
-        app.Versions.OrderByDescending(v => v.Version).Select(v => v.ReviewState).FirstOrDefault() ?? "Draft", app.Status == MiniAppStatus.Active ? "Published" : app.Status.ToString(), app.AutoLogin);
+        app.Versions.OrderByDescending(v => v.Version).Select(v => v.ReviewState).FirstOrDefault() ?? "Draft", app.Status == MiniAppStatus.Active ? "Published" : app.Status.ToString(), app.AutoLogin, app.Screenshots);
     private static (int Page, int PageSize) NormalizePage(int page, int pageSize) => (Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
     private static string? SafeDetail(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim()[..Math.Min(value.Trim().Length, 500)];
     [GeneratedRegex("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.CultureInvariant)]

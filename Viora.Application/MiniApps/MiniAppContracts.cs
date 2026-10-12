@@ -27,7 +27,7 @@ public sealed class MiniAppException(string code, string message, int statusCode
 public sealed record MiniAppPermissionDto(string Code, string Name, string? Description, bool IsSensitive, bool IsActive = true);
 public sealed record MiniAppListItemDto(Guid Id, string Name, string Slug, string? Description, string? IconUrl, string? CoverUrl, bool IsFeatured, string Developer = "", Guid? CategoryId = null, string? Category = null, string AuthenticationMode = "AnktSso", int PublishedVersion = 0, bool AutoLogin = false);
 public sealed record MiniAppListResponse(IReadOnlyList<MiniAppListItemDto> Items);
-public sealed record MiniAppDetailDto(Guid Id, string Name, string Slug, string? Description, string? IconUrl, string? CoverUrl, string Developer, IReadOnlyList<MiniAppPermissionDto> Permissions, string Status, string WebUrl = "", IReadOnlyList<string>? AllowedDomains = null, IReadOnlyList<string>? AllowedOrigins = null, IReadOnlyList<string>? CallbackUrls = null, Guid? CategoryId = null, string? Category = null, string AuthenticationMode = "AnktSso", int PublishedVersion = 0, string? ClientId = null, bool AutoLogin = false);
+public sealed record MiniAppDetailDto(Guid Id, string Name, string Slug, string? Description, string? IconUrl, string? CoverUrl, string Developer, IReadOnlyList<MiniAppPermissionDto> Permissions, string Status, string WebUrl = "", IReadOnlyList<string>? AllowedDomains = null, IReadOnlyList<string>? AllowedOrigins = null, IReadOnlyList<string>? CallbackUrls = null, Guid? CategoryId = null, string? Category = null, string AuthenticationMode = "AnktSso", int PublishedVersion = 0, string? ClientId = null, bool AutoLogin = false, IReadOnlyList<string>? Screenshots = null, string? PrivacyPolicyUrl = null, string? TermsUrl = null, string? SupportEmail = null, DateTime? PublishedAt = null, string SsoMode = "Optional");
 public sealed record LaunchMiniAppResponse(bool RequiresConsent, IReadOnlyList<MiniAppPermissionDto> Permissions, string? LaunchUrl, int? ExpiresIn, IReadOnlyList<string>? AllowedDomains, Guid? SessionId = null, string? SessionToken = null);
 public sealed record GrantConsentRequest(IReadOnlyList<string> Permissions, bool Granted);
 public sealed record ExchangeLaunchCodeRequest(string ClientId, string? ClientSecret, string Code, string? RedirectUri = null, string? State = null, string? CodeVerifier = null);
@@ -44,7 +44,7 @@ public sealed record MiniAppConfigurationInput(
     string AuthenticationMode = "Independent", IReadOnlyList<string>? CallbackUrls = null,
     IReadOnlyList<string>? AllowedOrigins = null, string ClientAuthenticationMethod = "ClientSecretPost", int? Version = null,
     string? SupportEmail = null, string? PrivacyPolicyUrl = null, string? TermsUrl = null, string? DevelopmentUrl = null,
-    string AgeRating = "Everyone", IReadOnlyList<string>? ReleaseRegions = null, string IntegrationType = "Website", string SsoMode = "Optional", bool AutoLogin = false);
+    string AgeRating = "Everyone", IReadOnlyList<string>? ReleaseRegions = null, string IntegrationType = "Website", string SsoMode = "Optional", bool AutoLogin = false, IReadOnlyList<string>? Screenshots = null);
 public sealed record MiniAppCredentialResponse(Guid Id, string ClientId, string ClientSecret);
 public sealed record MiniAppDeveloperView(
     Guid Id, string Name, string Slug, string Developer, string? Description, string? IconUrl, string? CoverUrl,
@@ -56,12 +56,12 @@ public sealed record MiniAppDeveloperView(
     int PublishedVersion = 0, int? PendingVersion = null,
     string? SupportEmail = null, string? PrivacyPolicyUrl = null, string? TermsUrl = null, string? DevelopmentUrl = null,
     string AgeRating = "Everyone", IReadOnlyList<string>? ReleaseRegions = null, string IntegrationType = "Website", string SsoMode = "Optional",
-    int? ApprovedVersion = null, string ReviewState = "Draft", string PublicationStatus = "Draft", bool AutoLogin = false);
+    int? ApprovedVersion = null, string ReviewState = "Draft", string PublicationStatus = "Draft", bool AutoLogin = false, IReadOnlyList<string>? Screenshots = null);
 public sealed record DeveloperInput(string Name, string? CompanyName, string Email, string? Phone, string? Website, Guid? AccountId, string PartnerType = "Individual", string? LegalName = null,
     string? TradingName = null, string? BusinessRegistrationNumber = null, string? Country = null,
     string? Address = null, string? RepresentativeName = null, int? Version = null);
 public sealed record DeveloperDto(Guid Id, Guid? AccountId, string Name, string? CompanyName, string Email, string? Phone, string? Website, string Status, int MiniAppCount, DateTime CreatedAt, DateTime UpdatedAt);
-public sealed record MiniAppAdminListItem(Guid Id, string Name, string Slug, string Developer, string WebUrl, string Status, bool IsFeatured, DateTime CreatedAt, int? PendingVersion = null);
+public sealed record MiniAppAdminListItem(Guid Id, string Name, string Slug, string Developer, string WebUrl, string Status, bool IsFeatured, DateTime CreatedAt, int? PendingVersion = null, bool HiddenFromCatalog = false);
 public sealed record MiniAppAdminDashboard(int TotalMiniApps, int Active, int PendingReview, int Suspended, int Developers, int SuccessfulLaunches, int FailedLaunches);
 public sealed record MiniAppAdminPage<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 public sealed record MiniAppAuditDto(Guid Id, Guid? MiniAppId, Guid? DeveloperId, Guid? ActorAccountId, string Action, string? Detail, DateTime CreatedAt);
@@ -73,8 +73,8 @@ public sealed record DeveloperProfileDto(Guid Id, Guid? AccountId, string Name, 
     IReadOnlyList<DeveloperReviewHistoryDto>? ReviewHistory = null);
 public sealed record DeveloperTeamInput(Guid AccountId, string Role = "Member");
 public sealed record DeveloperTeamDto(Guid Id, Guid AccountId, string Role, DateTime CreatedAt);
-public sealed record MiniAppCategoryDto(Guid Id, string Name, string Slug, bool IsActive = true);
-public sealed record MiniAppCategoryInput(string Name, string Slug, bool IsActive = true);
+public sealed record MiniAppCategoryDto(Guid Id, string Name, string Slug, bool IsActive = true, string Icon = "apps-outline", int SortOrder = 0);
+public sealed record MiniAppCategoryInput(string Name, string Slug, bool IsActive = true, string Icon = "apps-outline", int SortOrder = 0);
 public sealed record MiniAppPermissionInput(string Code, string Name, string? Description, bool IsSensitive, bool IsActive = true);
 public sealed record MiniAppDomainInput(string Host);
 public sealed record MiniAppDomainDto(Guid Id, string Host, DateTime? VerifiedAt, string ChallengeToken);

@@ -8,6 +8,7 @@ public sealed class OpenApiBoundaryTests
     [InlineData("/oauth/authorize", true)]
     [InlineData("/.well-known/openid-configuration", true)]
     [InlineData("/v1/me", true)]
+    [InlineData("/mini-app-sdk/ankt-mini-app.d.ts", true)]
     [InlineData("/api/admin", false)]
     [InlineData("/api/wallet", false)]
     [InlineData("/api/messages", false)]
@@ -31,5 +32,7 @@ public sealed class OpenApiBoundaryTests
         Assert.True(OpenApiPolicy.ValidTransaction("https://partner.example/callback", new[] { "https://partner.example/callback" }, new string('s', 32), new string('c', 43), "S256", new string('n', 32)));
         Assert.False(OpenApiPolicy.ValidTransaction("https://partner.example/callback/", new[] { "https://partner.example/callback" }, new string('s', 32), new string('c', 43), "S256", new string('n', 32)));
         Assert.False(OpenApiPolicy.ValidTransaction("https://partner.example/callback", new[] { "https://partner.example/callback" }, "short", new string('c', 43), "plain", "short"));
+        Assert.True(OpenApiPolicy.ValidTransaction("https://partner.example/callback", new[] { "https://partner.example/callback" }, new string('s', 1200), new string('c', 43), "S256", "638965863321.abcdefghijklmnop+/="));
+        Assert.False(OpenApiPolicy.ValidTransaction("https://partner.example/callback", new[] { "https://partner.example/callback" }, new string('s', 4097), new string('c', 43), "S256", new string('n', 32)));
     }
 }

@@ -9,6 +9,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     private static readonly Random SharedRandom = Random.Shared;
 
     public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<MiniAppFavorite> MiniAppFavorites => Set<MiniAppFavorite>();
+    public DbSet<MiniAppHistoryState> MiniAppHistoryStates => Set<MiniAppHistoryState>();
+    public DbSet<MiniAppBanner> MiniAppBanners => Set<MiniAppBanner>();
+    public DbSet<MiniAppPlacement> MiniAppPlacements => Set<MiniAppPlacement>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
     public DbSet<User> Users => Set<User>();

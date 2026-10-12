@@ -181,9 +181,11 @@ public sealed class OpenApiOAuthTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await f.Get("/v1/me", login.AccessToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await f.Prepare(f.Transaction)).StatusCode);
         await db.MiniApps.ExecuteUpdateAsync(s => s.SetProperty(a => a.Status, MiniAppStatus.Active).SetProperty(a => a.AuthenticationMode, MiniAppAuthenticationMode.Independent));
+        var independent = await db.MiniApps.SingleAsync(); MiniAppTestPublication.Publish(independent, "identity.login", "profile.basic"); await db.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.Forbidden, (await f.Prepare(f.Transaction)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await f.Get("/v1/me", login.AccessToken)).StatusCode);
         await db.MiniApps.ExecuteUpdateAsync(s => s.SetProperty(a => a.AuthenticationMode, MiniAppAuthenticationMode.AnktSso));
+        await db.Entry(independent).ReloadAsync(); MiniAppTestPublication.Publish(independent, "identity.login", "profile.basic"); await db.SaveChangesAsync();
         await db.Accounts.ExecuteUpdateAsync(s => s.SetProperty(a => a.DeletedAt, DateTime.UtcNow));
         Assert.Equal(HttpStatusCode.Forbidden, (await f.Prepare(f.Transaction)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await f.Get("/v1/me", login.AccessToken)).StatusCode);
@@ -263,7 +265,8 @@ public sealed class OpenApiOAuthTests
         using (var scope = f.App.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>(); var first = await db.MiniApps.FirstAsync();
-            db.MiniApps.Add(new MiniApp { DeveloperId = first.DeveloperId, Name = "Second", Slug = "second", ClientId = "fixture-second", ClientSecretHash = first.ClientSecretHash, Status = MiniAppStatus.Active, WebUrl = first.WebUrl, CallbackUrl = first.CallbackUrl, CallbackUrls = first.CallbackUrls, AllowedDomains = first.AllowedDomains, AllowedOrigins = first.AllowedOrigins, AuthenticationMode = MiniAppAuthenticationMode.AnktSso });
+            var second = new MiniApp { DeveloperId = first.DeveloperId, Name = "Second", Slug = "second", ClientId = "fixture-second", ClientSecretHash = first.ClientSecretHash, Status = MiniAppStatus.Active, WebUrl = first.WebUrl, CallbackUrl = first.CallbackUrl, CallbackUrls = first.CallbackUrls, AllowedDomains = first.AllowedDomains, AllowedOrigins = first.AllowedOrigins, AuthenticationMode = MiniAppAuthenticationMode.AnktSso };
+            MiniAppTestPublication.Publish(second, "identity.login", "profile.basic"); db.MiniApps.Add(second);
             await db.SaveChangesAsync();
         }
         var swapped = await f.Client.PostAsync("/oauth/token", new FormUrlEncodedContent(new Dictionary<string, string> { ["grant_type"] = "authorization_code", ["client_id"] = "fixture-second", ["client_secret"] = Fixture.Secret, ["code"] = code, ["redirect_uri"] = f.Transaction.RedirectUri, ["code_verifier"] = f.Verifier }));
@@ -288,7 +291,7 @@ public sealed class OpenApiOAuthTests
     [Fact] public async Task PublicClientRequiresPkceWithoutASecretAndCannotUseAnotherClientsCode()
     {
         await using var f = await Fixture.Create();
-        using (var scope = f.App.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<AppDbContext>().MiniApps.ExecuteUpdateAsync(s => s.SetProperty(a => a.ClientAuthenticationMethod, MiniAppClientAuthenticationMethod.None));
+        using (var scope = f.App.Services.CreateScope()) { var db = scope.ServiceProvider.GetRequiredService<AppDbContext>(); var app = await db.MiniApps.SingleAsync(); app.ClientAuthenticationMethod = MiniAppClientAuthenticationMethod.None; MiniAppTestPublication.Publish(app, "identity.login", "profile.basic"); await db.SaveChangesAsync(); }
         var code = await f.Code();
         var body = new Dictionary<string, string> { ["grant_type"] = "authorization_code", ["client_id"] = "fixture-client", ["code"] = code, ["redirect_uri"] = f.Transaction.RedirectUri, ["code_verifier"] = f.Verifier };
         var response = await f.Client.PostAsync("/oauth/token", new FormUrlEncodedContent(body));
@@ -332,6 +335,7 @@ public sealed class OpenApiOAuthTests
                 await scope.ServiceProvider.GetRequiredService<OpenApiDbContext>().Database.EnsureCreatedAsync();
                 var developer = new Developer { Name = "Fixture developer", Email = "fixture@example.com", Status = DeveloperStatus.Active };
                 var appEntity = new MiniApp { Id = appId, Developer = developer, Name = "Fixture app", Slug = "fixture-app", ClientId = "fixture-client", ClientSecretHash = new ClientCredentialService().HashSecret(Secret), Status = MiniAppStatus.Active, WebUrl = "https://partner.example/", CallbackUrl = "https://partner.example/callback", CallbackUrls = new[] { "https://partner.example/callback" }, AllowedDomains = new[] { "partner.example" }, AllowedOrigins = new[] { "https://partner.example" }, AuthenticationMode = MiniAppAuthenticationMode.AnktSso, ClientAuthenticationMethod = MiniAppClientAuthenticationMethod.ClientSecretPost };
+                MiniAppTestPublication.Publish(appEntity, "identity.login", "profile.basic");
                 db.AddRange(new Account { Id = accountId, Email = "person@example.com" }, new User { AccountId = accountId, DisplayName = "Fixture user" }, appEntity);
                 var permissions = await db.MiniAppPermissions.Where(p => p.Code == "identity.login" || p.Code == "profile.basic").ToArrayAsync();
                 foreach (var permission in permissions) { db.Add(new MiniAppPermissionMapping { MiniAppId = appId, PermissionId = permission.Id }); db.Add(new MiniAppUserConsent { AccountId = accountId, MiniAppId = appId, PermissionId = permission.Id, Granted = true }); }

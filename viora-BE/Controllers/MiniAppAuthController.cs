@@ -10,12 +10,8 @@ namespace viora_BE.Controllers;
 [Route("api/mini-app-auth")]
 [Tags("Mini App Authentication")]
 [EnableRateLimiting("mini-app-exchange")]
-public sealed class MiniAppAuthController(IMiniAppService service) : ControllerBase
+public sealed class MiniAppAuthController : ControllerBase
 {
     [HttpPost("exchange")]
-    public async Task<ActionResult<ExchangeLaunchCodeResponse>> Exchange(ExchangeLaunchCodeRequest request, CancellationToken cancellationToken)
-    {
-        try { return Ok(await service.ExchangeAsync(request, cancellationToken)); }
-        catch (MiniAppException exception) { return StatusCode(exception.StatusCode, new MiniAppErrorResponse(exception.Code, exception.Message)); }
-    }
+    public IActionResult Exchange() => StatusCode(410, new MiniAppErrorResponse("LEGACY_PROTOCOL_REMOVED", "Use the OpenID Connect authorization-code flow with PKCE S256."));
 }

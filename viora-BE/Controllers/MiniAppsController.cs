@@ -58,11 +58,7 @@ public sealed class MiniAppsController(IMiniAppService service, IMiniAppManageme
     [HttpPost("{id:guid}/authorize")]
     [Authorize]
     [EnableRateLimiting("mini-app-launch")]
-    public async Task<ActionResult<LaunchMiniAppResponse>> Authorize(Guid id, AuthorizeMiniAppRequest request, CancellationToken ct)
-    {
-        if (!TryGetAccountId(out var accountId)) return Unauthorized();
-        return Ok(await service.AuthorizeAsync(accountId, id, request, ct));
-    }
+    public IActionResult Authorize(Guid id) => StatusCode(410, new MiniAppErrorResponse("LEGACY_PROTOCOL_REMOVED", "Use /api/open-api/authorize with an OpenID Connect transaction."));
     [HttpPost("{id:guid}/reports")]
     [Authorize]
     [EnableRateLimiting("mini-app-launch")]

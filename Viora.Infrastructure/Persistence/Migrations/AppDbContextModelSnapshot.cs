@@ -2046,6 +2046,18 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<Guid?>("CatalogCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CatalogName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("CatalogSearchText")
+                        .IsRequired()
+                        .HasMaxLength(6000)
+                        .HasColumnType("character varying(6000)");
+
                     b.Property<Guid?>("CategoryId")
                         .HasColumnType("uuid");
 
@@ -2082,6 +2094,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
 
+                    b.Property<bool>("HiddenFromCatalog")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("IconUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
@@ -2107,6 +2122,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
 
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PublishedConfigurationJson")
                         .HasColumnType("text");
 
@@ -2115,6 +2133,10 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string[]>("ReleaseRegions")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string[]>("Screenshots")
                         .IsRequired()
                         .HasColumnType("text[]");
 
@@ -2153,6 +2175,8 @@ namespace Viora.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CatalogName");
+
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("ClientId")
@@ -2164,6 +2188,10 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("CatalogCategoryId", "Status");
+
+                    b.HasIndex("Status", "HiddenFromCatalog", "PublishedAt");
 
                     b.ToTable("MiniApps", (string)null);
                 });
@@ -2202,6 +2230,60 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.ToTable("MiniAppAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppBanner", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("MiniAppId");
+
+                    b.HasIndex("IsActive", "SortOrder");
+
+                    b.ToTable("MiniAppBanners", t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppBanner_Target", "(\"MiniAppId\" IS NULL) <> (\"CategoryId\" IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2210,6 +2292,11 @@ namespace Viora.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -2224,6 +2311,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2231,6 +2321,8 @@ namespace Viora.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Slug")
                         .IsUnique();
+
+                    b.HasIndex("IsActive", "SortOrder");
 
                     b.ToTable("MiniAppCategories");
                 });
@@ -2267,6 +2359,59 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("MiniAppExternalIdentities", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppFavorite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MiniAppId");
+
+                    b.HasIndex("AccountId", "MiniAppId")
+                        .IsUnique();
+
+                    b.HasIndex("AccountId", "SortOrder");
+
+                    b.ToTable("MiniAppFavorites");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppHistoryState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ClearedBefore")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique();
+
+                    b.ToTable("MiniAppHistoryStates");
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppLaunchCode", b =>
@@ -2351,6 +2496,10 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("MiniAppId", "CreatedAt");
+
+                    b.HasIndex("AccountId", "Status", "CreatedAt");
+
+                    b.HasIndex("Status", "CreatedAt", "MiniAppId", "AccountId");
 
                     b.ToTable("MiniAppLaunchLogs", (string)null);
                 });
@@ -2480,6 +2629,43 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasIndex("PermissionId");
 
                     b.ToTable("MiniAppPermissionMappings", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppPlacement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MiniAppId")
+                        .IsUnique();
+
+                    b.HasIndex("IsActive", "SortOrder");
+
+                    b.ToTable("MiniAppPlacements");
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppReport", b =>
@@ -4618,6 +4804,19 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("Developer");
                 });
 
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppBanner", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.MiniAppCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Viora.Domain.Entities.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppExternalIdentity", b =>
                 {
                     b.HasOne("Viora.Domain.Entities.Account", "Account")
@@ -4635,6 +4834,36 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("Account");
 
                     b.Navigation("MiniApp");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppFavorite", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Entities.MiniApp", "MiniApp")
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("MiniApp");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppHistoryState", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppLaunchCode", b =>
@@ -4678,6 +4907,17 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("MiniApp");
 
                     b.Navigation("Permission");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppPlacement", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.MiniApp", "MiniApp")
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MiniApp");
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppReport", b =>

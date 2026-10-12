@@ -27,6 +27,7 @@ public sealed class MiniAppHybridPostgresTests
             var account = new Account { Email = "miniapp@example.com" };
             var developer = new Developer { Name = "Test developer", Email = "developer@example.com", AccountId = account.Id, Status = DeveloperStatus.Active };
             var app = new MiniApp { Name = "Concurrent app", Slug = "concurrent-app", DeveloperId = developer.Id, Status = MiniAppStatus.Active, WebUrl = "https://example.com/app", CallbackUrl = "https://example.com/callback", CallbackUrls = ["https://example.com/callback"], AllowedDomains = ["example.com"], AllowedOrigins = ["https://example.com"], AuthenticationMode = MiniAppAuthenticationMode.AnktSso, ClientId = credentials.CreateClientId(), ClientSecretHash = credentials.HashSecret(secret) };
+            MiniAppTestPublication.Publish(app, "identity.login");
             setup.AddRange(account, developer, app, new MiniAppPermissionMapping { MiniAppId = app.Id, PermissionId = Guid.Parse("11111111-1111-1111-1111-111111111101") },
                 new MiniAppVerifiedDomain { MiniAppId = app.Id, Host = "example.com", ChallengeToken = "test-proof", VerifiedAt = DateTime.UtcNow }); await setup.SaveChangesAsync();
             var service = new MiniAppService(setup, credentials); await service.GrantConsentAsync(account.Id, app.Id, new(["identity.login"], true), default);

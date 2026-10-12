@@ -61,6 +61,11 @@ internal sealed class MiniAppConfiguration : IEntityTypeConfiguration<MiniApp>
         builder.Property(x => x.AllowedOrigins).HasColumnType("text[]");
         builder.Property(x => x.AuthenticationMode).HasDefaultValue(MiniAppAuthenticationMode.AnktSso).ValueGeneratedNever();
         builder.Property(x => x.PublishedConfigurationJson).HasColumnType("text");
+        builder.Property(x => x.CatalogName).HasMaxLength(160);
+        builder.Property(x => x.CatalogSearchText).HasMaxLength(6000);
+        builder.HasIndex(x => new { x.Status, x.HiddenFromCatalog, x.PublishedAt });
+        builder.HasIndex(x => new { x.CatalogCategoryId, x.Status });
+        builder.HasIndex(x => x.CatalogName);
         builder.Property(x => x.PendingVersion).IsConcurrencyToken();
         builder.Property(x => x.PublishedVersion).IsConcurrencyToken();
         builder.Property(x => x.Status).IsConcurrencyToken();
@@ -157,6 +162,8 @@ internal sealed class MiniAppCategoryConfiguration : IEntityTypeConfiguration<Mi
     {
         builder.Property(x => x.Name).HasMaxLength(120).IsRequired();
         builder.Property(x => x.Slug).HasMaxLength(120).IsRequired();
+        builder.Property(x => x.Icon).HasMaxLength(60).IsRequired();
+        builder.HasIndex(x => new { x.IsActive, x.SortOrder });
         builder.HasIndex(x => x.Slug).IsUnique();
     }
 }
@@ -251,5 +258,7 @@ internal sealed class MiniAppLaunchLogConfiguration : IEntityTypeConfiguration<M
         builder.HasKey(x => x.Id);
         builder.Property(x => x.FailureReason).HasMaxLength(80);
         builder.HasIndex(x => new { x.MiniAppId, x.CreatedAt });
+        builder.HasIndex(x => new { x.AccountId, x.Status, x.CreatedAt });
+        builder.HasIndex(x => new { x.Status, x.CreatedAt, x.MiniAppId, x.AccountId });
     }
 }

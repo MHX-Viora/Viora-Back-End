@@ -194,6 +194,7 @@ public sealed partial class MiniAppManagementService
         if (app.Status == MiniAppStatus.Active && app.PublishedConfigurationJson is null)
         {
             app.PublishedConfigurationJson = MiniAppConfigurationSnapshot.Serialize(app); app.PublishedVersion = 1;
+            MiniAppConfigurationSnapshot.RefreshCatalog(app);
             db.MiniAppVersions.Add(new MiniAppVersion { MiniAppId = app.Id, Version = 1, Status = MiniAppStatus.Active, ConfigurationJson = app.PublishedConfigurationJson, ReviewedAt = DateTime.UtcNow, Reason = "Imported published configuration" });
         }
         return Task.CompletedTask;
@@ -205,19 +206,23 @@ public sealed partial class MiniAppManagementService
     {
         var app = await RequireOwned(accountId, id, ct);
         await RequireCapability(accountId, app.Developer, "analytics", ct);
-        var logs = await db.MiniAppLaunchLogs.AsNoTracking().Where(l => l.MiniAppId == id && l.CreatedAt >= DateTime.UtcNow.AddDays(-30)).ToListAsync(ct);
-        return new(logs.Count(l => l.Status == MiniAppLaunchStatus.Succeeded), logs.Count(l => l.Status == MiniAppLaunchStatus.Failed), logs.Where(l => l.AccountId != null).Select(l => l.AccountId).Distinct().Count(),
-            logs.GroupBy(l => l.CreatedAt.ToString("yyyy-MM-dd")).OrderBy(g => g.Key).Select(g => new MiniAppUsageDay(g.Key, g.Count(l => l.Status == MiniAppLaunchStatus.Succeeded), g.Count(l => l.Status == MiniAppLaunchStatus.Failed))).ToArray());
+        var logs = db.MiniAppLaunchLogs.AsNoTracking().Where(l => l.MiniAppId == id && l.CreatedAt >= DateTime.UtcNow.AddDays(-30));
+        var successful = await logs.CountAsync(l => l.Status == MiniAppLaunchStatus.Succeeded, ct);
+        var failed = await logs.CountAsync(l => l.Status == MiniAppLaunchStatus.Failed, ct);
+        var users = await logs.Where(l => l.Status == MiniAppLaunchStatus.Succeeded && l.AccountId != null).Select(l => l.AccountId).Distinct().CountAsync(ct);
+        var days = await logs.GroupBy(l => l.CreatedAt.Date).OrderBy(g => g.Key)
+            .Select(g => new { Date = g.Key, Launches = g.Count(l => l.Status == MiniAppLaunchStatus.Succeeded), Failures = g.Count(l => l.Status == MiniAppLaunchStatus.Failed) }).ToListAsync(ct);
+        return new(successful, failed, users, days.Select(day => new MiniAppUsageDay(day.Date.ToString("yyyy-MM-dd"), day.Launches, day.Failures)).ToArray());
     }
     public async Task<MiniAppAdminPage<MiniAppAuditDto>> GetOwnedAuditAsync(Guid accountId, Guid id, int page, int pageSize, CancellationToken ct) { await RequireOwned(accountId, id, ct); return await GetAuditLogsAsync(page, pageSize, id, ct); }
-    public async Task<IReadOnlyList<MiniAppCategoryDto>> GetCategoriesAsync(bool includeInactive, CancellationToken ct) => await db.MiniAppCategories.AsNoTracking().Where(c => includeInactive || c.IsActive).OrderBy(c => c.Name).Select(c => new MiniAppCategoryDto(c.Id, c.Name, c.Slug, c.IsActive)).ToListAsync(ct);
+    public async Task<IReadOnlyList<MiniAppCategoryDto>> GetCategoriesAsync(bool includeInactive, CancellationToken ct) => await db.MiniAppCategories.AsNoTracking().Where(c => includeInactive || c.IsActive).OrderBy(c => c.SortOrder).ThenBy(c => c.Name).Select(c => new MiniAppCategoryDto(c.Id, c.Name, c.Slug, c.IsActive, c.Icon, c.SortOrder)).ToListAsync(ct);
     public async Task<MiniAppCategoryDto> SaveCategoryAsync(Guid actorAccountId, Guid? id, MiniAppCategoryInput input, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(input.Name) || input.Name.Length > 120 || input.Slug.Length > 120 || !SlugPattern().IsMatch(input.Slug)) throw new MiniAppException("VALIDATION_ERROR", "Invalid category.", 422);
+        if (string.IsNullOrWhiteSpace(input.Name) || input.Name.Length > 120 || input.Slug.Length > 120 || !SlugPattern().IsMatch(input.Slug) || input.SortOrder is < 0 or > 10000 || !new[] { "apps-outline", "cart-outline", "game-controller-outline", "school-outline", "heart-outline", "airplane-outline", "restaurant-outline", "briefcase-outline", "ticket-outline", "fitness-outline", "book-outline" }.Contains(input.Icon)) throw new MiniAppException("VALIDATION_ERROR", "Invalid category.", 422);
         var category = id is null ? new MiniAppCategory() : await db.MiniAppCategories.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw new MiniAppException("CATEGORY_NOT_FOUND", "Category not found.", 404);
         if (await db.MiniAppCategories.AnyAsync(c => c.Id != category.Id && c.Slug == input.Slug, ct)) throw new MiniAppException("CATEGORY_EXISTS", "Category slug exists.", 409);
-        if (id is null) db.MiniAppCategories.Add(category); category.Name = input.Name.Trim(); category.Slug = input.Slug; category.IsActive = input.IsActive;
-        Audit(actorAccountId, null, null, "CategoryUpdated"); await SaveAsync(ct); return new(category.Id, category.Name, category.Slug, category.IsActive);
+        if (id is null) db.MiniAppCategories.Add(category); category.Name = input.Name.Trim(); category.Slug = input.Slug; category.IsActive = input.IsActive; category.Icon = input.Icon; category.SortOrder = input.SortOrder;
+        Audit(actorAccountId, null, null, "CategoryUpdated"); await SaveAsync(ct); return new(category.Id, category.Name, category.Slug, category.IsActive, category.Icon, category.SortOrder);
     }
     public async Task SavePermissionAsync(Guid actorAccountId, string? code, MiniAppPermissionInput input, CancellationToken ct)
     {

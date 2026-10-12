@@ -27,6 +27,12 @@ public sealed class Developer : AuditableEntity
 
 public sealed class MiniApp : AuditableEntity
 {
+    // Searchable projection is refreshed exclusively from approved publication.
+    public string? CatalogName { get; set; }
+    public string CatalogSearchText { get; set; } = "";
+    public Guid? CatalogCategoryId { get; set; }
+    public DateTime? PublishedAt { get; set; }
+    public bool HiddenFromCatalog { get; set; }
     public string? SupportEmail { get; set; }
     public string? PrivacyPolicyUrl { get; set; }
     public string? TermsUrl { get; set; }
@@ -36,6 +42,7 @@ public sealed class MiniApp : AuditableEntity
     public string IntegrationType { get; set; } = "Website";
     public string SsoMode { get; set; } = "Optional";
     public bool AutoLogin { get; set; }
+    public string[] Screenshots { get; set; } = [];
 
     public string Name { get; set; } = null!;
     public string Slug { get; set; } = null!;
@@ -114,6 +121,8 @@ public sealed class MiniAppLaunchCode : CreatedEntity
 
 public sealed class MiniAppCategory : AuditableEntity
 {
+    public string Icon { get; set; } = "apps-outline";
+    public int SortOrder { get; set; }
     public string Name { get; set; } = null!;
     public string Slug { get; set; } = null!;
     public bool IsActive { get; set; } = true;

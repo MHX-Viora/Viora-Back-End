@@ -239,6 +239,8 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddSingleton<IClientCredentialService, ClientCredentialService>();
         services.AddScoped<IMiniAppService, MiniAppService>();
+        services.AddScoped<IMiniAppCatalogService, MiniAppCatalogService>();
+        services.AddScoped<IMiniAppEditorialService, MiniAppEditorialService>();
         services.AddSingleton<IMiniAppDomainVerifier, MiniAppDomainVerifier>();
         services.AddHostedService<MiniAppExpiryCleanup>();
         services.Configure<DeveloperVerificationOptions>(configuration.GetSection("DeveloperVerification"));

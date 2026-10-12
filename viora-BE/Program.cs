@@ -177,7 +177,6 @@ builder.Services.AddSwaggerGen(options =>
         BearerFormat = "JWT",
         In = ParameterLocation.Header
     });
-    options.OperationFilter<AuthorizeOperationFilter>();
 });
 
 
@@ -279,7 +278,9 @@ app.UseExceptionHandler(errorApp =>
 
 app.UseHttpsRedirection();
 
-app.UseStaticFiles();
+var platformStaticTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+platformStaticTypes.Mappings[".ts"] = "text/plain; charset=utf-8";
+app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = platformStaticTypes });
 app.UseCors("Web");
 if (app.Environment.IsDevelopment())
 {

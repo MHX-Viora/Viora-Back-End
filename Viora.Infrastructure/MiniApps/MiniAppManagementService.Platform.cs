@@ -156,6 +156,7 @@ public sealed partial class MiniAppManagementService
         await RequireVerifiedDomains(app, JsonSerializer.Deserialize<MiniAppConfigurationInput>(version.ConfigurationJson)!, ct);
         ValidateSubmittedTechnicalTest(version);
         app.PublishedVersion = version.Version; app.PublishedConfigurationJson = version.ConfigurationJson; app.Status = MiniAppStatus.Active;
+        MiniAppConfigurationSnapshot.RefreshCatalog(app);
         version.Status = MiniAppStatus.Active;
         Audit(accountId, app.DeveloperId, id, "MiniAppPublished", versionNumber.ToString());
         await NotifyOwner(app, "Mini App đã xuất bản", $"Phiên bản {versionNumber} đã được phát hành trên ANKT.", ct);

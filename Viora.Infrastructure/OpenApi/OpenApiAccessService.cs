@@ -19,7 +19,7 @@ public sealed record OpenApiIdentity(MiniApp App, Account Account, MiniAppExtern
 public sealed class OpenApiAccessService(AppDbContext db, IClientCredentialService credentials, IOpenIddictTokenManager tokens, IOpenIddictApplicationManager applications, IMiniAppService runtime, TimeProvider clock)
 {
     public async Task<MiniApp?> FindApp(string clientId, CancellationToken ct) => await db.MiniApps.Include(a => a.Developer).Include(a => a.PermissionMappings).ThenInclude(m => m.Permission)
-        .SingleOrDefaultAsync(a => a.ClientId == clientId && a.DeletedAt == null && a.Status == MiniAppStatus.Active && a.Developer.Status == DeveloperStatus.Active, ct);
+        .SingleOrDefaultAsync(a => a.ClientId == clientId && a.DeletedAt == null && a.Status == MiniAppStatus.Active && a.Developer.Status == DeveloperStatus.Active && a.PublishedVersion > 0 && a.PublishedConfigurationJson != null, ct);
 
     public async Task<OpenApiDecision> Prepare(Guid accountId, OpenApiTransaction input, CancellationToken ct)
     {
