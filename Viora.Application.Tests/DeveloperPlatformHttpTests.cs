@@ -29,7 +29,7 @@ public sealed class DeveloperPlatformHttpTests
     }
     private sealed class UnconfiguredMailer:IDeveloperVerificationMailer { public Task SendCodeAsync(string email,string code,CancellationToken ct)=>throw new MiniAppException("EMAIL_DELIVERY_UNAVAILABLE","Not configured.",503); }
     [Fact]
-    public async Task RoutesEnforceAuthenticationAdminRoleAndLegacyRegisterCannotSubmitWithoutVerification()
+    public async Task RoutesEnforceAuthenticationAdminRoleAndAllowSubmissionWithoutEmailDelivery()
     {
         await using var f=await MiniAppHybridIntegrationTests.Fixture.Create(true);
         var builder=WebApplication.CreateBuilder();builder.WebHost.UseTestServer();
@@ -47,7 +47,9 @@ public sealed class DeveloperPlatformHttpTests
         Assert.Equal(HttpStatusCode.Forbidden,(await http.GetAsync($"/api/admin/developers/{f.Db.Developers.First().Id}/application")).StatusCode);
         var response=await http.PostAsJsonAsync("/api/developer/profile",new DeveloperInput("New partner",null,"new@example.com","0901234567",null,f.Owner.Id,Country:"VN"));response.EnsureSuccessStatusCode();var draft=await response.Content.ReadFromJsonAsync<DeveloperProfileDto>();
         Assert.Equal(f.Other.Id,draft!.AccountId);Assert.Equal("Draft",draft.RegistrationStatus);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await http.PostAsJsonAsync("/api/developer/application/submit",new DeveloperSubmitInput(draft.RegistrationVersion,DeveloperPlatformService.TermsVersion,true))).StatusCode);
+        var submitted=await http.PostAsJsonAsync("/api/developer/application/submit",new DeveloperSubmitInput(draft.RegistrationVersion,DeveloperPlatformService.TermsVersion,true));
+        submitted.EnsureSuccessStatusCode();
+        Assert.Equal("PendingReview",(await submitted.Content.ReadFromJsonAsync<DeveloperProfileDto>())!.RegistrationStatus);
         Assert.Equal(HttpStatusCode.ServiceUnavailable,(await http.PostAsJsonAsync("/api/developer/email-verification/request",new DeveloperEmailRequest(draft.Email))).StatusCode);
     }
 }

@@ -3,7 +3,7 @@ public sealed record DeveloperReviewHistoryDto(Guid Id, Guid ReviewerId, string 
 public sealed record DeveloperReviewInput(int Version, string Status, string? Reason = null, string? InternalNotes = null);
 public sealed record DeveloperSubmitInput(int Version, string TermsVersion, bool AcceptedTerms);
 public sealed record DeveloperTermsDocument(string Id, string Title, string Content);
-public sealed record DeveloperTermsDto(string Version, IReadOnlyList<DeveloperTermsDocument> Documents, bool EmailVerificationRequired = true, bool PhoneVerificationRequired = false, bool LegalDocumentsRequired = false);
+public sealed record DeveloperTermsDto(string Version, IReadOnlyList<DeveloperTermsDocument> Documents, bool EmailVerificationRequired = false, bool PhoneVerificationRequired = false, bool LegalDocumentsRequired = false);
 public sealed record DeveloperEmailRequest(string Email);
 public sealed record DeveloperEmailConfirm(Guid VerificationId, string Code);
 public sealed record DeveloperEmailChallenge(Guid VerificationId, DateTime ExpiresAt, int ResendAfterSeconds);

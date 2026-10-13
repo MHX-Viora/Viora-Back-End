@@ -10,7 +10,7 @@ public sealed class DeveloperApplication : CreatedEntity
     public string TermsVersion { get; set; } = null!;
     public DateTime TermsAcceptedAt { get; set; }
     public Guid SubmittedByAccountId { get; set; }
-    public DateTime EmailVerifiedAt { get; set; }
+    public DateTime? EmailVerifiedAt { get; set; }
     public Developer Developer { get; set; } = null!;
     public Account SubmittedByAccount { get; set; } = null!;
 }

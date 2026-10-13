@@ -11,11 +11,11 @@ namespace Viora.Infrastructure.MiniApps;
 
 public sealed class DeveloperPlatformService(AppDbContext db,IDeveloperVerificationMailer mailer,IOptions<DeveloperVerificationOptions> options,TimeProvider clock) : IDeveloperPlatformService
 {
-    public const string TermsVersion="2026-10-10.1";
+    public const string TermsVersion="2026-10-13.1";
     private DateTime Now=>clock.GetUtcNow().UtcDateTime;
     public DeveloperTermsDto GetTerms()=>new(TermsVersion,[
         new("developer","Điều khoản Developer","Cung cấp thông tin chính xác; chịu trách nhiệm ứng dụng, thành viên và bảo mật thông tin tích hợp. ANKT có thể yêu cầu bổ sung, từ chối, tạm khóa hoặc thu hồi quyền khi vi phạm; không tự động xóa dữ liệu."),
-        new("privacy","Chính sách bảo mật","ANKT lưu thông tin liên hệ, hồ sơ, phiên bản đã nộp và lịch sử xét duyệt để vận hành nền tảng. Không nộp giấy tờ nhạy cảm khi chưa có yêu cầu và chính sách lưu giữ cụ thể. Xác minh email không chứng minh tư cách pháp lý doanh nghiệp."),
+        new("privacy","Chính sách bảo mật","ANKT lưu thông tin liên hệ, hồ sơ, phiên bản đã nộp và lịch sử xét duyệt để vận hành nền tảng. Không nộp giấy tờ nhạy cảm khi chưa có yêu cầu và chính sách lưu giữ cụ thể. Email liên hệ không yêu cầu xác minh khi đăng ký Developer; người đăng ký chịu trách nhiệm cung cấp địa chỉ chính xác."),
         new("mini-app","Quy định Mini App","Ứng dụng phải có thông tin hỗ trợ và chính sách bảo mật, nội dung hợp pháp, URL an toàn. Thay đổi domain, callback, quyền hoặc chức năng quan trọng phải được xét duyệt trước khi phát hành."),
         new("open-api","Quy định Open API","Chỉ dùng endpoint và quyền đã công bố hoặc duyệt; lưu secret và token trên backend; dùng OAuth/OIDC và PKCE. Không dùng JWT hoặc API nội bộ ANKT; không ghi secret hoặc token vào log."),
         new("user-data","Chính sách dữ liệu người dùng","Chỉ nhận dữ liệu trong phạm vi consent còn hiệu lực; không tự liên kết tài khoản theo email. Tôn trọng thu hồi quyền, không bán hoặc sử dụng dữ liệu ngoài mục đích đã công bố.")]);
@@ -92,8 +92,8 @@ public sealed class DeveloperPlatformService(AppDbContext db,IDeveloperVerificat
         if(!input.AcceptedTerms||input.TermsVersion!=TermsVersion) throw new MiniAppException("TERMS_REQUIRED","Accept the current Developer terms.",422);
         var x=Normalize(JsonSerializer.Deserialize<DeveloperInput>(d.DraftApplicationJson)!);
         if(await db.Developers.AnyAsync(other=>other.Id!=d.Id&&other.Email==x.Email,ct)) throw new MiniAppException("DEVELOPER_EXISTS","Contact email already registered.",409);
-        var verification=await db.DeveloperEmailVerifications.Where(v=>v.AccountId==accountId&&v.Email==x.Email&&v.VerifiedAt!=null&&v.DeliverySucceeded).OrderByDescending(v=>v.VerifiedAt).FirstOrDefaultAsync(ct)??throw new MiniAppException("EMAIL_VERIFICATION_REQUIRED","Verify the contact email before submission.",422);
-        db.DeveloperApplications.Add(new(){DeveloperId=d.Id,Version=d.RegistrationVersion,ConfigurationJson=JsonSerializer.Serialize(x),TermsVersion=TermsVersion,TermsAcceptedAt=Now,SubmittedAt=Now,SubmittedByAccountId=accountId,EmailVerifiedAt=verification.VerifiedAt!.Value});
+        var verifiedAt=await db.DeveloperEmailVerifications.Where(v=>v.AccountId==accountId&&v.Email==x.Email&&v.VerifiedAt!=null&&v.DeliverySucceeded).OrderByDescending(v=>v.VerifiedAt).Select(v=>v.VerifiedAt).FirstOrDefaultAsync(ct);
+        db.DeveloperApplications.Add(new(){DeveloperId=d.Id,Version=d.RegistrationVersion,ConfigurationJson=JsonSerializer.Serialize(x),TermsVersion=TermsVersion,TermsAcceptedAt=Now,SubmittedAt=Now,SubmittedByAccountId=accountId,EmailVerifiedAt=verifiedAt});
         d.DraftApplicationJson=null;d.RegistrationStatus="PendingReview";d.ConcurrencyStamp=Guid.NewGuid();if(d.Status!=DeveloperStatus.Active)d.Status=DeveloperStatus.Pending;
         Audit(accountId,d.Id,"DeveloperSubmitted"); await Notify(accountId,"Đã gửi hồ sơ Developer","Hồ sơ đang chờ xét duyệt.",ct);await Save(ct);return await Profile(d,accountId,false,ct);
     }

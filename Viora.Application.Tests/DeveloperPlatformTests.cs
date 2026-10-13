@@ -24,17 +24,19 @@ public sealed class DeveloperPlatformTests
     private static DeveloperInput Input(int? version=null) => new("Partner",null,"contact@example.com","0901234567",null,null,Country:"VN",Version:version);
     private static DeveloperPlatformService Service(MiniAppHybridIntegrationTests.Fixture f,Mailer mailer) => new(f.Db,mailer,Options.Create(new DeveloperVerificationOptions { OtpHashKey=new string('x',32) }),TimeProvider.System);
     [Fact]
-    public async Task SubmissionRequiresVerifiedEmailAndCurrentTermsThenLocksSnapshot()
+    public async Task SubmissionWithoutEmailVerificationRequiresCurrentTermsThenLocksSnapshot()
     {
-        await using var f=await MiniAppHybridIntegrationTests.Fixture.Create(true); var mailer=new Mailer(); var s=Service(f,mailer);
+        await using var f=await MiniAppHybridIntegrationTests.Fixture.Create(true); var mailer=new Mailer();
+        var s=new DeveloperPlatformService(f.Db,mailer,Options.Create(new DeveloperVerificationOptions()),TimeProvider.System);
         var draft=await s.SaveDraftAsync(f.Other.Id,Input(),default);
-        var missing=await Assert.ThrowsAsync<MiniAppException>(()=>s.SubmitAsync(f.Other.Id,new(draft.RegistrationVersion,s.GetTerms().Version,true),default)); Assert.Equal("EMAIL_VERIFICATION_REQUIRED",missing.Code);
-        var challenge=await s.RequestEmailAsync(f.Other.Id,new("contact@example.com"),default);
-        Assert.DoesNotContain(mailer.Code,(await f.Db.DeveloperEmailVerifications.SingleAsync()).CodeHash);
-        await s.ConfirmEmailAsync(f.Other.Id,new(challenge.VerificationId,mailer.Code),default);
-        await Assert.ThrowsAsync<MiniAppException>(()=>s.ConfirmEmailAsync(f.Other.Id,new(challenge.VerificationId,mailer.Code),default));
+        Assert.False(s.GetTerms().EmailVerificationRequired);
+        await Assert.ThrowsAsync<MiniAppException>(()=>s.SubmitAsync(f.Other.Id,new(draft.RegistrationVersion,s.GetTerms().Version,false),default));
         await Assert.ThrowsAsync<MiniAppException>(()=>s.SubmitAsync(f.Other.Id,new(draft.RegistrationVersion,"old",true),default));
         var submitted=await s.SubmitAsync(f.Other.Id,new(draft.RegistrationVersion,s.GetTerms().Version,true),default); Assert.Equal("PendingReview",submitted.RegistrationStatus);
+        Assert.False(submitted.ContactEmailVerified);
+        Assert.Null((await f.Db.DeveloperApplications.SingleAsync(a=>a.DeveloperId==draft.Id)).EmailVerifiedAt);
+        Assert.Empty(mailer.Code);
+        Assert.Empty(await f.Db.DeveloperEmailVerifications.ToListAsync());
         await Assert.ThrowsAsync<MiniAppException>(()=>s.SaveDraftAsync(f.Other.Id,Input(submitted.RegistrationVersion) with{Name="Changed"},default));
         var snapshot=await f.Db.DeveloperApplications.SingleAsync(); Assert.Contains("Partner",snapshot.ConfigurationJson); Assert.DoesNotContain("Changed",snapshot.ConfigurationJson);
     }

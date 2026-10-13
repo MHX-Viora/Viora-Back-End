@@ -844,7 +844,7 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("DeveloperId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("EmailVerifiedAt")
+                    b.Property<DateTime?>("EmailVerifiedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Status")
