@@ -1,3 +1,5 @@
+-- Historical setup baseline. Follow with mini-app-schema-consolidation.sql
+-- after the media/discovery migration; see ../handoffs/mini-app-schema-consolidation.md.
 START TRANSACTION;
 
 CREATE TABLE "DeveloperEmailVerifications" (

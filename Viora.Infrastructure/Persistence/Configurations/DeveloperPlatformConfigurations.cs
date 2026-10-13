@@ -14,17 +14,6 @@ internal sealed class DeveloperApplicationConfiguration : IEntityTypeConfigurati
         b.HasOne(x=>x.SubmittedByAccount).WithMany().HasForeignKey(x=>x.SubmittedByAccountId).OnDelete(DeleteBehavior.Restrict);
     }
 }
-internal sealed class DeveloperReviewHistoryConfiguration : IEntityTypeConfiguration<DeveloperReviewHistory>
-{
-    public void Configure(EntityTypeBuilder<DeveloperReviewHistory> b)
-    {
-        b.ToTable("DeveloperReviewHistory"); b.HasKey(x=>x.Id);
-        b.Property(x=>x.PreviousStatus).HasMaxLength(32); b.Property(x=>x.Status).HasMaxLength(32); b.Property(x=>x.Reason).HasMaxLength(1000); b.Property(x=>x.InternalNotes).HasMaxLength(2000);
-        b.HasIndex(x=>new{x.DeveloperId,x.CreatedAt});
-        b.HasOne(x=>x.Developer).WithMany().HasForeignKey(x=>x.DeveloperId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne(x=>x.ReviewerAccount).WithMany().HasForeignKey(x=>x.ReviewerAccountId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
 internal sealed class DeveloperEmailVerificationConfiguration : IEntityTypeConfiguration<DeveloperEmailVerification>
 {
     public void Configure(EntityTypeBuilder<DeveloperEmailVerification> b)

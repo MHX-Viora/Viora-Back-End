@@ -10,7 +10,7 @@ using Xunit;
 public sealed class MiniAppHybridPostgresTests
 {
     [MiniAppPostgresFact]
-    public async Task ConcurrentRedemptionConsumesOnceAndConcurrentFirstLoginSharesOnePairwiseIdentity()
+    public async Task ConcurrentRuntimeLaunchesHaveSeparateSessionsAndCloseIsIdempotent()
     {
         var builder = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("VIORA_MINI_APP_TEST_DB"));
         if (!(builder.Database ?? "").Contains("test", StringComparison.OrdinalIgnoreCase) && !(builder.Database ?? "").Contains("audit", StringComparison.OrdinalIgnoreCase))
@@ -31,23 +31,26 @@ public sealed class MiniAppHybridPostgresTests
             setup.AddRange(account, developer, app, new MiniAppPermissionMapping { MiniAppId = app.Id, PermissionId = Guid.Parse("11111111-1111-1111-1111-111111111101") },
                 new MiniAppVerifiedDomain { MiniAppId = app.Id, Host = "example.com", ChallengeToken = "test-proof", VerifiedAt = DateTime.UtcNow }); await setup.SaveChangesAsync();
             var service = new MiniAppService(setup, credentials); await service.GrantConsentAsync(account.Id, app.Id, new(["identity.login"], true), default);
-            var launch = await service.LaunchAsync(account.Id, app.Id, default);
-            var auth = new AuthorizeMiniAppRequest(launch.SessionId!.Value, launch.SessionToken!, app.CallbackUrl, MiniAppHybridIntegrationTests.Fixture.State, MiniAppSecurityPolicy.CreatePkceChallenge(MiniAppHybridIntegrationTests.Fixture.Verifier), "S256");
-            async Task<string> Code() => MiniAppHybridIntegrationTests.Code(await service.AuthorizeAsync(account.Id, app.Id, auth, default));
-            async Task<ExchangeLaunchCodeResponse?> Redeem(string code, Task gate)
+            async Task<LaunchMiniAppResponse> Launch()
             {
-                await using var db = new AppDbContext(options); await gate;
-                try { return await new MiniAppService(db, credentials).ExchangeAsync(new(app.ClientId, secret, code, app.CallbackUrl, auth.State, MiniAppHybridIntegrationTests.Fixture.Verifier), default); }
-                catch (MiniAppException e) when (e.Code == MiniAppErrorCodes.LaunchCodeUsed) { return null; }
+                await using var db = new AppDbContext(options);
+                return await new MiniAppService(db, credentials).LaunchAsync(account.Id, app.Id, default);
             }
-            var firstCode = await Code(); var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var a = Redeem(firstCode, firstGate.Task); var b = Redeem(firstCode, firstGate.Task); firstGate.SetResult();
-            Assert.Single((await Task.WhenAll(a, b)).OfType<ExchangeLaunchCodeResponse>());
-            await setup.MiniAppExternalIdentities.ExecuteDeleteAsync();
-            var codeA = await Code(); var codeB = await Code(); var distinctGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var c = Redeem(codeA, distinctGate.Task); var d = Redeem(codeB, distinctGate.Task); distinctGate.SetResult();
-            var identities = await Task.WhenAll(c, d); Assert.NotNull(identities[0]); Assert.NotNull(identities[1]); Assert.Equal(identities[0]!.Subject, identities[1]!.Subject);
-            Assert.Equal(1, await setup.MiniAppExternalIdentities.CountAsync());
+            var launches = await Task.WhenAll(Launch(), Launch());
+            Assert.NotEqual(launches[0].SessionId, launches[1].SessionId);
+            Assert.NotEqual(launches[0].SessionToken, launches[1].SessionToken);
+            var first = new ValidateMiniAppSessionRequest(launches[0].SessionId!.Value, launches[0].SessionToken!);
+            var second = new ValidateMiniAppSessionRequest(launches[1].SessionId!.Value, launches[1].SessionToken!);
+            async Task Close()
+            {
+                await using var db = new AppDbContext(options);
+                await new MiniAppService(db, credentials).CloseSessionAsync(account.Id, app.Id, first, default);
+            }
+            await Task.WhenAll(Close(), Close());
+            Assert.False((await service.ValidateSessionAsync(account.Id, app.Id, first, default)).Active);
+            Assert.True((await service.ValidateSessionAsync(account.Id, app.Id, second, default)).Active);
+            await service.RevokeConsentAsync(account.Id, app.Id, default);
+            Assert.Empty((await service.ValidateSessionAsync(account.Id, app.Id, second, default)).Permissions);
         }
         finally { await using var drop = new NpgsqlCommand($"DROP SCHEMA \"{schema}\" CASCADE", connection); await drop.ExecuteNonQueryAsync(); }
     }

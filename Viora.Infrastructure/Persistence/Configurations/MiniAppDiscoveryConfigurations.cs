@@ -16,16 +16,6 @@ internal sealed class MiniAppFavoriteConfiguration : IEntityTypeConfiguration<Mi
     }
 }
 
-internal sealed class MiniAppHistoryStateConfiguration : IEntityTypeConfiguration<MiniAppHistoryState>
-{
-    public void Configure(EntityTypeBuilder<MiniAppHistoryState> builder)
-    {
-        builder.HasKey(x => x.Id);
-        builder.HasIndex(x => x.AccountId).IsUnique();
-        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
-    }
-}
-
 internal sealed class MiniAppBannerConfiguration : IEntityTypeConfiguration<MiniAppBanner>
 {
     public void Configure(EntityTypeBuilder<MiniAppBanner> builder)

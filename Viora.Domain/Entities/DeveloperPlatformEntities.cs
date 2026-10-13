@@ -15,19 +15,6 @@ public sealed class DeveloperApplication : CreatedEntity
     public Account SubmittedByAccount { get; set; } = null!;
 }
 
-public sealed class DeveloperReviewHistory : CreatedEntity
-{
-    public Guid DeveloperId { get; set; }
-    public int Version { get; set; }
-    public Guid ReviewerAccountId { get; set; }
-    public string PreviousStatus { get; set; } = null!;
-    public string Status { get; set; } = null!;
-    public string? Reason { get; set; }
-    public string? InternalNotes { get; set; }
-    public Developer Developer { get; set; } = null!;
-    public Account ReviewerAccount { get; set; } = null!;
-}
-
 public sealed class DeveloperEmailVerification : CreatedEntity
 {
     public Guid AccountId { get; set; }

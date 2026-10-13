@@ -138,24 +138,6 @@ internal sealed class MiniAppUserConsentConfiguration : IEntityTypeConfiguration
     }
 }
 
-internal sealed class MiniAppLaunchCodeConfiguration : IEntityTypeConfiguration<MiniAppLaunchCode>
-{
-    public void Configure(EntityTypeBuilder<MiniAppLaunchCode> builder)
-    {
-        builder.ToTable("MiniAppLaunchCodes");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
-        builder.Property(x => x.RedirectUri).HasMaxLength(2048);
-        builder.Property(x => x.StateHash).HasMaxLength(64);
-        builder.Property(x => x.CodeChallenge).HasMaxLength(43);
-        builder.HasOne<MiniAppRuntimeSession>().WithMany().HasForeignKey(x => x.RuntimeSessionId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(x => x.CodeHash).IsUnique();
-        builder.HasIndex(x => x.ExpiresAt);
-        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
-    }
-}
-
 internal sealed class MiniAppCategoryConfiguration : IEntityTypeConfiguration<MiniAppCategory>
 {
     public void Configure(EntityTypeBuilder<MiniAppCategory> builder)
@@ -242,11 +224,18 @@ internal sealed class MiniAppAuditLogConfiguration : IEntityTypeConfiguration<Mi
 {
     public void Configure(EntityTypeBuilder<MiniAppAuditLog> builder)
     {
-        builder.ToTable("MiniAppAuditLogs");
+        builder.ToTable("MiniAppAuditLogs", table => table.HasCheckConstraint("CK_MiniAppAuditLogs_DeveloperReview", "\"EventType\" <> 'DeveloperReview' OR (\"DeveloperId\" IS NOT NULL AND \"ActorAccountId\" IS NOT NULL AND \"ReviewVersion\" IS NOT NULL AND \"ReviewPreviousStatus\" IS NOT NULL AND \"ReviewStatus\" IS NOT NULL)"));
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Action).HasMaxLength(80).IsRequired();
         builder.Property(x => x.Detail).HasMaxLength(500);
+        builder.Property(x => x.EventType).HasMaxLength(32).HasDefaultValue("Activity").IsRequired();
+        builder.Property(x => x.ReviewPreviousStatus).HasMaxLength(32);
+        builder.Property(x => x.ReviewStatus).HasMaxLength(32);
+        builder.Property(x => x.ReviewReason).HasMaxLength(1000);
+        builder.Property(x => x.ReviewInternalNotes).HasMaxLength(2000);
         builder.HasIndex(x => new { x.MiniAppId, x.CreatedAt });
+        builder.HasIndex(x => new { x.DeveloperId, x.EventType, x.CreatedAt, x.Id });
+        builder.HasIndex(x => new { x.DeveloperId, x.EventType, x.ReviewVersion });
     }
 }
 

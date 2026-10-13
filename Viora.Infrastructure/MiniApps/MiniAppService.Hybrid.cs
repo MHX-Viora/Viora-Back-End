@@ -6,12 +6,6 @@ namespace Viora.Infrastructure.MiniApps;
 
 public sealed partial class MiniAppService
 {
-    private bool ClientAuthenticated(MiniApp app, ExchangeLaunchCodeRequest request)
-    {
-        var configuration = MiniAppConfigurationSnapshot.Published(app);
-        return configuration.ClientAuthenticationMethod == "None" || credentials.VerifySecret(request.ClientSecret ?? "", app.ClientSecretHash);
-    }
-
     private async Task<IReadOnlyList<MiniAppPermissionDto>> ApprovedPermissions(MiniApp app, CancellationToken ct)
     {
         var codes = MiniAppConfigurationSnapshot.Published(app).Permissions;
@@ -45,30 +39,9 @@ public sealed partial class MiniAppService
             .ExecuteUpdateAsync(update => update.SetProperty(s => s.ClosedAt, DateTime.UtcNow), ct);
     }
 
-    public async Task<LaunchMiniAppResponse> AuthorizeAsync(Guid accountId, Guid miniAppId, AuthorizeMiniAppRequest request, CancellationToken ct)
-    {
-        var validation = await ValidateSessionAsync(accountId, miniAppId, new(request.SessionId, request.SessionToken), ct);
-        if (!validation.Active) throw new MiniAppException("SESSION_EXPIRED", "A valid active runtime session is required.", 401);
-        var app = await ActiveAppQuery().AsNoTracking().SingleAsync(a => a.Id == miniAppId, ct);
-        var configuration = MiniAppConfigurationSnapshot.Published(app);
-        if (configuration.AuthenticationMode != "AnktSso") throw new MiniAppException("SSO_NOT_ENABLED", "Independent apps manage their own login.", 403);
-        if (request.RedirectUri?.Length > 2048 || !MiniAppSecurityPolicy.IsExactRedirect(request.RedirectUri ?? "", configuration.CallbackUrls ?? []))
-            throw new MiniAppException("INVALID_REDIRECT_URI", "Exact registered redirect URI required.", 422);
-        var callbackHost = new Uri(request.RedirectUri!).IdnHost;
-        if (!await db.MiniAppVerifiedDomains.AnyAsync(d => d.MiniAppId == miniAppId && d.Host == callbackHost && d.VerifiedAt != null, ct))
-            throw new MiniAppException("DOMAIN_NOT_VERIFIED", "Verify the callback domain before SSO authorization.", 403);
-        if (string.IsNullOrWhiteSpace(request.State) || request.State.Length is < 16 or > 512 || request.CodeChallengeMethod != "S256" || request.CodeChallenge is not { Length: 43 } || request.CodeChallenge.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
-            throw new MiniAppException("INVALID_AUTH_TRANSACTION", "State and S256 PKCE challenge required.", 422);
-        var permissions = await ApprovedPermissions(app, ct);
-        var missing = permissions.Where(p => !validation.Permissions.Contains(p.Code)).ToArray();
-        if (!validation.Permissions.Contains("identity.login")) return new(true, missing, null, null, configuration.AllowedDomains);
-        var rawCode = credentials.CreateLaunchCode();
-        db.MiniAppLaunchCodes.Add(new MiniAppLaunchCode { AccountId = accountId, MiniAppId = miniAppId, CodeHash = credentials.HashLaunchCode(rawCode),
-            ExpiresAt = DateTime.UtcNow.AddSeconds(LaunchCodeLifetimeSeconds), RedirectUri = request.RedirectUri, StateHash = credentials.HashLaunchCode(request.State), CodeChallenge = request.CodeChallenge, RuntimeSessionId = request.SessionId });
-        db.MiniAppAuditLogs.Add(new MiniAppAuditLog { MiniAppId = miniAppId, ActorAccountId = accountId, Action = "AuthorizationIssued" });
-        await db.SaveChangesAsync(ct);
-        return new(false, [], MiniAppSecurityPolicy.BuildLaunchUrl(request.RedirectUri!, rawCode, request.State), LaunchCodeLifetimeSeconds, configuration.AllowedDomains);
-    }
+    // Retired even for internal callers; runtime SSO uses OpenIddict exclusively.
+    public Task<LaunchMiniAppResponse> AuthorizeAsync(Guid accountId, Guid miniAppId, AuthorizeMiniAppRequest request, CancellationToken ct)
+        => Task.FromException<LaunchMiniAppResponse>(new MiniAppException("LEGACY_PROTOCOL_REMOVED", "Use OpenID Connect authorization.", 410));
 
     public async Task ReportAsync(Guid accountId, Guid miniAppId, MiniAppReportInput input, CancellationToken ct)
     {

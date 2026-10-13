@@ -104,21 +104,6 @@ public sealed class MiniAppUserConsent : AuditableEntity
     public MiniAppPermission Permission { get; set; } = null!;
 }
 
-public sealed class MiniAppLaunchCode : CreatedEntity
-{
-    public string CodeHash { get; set; } = null!;
-    public Guid AccountId { get; set; }
-    public Guid MiniAppId { get; set; }
-    public DateTime ExpiresAt { get; set; }
-    public DateTime? UsedAt { get; set; }
-    public string? RedirectUri { get; set; }
-    public string? StateHash { get; set; }
-    public string? CodeChallenge { get; set; }
-    public Guid? RuntimeSessionId { get; set; }
-    public Account Account { get; set; } = null!;
-    public MiniApp MiniApp { get; set; } = null!;
-}
-
 public sealed class MiniAppCategory : AuditableEntity
 {
     public string Icon { get; set; } = "apps-outline";
@@ -198,11 +183,18 @@ public sealed class MiniAppExternalIdentity : AuditableEntity
 
 public sealed class MiniAppAuditLog : CreatedEntity
 {
+    public const string DeveloperReviewEvent = "DeveloperReview";
     public Guid? MiniAppId { get; set; }
     public Guid? DeveloperId { get; set; }
     public Guid? ActorAccountId { get; set; }
     public string Action { get; set; } = null!;
     public string? Detail { get; set; }
+    public string EventType { get; set; } = "Activity";
+    public int? ReviewVersion { get; set; }
+    public string? ReviewPreviousStatus { get; set; }
+    public string? ReviewStatus { get; set; }
+    public string? ReviewReason { get; set; }
+    public string? ReviewInternalNotes { get; set; }
 }
 
 public sealed class MiniAppLaunchLog : CreatedEntity

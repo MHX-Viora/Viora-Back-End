@@ -41,6 +41,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("MiniAppHistoryClearedBefore")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
 
@@ -1000,51 +1003,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("DeveloperReauths", (string)null);
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.DeveloperReviewHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DeveloperId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("InternalNotes")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("PreviousStatus")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<Guid>("ReviewerAccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReviewerAccountId");
-
-                    b.HasIndex("DeveloperId", "CreatedAt");
-
-                    b.ToTable("DeveloperReviewHistory", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.DeviceToken", b =>
@@ -2220,14 +2178,47 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("DeveloperId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("Activity");
+
                     b.Property<Guid?>("MiniAppId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewInternalNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ReviewPreviousStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ReviewReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ReviewStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("ReviewVersion")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
                     b.HasIndex("MiniAppId", "CreatedAt");
 
-                    b.ToTable("MiniAppAuditLogs", (string)null);
+                    b.HasIndex("DeveloperId", "EventType", "ReviewVersion");
+
+                    b.HasIndex("DeveloperId", "EventType", "CreatedAt", "Id");
+
+                    b.ToTable("MiniAppAuditLogs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppAuditLogs_DeveloperReview", "\"EventType\" <> 'DeveloperReview' OR (\"DeveloperId\" IS NOT NULL AND \"ActorAccountId\" IS NOT NULL AND \"ReviewVersion\" IS NOT NULL AND \"ReviewPreviousStatus\" IS NOT NULL AND \"ReviewStatus\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppBanner", b =>
@@ -2389,86 +2380,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasIndex("AccountId", "SortOrder");
 
                     b.ToTable("MiniAppFavorites");
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.MiniAppHistoryState", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("ClearedBefore")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AccountId")
-                        .IsUnique();
-
-                    b.ToTable("MiniAppHistoryStates");
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.MiniAppLaunchCode", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CodeChallenge")
-                        .HasMaxLength(43)
-                        .HasColumnType("character varying(43)");
-
-                    b.Property<string>("CodeHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("MiniAppId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RedirectUri")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<Guid?>("RuntimeSessionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("StateHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTime?>("UsedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AccountId");
-
-                    b.HasIndex("CodeHash")
-                        .IsUnique();
-
-                    b.HasIndex("ExpiresAt");
-
-                    b.HasIndex("MiniAppId");
-
-                    b.HasIndex("RuntimeSessionId");
-
-                    b.ToTable("MiniAppLaunchCodes", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppLaunchLog", b =>
@@ -4443,25 +4354,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
-            modelBuilder.Entity("Viora.Domain.Entities.DeveloperReviewHistory", b =>
-                {
-                    b.HasOne("Viora.Domain.Entities.Developer", "Developer")
-                        .WithMany()
-                        .HasForeignKey("DeveloperId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Viora.Domain.Entities.Account", "ReviewerAccount")
-                        .WithMany()
-                        .HasForeignKey("ReviewerAccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Developer");
-
-                    b.Navigation("ReviewerAccount");
-                });
-
             modelBuilder.Entity("Viora.Domain.Entities.DeviceToken", b =>
                 {
                     b.HasOne("Viora.Domain.Entities.User", "User")
@@ -4849,41 +4741,6 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasForeignKey("MiniAppId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Account");
-
-                    b.Navigation("MiniApp");
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.MiniAppHistoryState", b =>
-                {
-                    b.HasOne("Viora.Domain.Entities.Account", "Account")
-                        .WithMany()
-                        .HasForeignKey("AccountId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Account");
-                });
-
-            modelBuilder.Entity("Viora.Domain.Entities.MiniAppLaunchCode", b =>
-                {
-                    b.HasOne("Viora.Domain.Entities.Account", "Account")
-                        .WithMany()
-                        .HasForeignKey("AccountId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Viora.Domain.Entities.MiniApp", "MiniApp")
-                        .WithMany()
-                        .HasForeignKey("MiniAppId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Viora.Domain.Entities.MiniAppRuntimeSession", null)
-                        .WithMany()
-                        .HasForeignKey("RuntimeSessionId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Account");
 

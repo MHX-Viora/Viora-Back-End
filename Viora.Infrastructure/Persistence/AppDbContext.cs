@@ -10,7 +10,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<MiniAppFavorite> MiniAppFavorites => Set<MiniAppFavorite>();
-    public DbSet<MiniAppHistoryState> MiniAppHistoryStates => Set<MiniAppHistoryState>();
     public DbSet<MiniAppBanner> MiniAppBanners => Set<MiniAppBanner>();
     public DbSet<MiniAppPlacement> MiniAppPlacements => Set<MiniAppPlacement>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
@@ -54,14 +53,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Developer> Developers => Set<Developer>();
     public DbSet<DeveloperReauth> DeveloperReauths => Set<DeveloperReauth>();
     public DbSet<DeveloperApplication> DeveloperApplications => Set<DeveloperApplication>();
-    public DbSet<DeveloperReviewHistory> DeveloperReviewHistory => Set<DeveloperReviewHistory>();
     public DbSet<DeveloperEmailVerification> DeveloperEmailVerifications => Set<DeveloperEmailVerification>();
     public DbSet<MiniAppTechnicalTest> MiniAppTechnicalTests => Set<MiniAppTechnicalTest>();
     public DbSet<MiniApp> MiniApps => Set<MiniApp>();
     public DbSet<MiniAppPermission> MiniAppPermissions => Set<MiniAppPermission>();
     public DbSet<MiniAppPermissionMapping> MiniAppPermissionMappings => Set<MiniAppPermissionMapping>();
     public DbSet<MiniAppUserConsent> MiniAppUserConsents => Set<MiniAppUserConsent>();
-    public DbSet<MiniAppLaunchCode> MiniAppLaunchCodes => Set<MiniAppLaunchCode>();
     public DbSet<MiniAppExternalIdentity> MiniAppExternalIdentities => Set<MiniAppExternalIdentity>();
     public DbSet<MiniAppAuditLog> MiniAppAuditLogs => Set<MiniAppAuditLog>();
     public DbSet<MiniAppLaunchLog> MiniAppLaunchLogs => Set<MiniAppLaunchLog>();

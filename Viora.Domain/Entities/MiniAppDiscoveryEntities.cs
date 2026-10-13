@@ -9,13 +9,6 @@ public sealed class MiniAppFavorite : CreatedEntity
     public MiniApp MiniApp { get; set; } = null!;
 }
 
-public sealed class MiniAppHistoryState : CreatedEntity
-{
-    public Guid AccountId { get; set; }
-    public DateTime ClearedBefore { get; set; }
-    public Account Account { get; set; } = null!;
-}
-
 public sealed class MiniAppBanner : AuditableEntity
 {
     public string Title { get; set; } = "";

@@ -27,7 +27,7 @@ public sealed class MiniAppCatalogService(AppDbContext db) : IMiniAppCatalogServ
         var query = Visible();
         var now = DateTime.UtcNow;
         var weekAgo = now.AddDays(-7);
-        var clearedBefore = await db.MiniAppHistoryStates.Where(state => state.AccountId == accountId).Select(state => (DateTime?)state.ClearedBefore).SingleOrDefaultAsync(ct) ?? DateTime.MinValue;
+        var clearedBefore = await db.Accounts.Where(account => account.Id == accountId).Select(account => account.MiniAppHistoryClearedBefore).SingleAsync(ct) ?? DateTime.MinValue;
         // Bound discovery history without deleting security/audit records.
         if (clearedBefore < now.AddDays(-90)) clearedBefore = now.AddDays(-90);
         var recent = db.MiniAppLaunchLogs.Where(log => log.AccountId == accountId && log.Status == MiniAppLaunchStatus.Succeeded && log.CreatedAt > clearedBefore);
@@ -117,11 +117,11 @@ public sealed class MiniAppCatalogService(AppDbContext db) : IMiniAppCatalogServ
     public Task ClearHistoryAsync(Guid accountId, CancellationToken ct) => WithAccountLock(accountId, () => ClearHistoryCore(accountId, ct), ct);
     private async Task ClearHistoryCore(Guid accountId, CancellationToken ct)
     {
-        await RequireAccount(accountId, ct);
-        var state = await db.MiniAppHistoryStates.SingleOrDefaultAsync(state => state.AccountId == accountId, ct);
-        if (state is null) { state = new MiniAppHistoryState { AccountId = accountId }; db.MiniAppHistoryStates.Add(state); }
-        state.ClearedBefore = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
+        // Update only this preference so a tracked account cannot overwrite newer account fields.
+        var clearedBefore = DateTime.UtcNow;
+        var updated = await db.Accounts.Where(account => account.Id == accountId && account.Status == AccountStatus.Active && account.DeletedAt == null)
+            .ExecuteUpdateAsync(update => update.SetProperty(account => account.MiniAppHistoryClearedBefore, clearedBefore), ct);
+        if (updated == 0) throw new MiniAppException("ACCOUNT_NOT_ACTIVE", "Active account required.", 403);
     }
 
     private async Task WithAccountLock(Guid accountId, Func<Task> operation, CancellationToken ct)

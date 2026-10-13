@@ -9,6 +9,14 @@ using Xunit;
 
 public sealed class MiniAppHybridIntegrationTests
 {
+    [Fact] public async Task RetiredCustomProtocolRejectsAuthorizeAndExchangeBeforeReadingDatabase()
+    {
+        await using var f = await Fixture.Create();
+        var authorize = await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.AuthorizeAsync(Guid.NewGuid(), Guid.NewGuid(), new(Guid.NewGuid(), "obsolete", "https://example.com/callback", Fixture.State, MiniAppSecurityPolicy.CreatePkceChallenge(Fixture.Verifier), "S256"), default));
+        var exchange = await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.ExchangeAsync(new("obsolete", null, "obsolete", "https://example.com/callback", Fixture.State, Fixture.Verifier), default));
+        Assert.Equal("LEGACY_PROTOCOL_REMOVED", authorize.Code); Assert.Equal(410, authorize.StatusCode);
+        Assert.Equal("LEGACY_PROTOCOL_REMOVED", exchange.Code); Assert.Equal(410, exchange.StatusCode);
+    }
     [Fact] public async Task AutoLoginUsesPublishedPolicyAndIndependentAppsCannotEnableIt()
     {
         await using var f = await Fixture.Create(true);
@@ -35,7 +43,7 @@ public sealed class MiniAppHybridIntegrationTests
         await using var f = await Fixture.Create(true);
         var app = await f.Publish(f.Input()); var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default);
         Assert.False(launch.RequiresConsent); Assert.Equal("https://example.com/app", launch.LaunchUrl); Assert.DoesNotContain("code=", launch.LaunchUrl!);
-        Assert.NotNull(launch.SessionToken); Assert.Empty(await f.Db.MiniAppLaunchCodes.ToListAsync());
+        Assert.NotNull(launch.SessionToken);
         Assert.True((await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, new(launch.SessionId!.Value, launch.SessionToken!), default)).Active);
         await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default));
     }
@@ -79,49 +87,42 @@ public sealed class MiniAppHybridIntegrationTests
         await f.Submit(app.Id); await f.Management.SetAppStatusAsync(f.Other.Id, app.Id, MiniAppStatus.Active, null, default);
         Assert.Equal("Approved update", (await f.Runtime.GetActiveDetailAsync(app.Id, default))!.Name);
     }
-    [Fact] public async Task ConsentIsRequiredOnExplicitLoginAndGrantsAreProjected()
+    [Fact] public async Task RuntimeProjectsOnlyExplicitlyGrantedConsent()
     {
-        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput()); var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default);
+        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput());
+        var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default);
+        var session = new ValidateMiniAppSessionRequest(launch.SessionId!.Value, launch.SessionToken!);
         Assert.False(launch.RequiresConsent);
-        var authorize = await f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default); Assert.True(authorize.RequiresConsent); Assert.Null(authorize.LaunchUrl);
+        Assert.Empty((await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, session, default)).Permissions);
         await f.Runtime.GrantConsentAsync(f.Owner.Id, app.Id, new(["identity.login", "profile.basic"], true), default);
-        var login = await f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default); var code = Code(login);
-        var identity = await f.Runtime.ExchangeAsync(new(app.ClientId, app.ClientSecret, code, "https://example.com/callback", Fixture.State, Fixture.Verifier), default);
-        Assert.StartsWith("sub_", identity.Subject); Assert.Equal("Owner", identity.DisplayName); Assert.Null(identity.Email); Assert.Null(identity.Phone);
-        await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.ExchangeAsync(new(app.ClientId, app.ClientSecret, code, "https://example.com/callback", Fixture.State, Fixture.Verifier), default));
+        Assert.Equal(["identity.login", "profile.basic"], (await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, session, default)).Permissions.OrderBy(p => p).ToArray());
     }
-    [Fact] public async Task IdentityConsentAllowsLoginAfterOptionalProfileClaimsAreDeclined()
+    [Fact] public async Task IdentityConsentDoesNotGrantDeclinedOptionalProfilePermissions()
     {
         await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput() with { Permissions = ["identity.login", "profile.basic", "profile.email", "profile.phone"] });
         var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default);
-        Assert.True((await f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default)).RequiresConsent);
         await f.Runtime.GrantConsentAsync(f.Owner.Id, app.Id, new(["identity.login"], true), default);
-        var authorized = await f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default); Assert.False(authorized.RequiresConsent);
-        var exchange = await f.Runtime.ExchangeAsync(new(app.ClientId, app.ClientSecret, Code(authorized), "https://example.com/callback", Fixture.State, Fixture.Verifier), default);
-        Assert.NotNull(exchange.Subject); Assert.Null(exchange.DisplayName); Assert.Null(exchange.Email); Assert.Null(exchange.Phone); Assert.Equal(["identity.login"], exchange.Scopes);
+        Assert.Equal(["identity.login"], (await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, new(launch.SessionId!.Value, launch.SessionToken!), default)).Permissions);
     }
-    [Theory] [InlineData("client")] [InlineData("redirect")] [InlineData("state")] [InlineData("pkce")]
-    public async Task InvalidExchangeBindingsDoNotConsumeCode(string field)
+    [Theory] [InlineData("session")] [InlineData("token")] [InlineData("oversized")]
+    public async Task InvalidRuntimeBindingsCannotValidateSession(string field)
     {
-        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput()); await f.Runtime.GrantConsentAsync(f.Owner.Id, app.Id, new(["identity.login", "profile.basic"], true), default);
-        var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default); var code = Code(await f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default));
-        var valid = new ExchangeLaunchCodeRequest(app.ClientId, app.ClientSecret, code, "https://example.com/callback", Fixture.State, Fixture.Verifier);
-        var invalid = field switch { "client" => valid with { ClientSecret = "wrong" }, "redirect" => valid with { RedirectUri = "https://example.com/callback/" }, "state" => valid with { State = "wrong" }, _ => valid with { CodeVerifier = new string('b', 43) } };
-        await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.ExchangeAsync(invalid, default));
-        Assert.Null((await f.Db.MiniAppLaunchCodes.AsNoTracking().SingleAsync()).UsedAt);
-        Assert.NotNull((await f.Runtime.ExchangeAsync(valid, default)).Subject);
+        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput());
+        var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default);
+        var valid = new ValidateMiniAppSessionRequest(launch.SessionId!.Value, launch.SessionToken!);
+        var invalid = field switch { "session" => valid with { SessionId = Guid.NewGuid() }, "token" => valid with { SessionToken = "wrong" }, _ => valid with { SessionToken = new string('a', 201) } };
+        Assert.False((await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, invalid, default)).Active);
+        Assert.True((await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, valid, default)).Active);
     }
-    [Fact] public async Task ExpiredCodeCannotRedeemAndSessionCannotCrossUserOrApp()
+    [Fact] public async Task ExpiredSessionCannotValidateOrCrossUserOrApp()
     {
-        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput()); await f.Runtime.GrantConsentAsync(f.Owner.Id, app.Id, new(["identity.login", "profile.basic"], true), default);
+        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput());
         var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default);
         var validation = new ValidateMiniAppSessionRequest(launch.SessionId!.Value, launch.SessionToken!);
         Assert.False((await f.Runtime.ValidateSessionAsync(f.Other.Id, app.Id, validation, default)).Active);
         Assert.False((await f.Runtime.ValidateSessionAsync(f.Owner.Id, Guid.NewGuid(), validation, default)).Active);
-        var code = Code(await f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default));
-        await f.Db.MiniAppLaunchCodes.ExecuteUpdateAsync(s => s.SetProperty(c => c.ExpiresAt, DateTime.UtcNow.AddSeconds(-1)));
-        var error = await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.ExchangeAsync(new(app.ClientId, app.ClientSecret, code, "https://example.com/callback", Fixture.State, Fixture.Verifier), default));
-        Assert.Equal(MiniAppErrorCodes.LaunchCodeExpired, error.Code);
+        await f.Db.MiniAppRuntimeSessions.ExecuteUpdateAsync(s => s.SetProperty(c => c.ExpiresAt, DateTime.UtcNow.AddSeconds(-1)));
+        Assert.False((await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, validation, default)).Active);
     }
     [Fact] public async Task RevokeSuspensionAndClosureInvalidateLiveRuntimePrivileges()
     {
@@ -135,18 +136,7 @@ public sealed class MiniAppHybridIntegrationTests
         await f.Management.SetAppStatusAsync(f.Other.Id, app.Id, MiniAppStatus.Active, null, default);
         await f.Runtime.CloseSessionAsync(f.Owner.Id, app.Id, request, default); Assert.False((await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, request, default)).Active);
     }
-    [Fact] public async Task PublicClientStillRequiresPkceAndPairwiseSubjectsDifferPerApp()
-    {
-        await using var f = await Fixture.Create(true); var a = await f.Publish(f.SsoInput() with { ClientAuthenticationMethod = "None" }); var b = await f.Publish(f.SsoInput() with { Slug = "second-app" });
-        async Task<string?> Login(MiniAppCredentialResponse app)
-        {
-            await f.Runtime.GrantConsentAsync(f.Owner.Id, app.Id, new(["identity.login", "profile.basic"], true), default);
-            var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default); var code = Code(await f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default));
-            var exchange = new ExchangeLaunchCodeRequest(app.ClientId, app.Id == a.Id ? null : app.ClientSecret, code, "https://example.com/callback", Fixture.State, Fixture.Verifier);
-            return (await f.Runtime.ExchangeAsync(exchange, default)).Subject;
-        }
-        var subjectA = await Login(a); Assert.Equal(subjectA, await Login(a)); Assert.NotEqual(subjectA, await Login(b));
-    }
+
     [Fact] public async Task ConsentRejectsUnapprovedScopesAndDraftPermissionsDoNotLeak()
     {
         await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput());
@@ -155,16 +145,16 @@ public sealed class MiniAppHybridIntegrationTests
         await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.GrantConsentAsync(f.Owner.Id, app.Id, new(["profile.email"], true), default));
         Assert.DoesNotContain((await f.Runtime.GetActiveDetailAsync(app.Id, default))!.Permissions, p => p.Code == "profile.email");
     }
-    [Fact] public async Task SoftDeletedAccountCannotRedeemAndRevokedLoginCodeCannotRedeem()
+    [Fact] public async Task SoftDeletedAccountCannotValidateAndRevokedConsentRemovesGrants()
     {
-        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput()); await f.Runtime.GrantConsentAsync(f.Owner.Id, app.Id, new(["identity.login", "profile.basic"], true), default);
-        var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default); var code = Code(await f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default));
-        var exchange = new ExchangeLaunchCodeRequest(app.ClientId, app.ClientSecret, code, "https://example.com/callback", Fixture.State, Fixture.Verifier);
-        await f.Runtime.RevokeConsentAsync(f.Owner.Id, app.Id, default); await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.ExchangeAsync(exchange, default));
+        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput());
         await f.Runtime.GrantConsentAsync(f.Owner.Id, app.Id, new(["identity.login", "profile.basic"], true), default);
+        var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default);
+        var validation = new ValidateMiniAppSessionRequest(launch.SessionId!.Value, launch.SessionToken!);
+        await f.Runtime.RevokeConsentAsync(f.Owner.Id, app.Id, default);
+        Assert.Empty((await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, validation, default)).Permissions);
         f.Owner.DeletedAt = DateTime.UtcNow; await f.Db.SaveChangesAsync();
-        await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.ExchangeAsync(exchange, default));
-        Assert.False((await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, new(launch.SessionId!.Value, launch.SessionToken!), default)).Active);
+        Assert.False((await f.Runtime.ValidateSessionAsync(f.Owner.Id, app.Id, validation, default)).Active);
     }
     [Fact] public async Task DisabledPermissionIsRemovedFromActiveGrantsImmediately()
     {
@@ -190,22 +180,25 @@ public sealed class MiniAppHybridIntegrationTests
         await f.Management.SetDeveloperStatusAsync(f.Other.Id, developer.Id, DeveloperStatus.Active, default); await f.Management.SetAppStatusAsync(f.Other.Id, app.Id, MiniAppStatus.Archived, "Archived", default);
         Assert.Empty((await f.Runtime.GetActiveAsync(default)).Items); Assert.Null(await f.Runtime.GetActiveDetailAsync(app.Id, default));
     }
-    [Fact] public async Task ExpiryCleanupPreservesAuditAndDeletesOnlyExpiredCredentials()
+    [Fact] public async Task ExpiryCleanupPreservesAuditAndDeletesOnlyExpiredRuntimeSessions()
     {
-        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput()); await f.Runtime.GrantConsentAsync(f.Owner.Id, app.Id, new(["identity.login", "profile.basic"], true), default);
-        var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default); await f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default);
-        await f.Db.MiniAppLaunchCodes.ExecuteUpdateAsync(s => s.SetProperty(c => c.ExpiresAt, DateTime.UtcNow.AddDays(-2)));
-        await f.Db.MiniAppRuntimeSessions.ExecuteUpdateAsync(s => s.SetProperty(c => c.ExpiresAt, DateTime.UtcNow.AddDays(-2)));
+        await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput());
+        var expired = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default);
+        var live = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default);
+        await f.Db.MiniAppRuntimeSessions.Where(s => s.Id == expired.SessionId).ExecuteUpdateAsync(s => s.SetProperty(c => c.ExpiresAt, DateTime.UtcNow.AddDays(-2)));
+        var auditCount = await f.Db.MiniAppAuditLogs.CountAsync();
         await MiniAppExpiryCleanup.CleanupAsync(f.Db, DateTime.UtcNow.AddDays(-1), default);
-        Assert.Empty(await f.Db.MiniAppLaunchCodes.ToListAsync()); Assert.Empty(await f.Db.MiniAppRuntimeSessions.ToListAsync()); Assert.NotEmpty(await f.Db.MiniAppAuditLogs.ToListAsync());
+        Assert.Equal(live.SessionId, (await f.Db.MiniAppRuntimeSessions.AsNoTracking().SingleAsync()).Id);
+        Assert.True(auditCount > 0); Assert.Equal(auditCount, await f.Db.MiniAppAuditLogs.CountAsync());
     }
-    [Fact] public async Task LegacyPublishedWebsiteRemainsLaunchableButBridgeAndSsoNeedVerifiedDomains()
+    [Fact] public async Task LegacyPublishedWebsiteRemainsLaunchableButBridgeNeedsVerifiedDomains()
     {
         await using var f = await Fixture.Create(true); var app = await f.Publish(f.SsoInput());
         await f.Db.MiniAppVerifiedDomains.ExecuteDeleteAsync();
         Assert.Empty((await f.Runtime.GetActiveDetailAsync(app.Id, default))!.AllowedOrigins!);
         var launch = await f.Runtime.LaunchAsync(f.Owner.Id, app.Id, default); Assert.Equal("https://example.com/app", launch.LaunchUrl);
-        var error = await Assert.ThrowsAsync<MiniAppException>(() => f.Runtime.AuthorizeAsync(f.Owner.Id, app.Id, f.Auth(launch), default)); Assert.Equal("DOMAIN_NOT_VERIFIED", error.Code);
+        // Website navigation uses published domains; the bridge uses verified origins above.
+        Assert.Equal(new[] { "example.com" }, launch.AllowedDomains!);
     }
     [Fact] public async Task FailedDomainProofDoesNotVerifyAndAttemptCooldownIsPersistent()
     {
@@ -217,7 +210,6 @@ public sealed class MiniAppHybridIntegrationTests
         var error = await Assert.ThrowsAsync<MiniAppException>(() => f.Management.VerifyDomainAsync(f.Owner.Id, app.Id, domain.Id, default)); Assert.Equal(MiniAppErrorCodes.RateLimited, error.Code);
         await Assert.ThrowsAsync<MiniAppException>(() => f.Management.SubmitReviewAsync(f.Owner.Id, app.Id, default));
     }
-    public static string Code(LaunchMiniAppResponse response) => Uri.UnescapeDataString(new Uri(response.LaunchUrl!).Query.TrimStart('?').Split('&').Single(x => x.StartsWith("code=")).Substring(5));
     public sealed class Fixture : IAsyncDisposable
     {
         public const string State = "partner-transaction-state-123456789";
