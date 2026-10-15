@@ -9,7 +9,6 @@ public sealed class Account : AuditableEntity
     public AccountRole Role { get; set; } = AccountRole.User;
     public AccountStatus Status { get; set; } = AccountStatus.Active;
     public DateTime? LastLoginAt { get; set; }
-    public DateTime? MiniAppHistoryClearedBefore { get; set; }
     public DateTime? DeletedAt { get; set; }
     public User? User { get; set; }
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];

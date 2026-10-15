@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,8 +27,6 @@ using Viora.Application.GroupCalls;
 using Viora.Application.Legal;
 using Viora.Infrastructure.GroupCalls;
 using Viora.Application.Articles;
-using Viora.Application.MiniApps;
-using Viora.Infrastructure.MiniApps;
 using Viora.Application.Stickers;
 using Viora.Application.Wallets;
 using Viora.Infrastructure.Wallets;
@@ -238,23 +235,6 @@ public static class DependencyInjection
         services.AddScoped<IPushNotificationSender, FirebasePushNotificationSender>();
         services.AddHostedService<CallTimeoutHostedService>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
-        services.AddSingleton<IClientCredentialService, ClientCredentialService>();
-        services.AddScoped<IMiniAppService, MiniAppService>();
-        services.AddScoped<IMiniAppCatalogService, MiniAppCatalogService>();
-        services.AddScoped<IMiniAppEditorialService, MiniAppEditorialService>();
-        services.AddDataProtection().SetApplicationName("ANKT.DeveloperPlatform");
-        services.AddSingleton<IMiniAppDomainVerifier, MiniAppDomainVerifier>();
-        services.AddHostedService<MiniAppExpiryCleanup>();
-        services.Configure<DeveloperVerificationOptions>(configuration.GetSection("DeveloperVerification"));
-        services.AddSingleton(TimeProvider.System);
-        services.AddScoped<IDeveloperVerificationMailer, DeveloperVerificationMailer>();
-        services.AddScoped<IDeveloperPlatformService, DeveloperPlatformService>();
-        services.AddScoped<IDeveloperReauthenticationService, DeveloperReauthenticationService>();
-        services.AddScoped<IDeveloperAccountVerificationService, DeveloperAccountVerificationService>();
-        services.AddScoped<MiniAppManagementService>();
-        services.AddScoped<IDeveloperMembershipService>(provider => provider.GetRequiredService<MiniAppManagementService>());
-        services.AddScoped<IMiniAppManagementService>(provider => provider.GetRequiredService<MiniAppManagementService>());
-        services.AddScoped<IDeveloperMiniAppService>(provider => provider.GetRequiredService<MiniAppManagementService>());
         return services;
     }
 }

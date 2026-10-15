@@ -5,18 +5,14 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Text.Json;
-using viora_BE.OpenApi;
 using System.Threading.RateLimiting;
 using Viora.Application.Posts;
 using Viora.Infrastructure.Realtime;
-using Viora.Application.MiniApps;
 
 LoadDotEnv();
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<IDeveloperOrganizationContext, viora_BE.Services.DeveloperOrganizationContext>();
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))
 {
@@ -147,26 +143,19 @@ builder.Services.AddRateLimiter(options => options.AddPolicy("auth", context =>
         })));
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddPolicy("mini-app-launch", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
-    options.AddPolicy("mini-app-exchange", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.ContentType = "application/json";
         await context.HttpContext.Response.WriteAsJsonAsync(new
         {
-            code = MiniAppErrorCodes.RateLimited,
+            code = "RATE_LIMITED",
             message = "Quá nhiều yêu cầu. Vui lòng thử lại sau."
         }, cancellationToken);
     };
 });
 builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration);
-var partnerOpenApi = builder.AddPartnerOpenApi();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -223,8 +212,6 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
-if (partnerOpenApi.Enabled) app.UseForwardedHeaders();
-app.UsePartnerOpenApiBoundary(partnerOpenApi);
 app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
 
 app.UseExceptionHandler(errorApp =>
@@ -243,14 +230,6 @@ app.UseExceptionHandler(errorApp =>
 
         if (context.Response.HasStarted)
         {
-            return;
-        }
-
-        if (exception is MiniAppException miniAppException)
-        {
-            context.Response.StatusCode = miniAppException.StatusCode;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(new { code = miniAppException.Code, message = miniAppException.Message });
             return;
         }
 
@@ -280,9 +259,7 @@ app.UseExceptionHandler(errorApp =>
 
 app.UseHttpsRedirection();
 
-var platformStaticTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
-platformStaticTypes.Mappings[".ts"] = "text/plain; charset=utf-8";
-app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = platformStaticTypes });
+app.UseStaticFiles();
 app.UseCors("Web");
 if (app.Environment.IsDevelopment())
 {
@@ -295,7 +272,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
-app.UsePartnerOpenApiPrincipalLimits(partnerOpenApi);
 app.UseRateLimiter();
 app.UseAuthorization();
 

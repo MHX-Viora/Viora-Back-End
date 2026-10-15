@@ -1,5 +1,0 @@
-node_modules/
-dist/
-*.tgz
-src/ankt-mini-app.js
-src/ankt-mini-app.d.ts

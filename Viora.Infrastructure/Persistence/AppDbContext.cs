@@ -9,9 +9,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     private static readonly Random SharedRandom = Random.Shared;
 
     public DbSet<Account> Accounts => Set<Account>();
-    public DbSet<MiniAppFavorite> MiniAppFavorites => Set<MiniAppFavorite>();
-    public DbSet<MiniAppBanner> MiniAppBanners => Set<MiniAppBanner>();
-    public DbSet<MiniAppPlacement> MiniAppPlacements => Set<MiniAppPlacement>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
     public DbSet<User> Users => Set<User>();
@@ -50,26 +47,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AdminLog> AdminLogs => Set<AdminLog>();
     public DbSet<LegalDocument> LegalDocuments => Set<LegalDocument>();
     public DbSet<UserLegalAcceptance> UserLegalAcceptances => Set<UserLegalAcceptance>();
-    public DbSet<Developer> Developers => Set<Developer>();
-    public DbSet<DeveloperReauth> DeveloperReauths => Set<DeveloperReauth>();
-    public DbSet<DeveloperApplication> DeveloperApplications => Set<DeveloperApplication>();
-    public DbSet<DeveloperEmailVerification> DeveloperEmailVerifications => Set<DeveloperEmailVerification>();
-    public DbSet<MiniAppTechnicalTest> MiniAppTechnicalTests => Set<MiniAppTechnicalTest>();
-    public DbSet<MiniApp> MiniApps => Set<MiniApp>();
-    public DbSet<MiniAppPermission> MiniAppPermissions => Set<MiniAppPermission>();
-    public DbSet<MiniAppPermissionMapping> MiniAppPermissionMappings => Set<MiniAppPermissionMapping>();
-    public DbSet<MiniAppUserConsent> MiniAppUserConsents => Set<MiniAppUserConsent>();
-    public DbSet<MiniAppExternalIdentity> MiniAppExternalIdentities => Set<MiniAppExternalIdentity>();
-    public DbSet<MiniAppAuditLog> MiniAppAuditLogs => Set<MiniAppAuditLog>();
-    public DbSet<MiniAppLaunchLog> MiniAppLaunchLogs => Set<MiniAppLaunchLog>();
-    public DbSet<MiniAppCategory> MiniAppCategories => Set<MiniAppCategory>();
-    public DbSet<DeveloperMembership> DeveloperMemberships => Set<DeveloperMembership>();
-    public DbSet<MiniAppMembership> MiniAppMemberships => Set<MiniAppMembership>();
-    public DbSet<MiniAppMemberInvitation> MiniAppMemberInvitations => Set<MiniAppMemberInvitation>();
-    public DbSet<MiniAppVersion> MiniAppVersions => Set<MiniAppVersion>();
-    public DbSet<MiniAppVerifiedDomain> MiniAppVerifiedDomains => Set<MiniAppVerifiedDomain>();
-    public DbSet<MiniAppRuntimeSession> MiniAppRuntimeSessions => Set<MiniAppRuntimeSession>();
-    public DbSet<MiniAppReport> MiniAppReports => Set<MiniAppReport>();
     public DbSet<Wallet> Wallets => Set<Wallet>();
     public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
     public DbSet<Payment> Payments => Set<Payment>();

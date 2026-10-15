@@ -136,21 +136,6 @@ public sealed class AccountsController(
         };
     }
 
-    [HttpPost("developer-google-login")]
-    [EnableRateLimiting("auth")]
-    public async Task<ActionResult> DeveloperGoogleLogin(GoogleLoginRequest request, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var result = await googleLoginService.LoginAsync(new GoogleLoginCommand(request.FirebaseToken, RequireExplicitExistingAccountLink: true), cancellationToken);
-            if (result.Outcome != LoginOutcome.Active)
-                return StatusCode(result.Outcome is LoginOutcome.Banned or LoginOutcome.Deleted ? 403 : 401, new LoginMessageResponse(result.Status, result.Message!));
-            SetRefreshTokenCookie(result.Tokens!.RefreshToken, result.Tokens.RefreshTokenExpiresAt);
-            return Ok(new LoginSuccessResponse(result.Status!.Value, result.Tokens.AccessToken, RefreshTokenForResponse(result.Tokens.RefreshToken), result.Tokens.AccessTokenExpiresAt, result.Tokens.RefreshTokenExpiresAt, result.Tokens.SessionId, result.User));
-        }
-        catch (AccountConflictException exception) { return ConflictProblem(exception); }
-    }
-
     [HttpPost("refresh-token")]
     [EnableRateLimiting("auth")]
     [ProducesResponseType<RefreshTokenSuccessResponse>(StatusCodes.Status200OK)]
