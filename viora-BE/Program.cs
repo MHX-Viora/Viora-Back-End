@@ -299,6 +299,7 @@ app.MapGet("/group/{inviteCode}", (string inviteCode) =>
 });
 
 app.MapControllers();
+viora_BE.Developer.DeveloperEndpoints.MapDeveloperEndpoints(app);
 app.MapHub<RealtimeHub>("/hubs/realtime");
 app.MapHub<CallHub>("/hubs/calls");
 
