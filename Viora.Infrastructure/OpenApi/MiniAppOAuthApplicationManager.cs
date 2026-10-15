@@ -51,7 +51,7 @@ public sealed class MiniAppOAuthApplicationManager(
     }
     public override async ValueTask<bool> ValidateClientSecretAsync(OpenIddictEntityFrameworkCoreApplication application, string secret, CancellationToken ct = default)
     {
-        var hash = await db.MiniApps.Where(a => a.ClientId == application.ClientId && a.DeletedAt == null && a.Status == MiniAppStatus.Active && a.Developer.Status == DeveloperStatus.Active).Select(a => a.ClientSecretHash).SingleOrDefaultAsync(ct);
-        return hash is not null && credentials.VerifySecret(secret, hash);
+        var hash = await db.MiniApps.Where(a => a.ClientId == application.ClientId && a.DeletedAt == null && a.Status == MiniAppStatus.Active && a.Developer.Status == DeveloperStatus.Active).SingleOrDefaultAsync(ct);
+        return hash is not null && MiniAppSecretPolicy.Verify(credentials, hash, secret, DateTime.UtcNow);
     }
 }

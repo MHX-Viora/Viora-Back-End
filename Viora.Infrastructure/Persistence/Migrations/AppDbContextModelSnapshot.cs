@@ -38,6 +38,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<DateTime?>("EmailVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -951,8 +954,7 @@ namespace Viora.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccountId")
-                        .IsUnique();
+                    b.HasIndex("AccountId");
 
                     b.HasIndex("DeveloperId", "AccountId")
                         .IsUnique();
@@ -975,6 +977,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("DeveloperId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -991,15 +996,24 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("ProviderAuthenticationHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
+
+                    b.HasIndex("DeveloperId");
 
                     b.HasIndex("ExpiresAt");
 
                     b.HasIndex("MiniAppId");
 
                     b.HasIndex("ProofHash")
+                        .IsUnique();
+
+                    b.HasIndex("ProviderAuthenticationHash")
                         .IsUnique();
 
                     b.ToTable("DeveloperReauths", (string)null);
@@ -2076,6 +2090,13 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("PreviousClientSecretExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviousClientSecretHash")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
                     b.Property<string>("PrivacyPolicyUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
@@ -2413,6 +2434,76 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "CreatedAt", "MiniAppId", "AccountId");
 
                     b.ToTable("MiniAppLaunchLogs", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppMemberInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InvitedByAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("Role")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MiniAppId");
+
+                    b.HasIndex("AccountId", "ExpiresAt");
+
+                    b.ToTable("MiniAppMemberInvitations");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppMembership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("Role")
+                        .IsConcurrencyToken()
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("MiniAppId", "AccountId")
+                        .IsUnique();
+
+                    b.ToTable("MiniAppMemberships");
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.MiniAppPermission", b =>
@@ -2755,6 +2846,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Host")
                         .IsRequired()
                         .HasMaxLength(253)
@@ -2763,11 +2857,23 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("LastAttemptAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid>("MiniAppId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ProtectedChallengeToken")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VerificationFileName")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
                     b.Property<DateTime?>("VerifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -4348,6 +4454,11 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Viora.Domain.Entities.Developer", null)
+                        .WithMany()
+                        .HasForeignKey("DeveloperId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Viora.Domain.Entities.MiniApp", null)
                         .WithMany()
                         .HasForeignKey("MiniAppId")
@@ -4734,6 +4845,44 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Entities.MiniApp", "MiniApp")
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("MiniApp");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppMemberInvitation", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Entities.MiniApp", "MiniApp")
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("MiniApp");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.MiniAppMembership", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Viora.Domain.Entities.MiniApp", "MiniApp")

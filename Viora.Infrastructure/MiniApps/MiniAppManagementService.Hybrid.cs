@@ -11,13 +11,13 @@ public sealed partial class MiniAppManagementService
     {
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateConcurrencyException) { throw new MiniAppException("CONCURRENT_UPDATE", "Configuration changed; reload and retry.", 409); }
+        catch (DbUpdateException) { throw new MiniAppException("CONFLICT", "Resource or membership already exists; reload and retry.", 409); }
     }
     public async Task<IReadOnlyList<MiniAppPermissionDto>> GetAdminPermissionsAsync(CancellationToken ct) => await db.MiniAppPermissions.AsNoTracking().OrderBy(p => p.Code).Select(p => new MiniAppPermissionDto(p.Code, p.Name, p.Description, p.IsSensitive, p.Status == MiniAppPermissionStatus.Active)).ToListAsync(ct);
     private async Task<Developer> RequireDeveloper(Guid accountId, bool ownerOnly, CancellationToken ct)
     {
         await RequireActiveAccount(accountId, ct);
-        var developer = await db.Developers.SingleOrDefaultAsync(d => d.AccountId == accountId ||
-            db.DeveloperMemberships.Any(m => m.DeveloperId == d.Id && m.AccountId == accountId && (!ownerOnly || m.Role == DeveloperMembershipRole.Owner)), ct)
+        var developer = await DeveloperOrganizationSelection.Resolve(db, accountId, organizationContext?.OrganizationId, ownerOnly, ct)
             ?? throw new MiniAppException("DEVELOPER_NOT_FOUND", "Developer access denied.", 403);
         if (ownerOnly && developer.AccountId != accountId) throw new MiniAppException("OWNER_REQUIRED", "Only the owner can manage this resource.", 403);
         if (developer.Status != DeveloperStatus.Active) throw new MiniAppException(MiniAppErrorCodes.DeveloperSuspended, "Developer is not active.", 403);
@@ -26,14 +26,14 @@ public sealed partial class MiniAppManagementService
 
     public async Task<DeveloperProfileDto?> GetProfileAsync(Guid accountId, CancellationToken ct)
     {
-        var d = await db.Developers.AsNoTracking().Include(d => d.MiniApps).SingleOrDefaultAsync(d => d.AccountId == accountId ||
-            db.DeveloperMemberships.Any(m => m.DeveloperId == d.Id && m.AccountId == accountId), ct);
-        return d is null ? null : Profile(d, accountId);
+        var d = await DeveloperOrganizationSelection.Resolve(db, accountId, organizationContext?.OrganizationId, false, ct);
+        if (d is not null) await db.Entry(d).Collection(x => x.MiniApps).LoadAsync(ct);
+        return d is null ? null : Profile(d, accountId) with { MembershipRole = (await RoleFor(accountId, d, ct)).ToString() };
     }
 
     public async Task<DeveloperProfileDto> RegisterDeveloperAsync(Guid accountId, DeveloperInput input, CancellationToken ct)
     {
-        if (await GetProfileAsync(accountId, ct) is not null) throw new MiniAppException("DEVELOPER_EXISTS", "Account already belongs to a developer.", 409);
+        if (await db.Developers.AnyAsync(d => d.AccountId == accountId, ct)) throw new MiniAppException("DEVELOPER_EXISTS", "Account already owns a developer profile.", 409);
         ValidateDeveloper(input);
         if (!await db.Accounts.AnyAsync(a => a.Id == accountId && a.Status == AccountStatus.Active && a.DeletedAt == null, ct)) throw new MiniAppException("ACCOUNT_NOT_FOUND", "Active account required.", 403);
         var email = input.Email.Trim().ToLowerInvariant();
@@ -47,7 +47,7 @@ public sealed partial class MiniAppManagementService
 
     public async Task<DeveloperProfileDto> UpdateProfileAsync(Guid accountId, DeveloperInput input, CancellationToken ct)
     {
-        var d = await db.Developers.SingleOrDefaultAsync(d => d.AccountId == accountId, ct) ?? throw new MiniAppException("OWNER_REQUIRED", "Owner required.", 403);
+        var d = await DeveloperOrganizationSelection.Resolve(db, accountId, organizationContext?.OrganizationId, true, ct) ?? throw new MiniAppException("OWNER_REQUIRED", "Owner required.", 403);
         if (d.Status == DeveloperStatus.Suspended) throw new MiniAppException(MiniAppErrorCodes.DeveloperSuspended, "Developer suspended.", 403);
         ValidateDeveloper(input); var email = input.Email.Trim().ToLowerInvariant();
         if (await db.Developers.AnyAsync(x => x.Id != d.Id && x.Email == email, ct)) throw new MiniAppException("DEVELOPER_EXISTS", "Email already registered.", 409);
@@ -84,7 +84,7 @@ public sealed partial class MiniAppManagementService
         if (role == DeveloperMembershipRole.Admin && await RoleFor(accountId, d, ct) != DeveloperMembershipRole.Owner)
             throw new MiniAppException("OWNER_REQUIRED", "Chỉ Owner được cấp quyền Admin.", 403);
         if (!await db.Accounts.AnyAsync(a => a.Id == input.AccountId && a.Status == AccountStatus.Active && a.DeletedAt == null, ct)) throw new MiniAppException("ACCOUNT_NOT_FOUND", "Account unavailable.", 404);
-        if (await db.Developers.AnyAsync(x => x.AccountId == input.AccountId, ct) || await db.DeveloperMemberships.AnyAsync(m => m.AccountId == input.AccountId, ct)) throw new MiniAppException("MEMBERSHIP_EXISTS", "Account already belongs to a developer.", 409);
+        if (await db.DeveloperMemberships.AnyAsync(m => m.DeveloperId == d.Id && m.AccountId == input.AccountId, ct) || d.AccountId == input.AccountId) throw new MiniAppException("MEMBERSHIP_EXISTS", "Account already belongs to a developer.", 409);
         var member = new DeveloperMembership { AccountId = input.AccountId, DeveloperId = d.Id, Role = role };
         db.DeveloperMemberships.Add(member); Audit(accountId, d.Id, null, "TeamMemberAdded"); await SaveAsync(ct);
         return new(member.Id, member.AccountId, member.Role.ToString(), member.CreatedAt);
@@ -100,45 +100,6 @@ public sealed partial class MiniAppManagementService
         db.DeveloperMemberships.Remove(member); Audit(accountId, d.Id, null, "TeamMemberRemoved"); await SaveAsync(ct);
     }
 
-    public async Task<IReadOnlyList<MiniAppDomainDto>> GetDomainsAsync(Guid accountId, Guid id, CancellationToken ct)
-    {
-        await RequireOwned(accountId, id, ct);
-        return await db.MiniAppVerifiedDomains.AsNoTracking().Where(d => d.MiniAppId == id).OrderBy(d => d.Host).Select(d => new MiniAppDomainDto(d.Id, d.Host, d.VerifiedAt, d.ChallengeToken)).ToListAsync(ct);
-    }
-    public async Task<MiniAppDomainDto> AddDomainAsync(Guid accountId, Guid id, MiniAppDomainInput input, CancellationToken ct)
-    {
-        var app = await RequireOwned(accountId, id, ct);
-        await RequireCapability(accountId, app.Developer, "edit", ct);
-        var hosts = MiniAppSecurityPolicy.NormalizeDomains([input.Host]);
-        if (hosts.Length != 1 || !MiniAppSecurityPolicy.IsPublicHost(hosts[0]) || hosts[0].Contains('*')) throw new MiniAppException("VALIDATION_ERROR", "An exact public hostname is required.", 422);
-        var domain = await db.MiniAppVerifiedDomains.SingleOrDefaultAsync(d => d.MiniAppId == id && d.Host == hosts[0], ct);
-        if (domain is null)
-        {
-            domain = new MiniAppVerifiedDomain { MiniAppId = id, Host = hosts[0], ChallengeToken = credentials.CreateLaunchCode() };
-            db.MiniAppVerifiedDomains.Add(domain); Audit(accountId, app.DeveloperId, id, "DomainChallengeCreated"); await SaveAsync(ct);
-        }
-        return new(domain.Id, domain.Host, domain.VerifiedAt, domain.ChallengeToken);
-    }
-    public async Task<MiniAppDomainDto> VerifyDomainAsync(Guid accountId, Guid id, Guid domainId, CancellationToken ct)
-    {
-        var app = await RequireOwned(accountId, id, ct);
-        await RequireCapability(accountId, app.Developer, "edit", ct);
-        return await VerifyDomain(accountId, app, domainId, ct);
-    }
-    private async Task<MiniAppDomainDto> VerifyDomain(Guid actorAccountId, MiniApp app, Guid domainId, CancellationToken ct)
-    {
-        var id = app.Id;
-        var domain = await db.MiniAppVerifiedDomains.SingleOrDefaultAsync(d => d.Id == domainId && d.MiniAppId == id, ct) ?? throw new MiniAppException("DOMAIN_NOT_FOUND", "Domain not found.", 404);
-        var now = DateTime.UtcNow;
-        var attempted = await db.MiniAppVerifiedDomains.Where(d => d.Id == domain.Id && (d.LastAttemptAt == null || d.LastAttemptAt < now.AddSeconds(-30)))
-            .ExecuteUpdateAsync(s => s.SetProperty(d => d.LastAttemptAt, now), ct);
-        if (attempted != 1) throw new MiniAppException(MiniAppErrorCodes.RateLimited, "Wait before another verification attempt.", 429);
-        var verified = domainVerifier is not null && await domainVerifier.VerifyAsync(domain.Host, domain.ChallengeToken, ct);
-        domain.VerifiedAt = verified ? now : null; Audit(actorAccountId, app.DeveloperId, id, verified ? "DomainVerified" : "DomainVerificationFailed"); await SaveAsync(ct);
-        if (!verified) throw new MiniAppException("DOMAIN_VERIFICATION_FAILED", "Public HTTPS challenge did not match.", 422);
-        return new(domain.Id, domain.Host, domain.VerifiedAt, domain.ChallengeToken);
-    }
-
     public async Task<MiniAppAdminReviewContext> GetReviewContextAsync(Guid id, CancellationToken ct)
     {
         var app = await AppQuery().AsNoTracking().SingleOrDefaultAsync(a => a.Id == id && a.DeletedAt == null, ct)
@@ -146,15 +107,15 @@ public sealed partial class MiniAppManagementService
         var d = app.Developer;
         var count = await db.MiniApps.CountAsync(a => a.DeveloperId == d.Id && a.DeletedAt == null, ct);
         var domains = await db.MiniAppVerifiedDomains.AsNoTracking().Where(d => d.MiniAppId == id).OrderBy(d => d.Host)
-            .Select(d => new MiniAppDomainVerificationDto(d.Id, d.Host, d.VerifiedAt)).ToListAsync(ct);
+            .Select(d => new MiniAppDomainVerificationDto(d.Id, d.Host, d.VerifiedAt, d.VerificationFileName ?? "ankt-mini-app-verification.txt", "https://" + d.Host + "/" + (d.VerificationFileName ?? "ankt-mini-app-verification.txt"), d.ExpiresAt, d.LastAttemptAt, d.LastError)).ToListAsync(ct);
         return new(new(d.Id, d.AccountId, d.Name, d.CompanyName, d.Email, d.Phone, d.Website, d.Status.ToString(), count, d.CreatedAt, d.UpdatedAt), domains);
     }
     public async Task<MiniAppDomainVerificationDto> VerifyAdminDomainAsync(Guid actorAccountId, Guid id, Guid domainId, CancellationToken ct)
     {
         var app = await AppQuery().SingleOrDefaultAsync(a => a.Id == id && a.DeletedAt == null, ct)
             ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
-        var result = await VerifyDomain(actorAccountId, app, domainId, ct);
-        return new(result.Id, result.Host, result.VerifiedAt);
+        var result = await VerifyDomain(actorAccountId, app, domainId, ct, force: true);
+        return new(result.Id, result.Host, result.VerifiedAt, result.VerificationFileName, result.VerificationUrl, result.ExpiresAt, result.LastCheckedAt, result.LastError);
     }
     public async Task ReviewAppVersionAsync(Guid actorAccountId, Guid id, int? version, bool approve, string? reason, CancellationToken ct)
     {
@@ -186,8 +147,11 @@ public sealed partial class MiniAppManagementService
     }
     private async Task<MiniApp> RequireOwned(Guid accountId, Guid id, CancellationToken ct)
     {
-        var d = await RequireDeveloper(accountId, false, ct);
-        return await AppQuery().SingleOrDefaultAsync(a => a.Id == id && a.DeveloperId == d.Id && a.DeletedAt == null, ct) ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App not found.", 404);
+        await RequireActiveAccount(accountId, ct);
+        var app = await AppQuery().SingleOrDefaultAsync(a => a.Id == id && a.DeletedAt == null, ct)
+            ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App not found.", 404);
+        await RequireAppCapability(accountId, app, "read", ct);
+        return app;
     }
     private Task PreserveLegacyPublished(MiniApp app, CancellationToken ct)
     {
@@ -205,7 +169,7 @@ public sealed partial class MiniAppManagementService
     public async Task<MiniAppAnalyticsDto> GetAnalyticsAsync(Guid accountId, Guid id, CancellationToken ct)
     {
         var app = await RequireOwned(accountId, id, ct);
-        await RequireCapability(accountId, app.Developer, "analytics", ct);
+        await RequireAppCapability(accountId, app, "analytics", ct);
         var logs = db.MiniAppLaunchLogs.AsNoTracking().Where(l => l.MiniAppId == id && l.CreatedAt >= DateTime.UtcNow.AddDays(-30));
         var successful = await logs.CountAsync(l => l.Status == MiniAppLaunchStatus.Succeeded, ct);
         var failed = await logs.CountAsync(l => l.Status == MiniAppLaunchStatus.Failed, ct);
@@ -214,7 +178,7 @@ public sealed partial class MiniAppManagementService
             .Select(g => new { Date = g.Key, Launches = g.Count(l => l.Status == MiniAppLaunchStatus.Succeeded), Failures = g.Count(l => l.Status == MiniAppLaunchStatus.Failed) }).ToListAsync(ct);
         return new(successful, failed, users, days.Select(day => new MiniAppUsageDay(day.Date.ToString("yyyy-MM-dd"), day.Launches, day.Failures)).ToArray());
     }
-    public async Task<MiniAppAdminPage<MiniAppAuditDto>> GetOwnedAuditAsync(Guid accountId, Guid id, int page, int pageSize, CancellationToken ct) { await RequireOwned(accountId, id, ct); return await GetAuditLogsAsync(page, pageSize, id, ct); }
+    public async Task<MiniAppAdminPage<MiniAppAuditDto>> GetOwnedAuditAsync(Guid accountId, Guid id, int page, int pageSize, CancellationToken ct) { var app = await RequireOwned(accountId, id, ct); await RequireAppCapability(accountId, app, "audit", ct); return await GetAuditLogsAsync(page, pageSize, id, ct); }
     public async Task<IReadOnlyList<MiniAppCategoryDto>> GetCategoriesAsync(bool includeInactive, CancellationToken ct) => await db.MiniAppCategories.AsNoTracking().Where(c => includeInactive || c.IsActive).OrderBy(c => c.SortOrder).ThenBy(c => c.Name).Select(c => new MiniAppCategoryDto(c.Id, c.Name, c.Slug, c.IsActive, c.Icon, c.SortOrder)).ToListAsync(ct);
     public async Task<MiniAppCategoryDto> SaveCategoryAsync(Guid actorAccountId, Guid? id, MiniAppCategoryInput input, CancellationToken ct)
     {
@@ -251,6 +215,6 @@ public sealed partial class MiniAppManagementService
     {
         if (!await db.Developers.AnyAsync(d => d.Id == developerId && d.Status == DeveloperStatus.Active, ct)) throw new MiniAppException("DEVELOPER_NOT_FOUND", "Active developer required.", 422);
         var secret = credentials.CreateSecret(); var app = new MiniApp { DeveloperId = developerId, ClientId = credentials.CreateClientId(), ClientSecretHash = credentials.HashSecret(secret) };
-        db.MiniApps.Add(app); await ApplyInput(app, input, true, ct); Audit(actorAccountId, developerId, app.Id, "MiniAppCreated"); await SaveAsync(ct); return new(app.Id, app.ClientId, secret);
+        db.MiniApps.Add(app); await ApplyInput(app, input, true, ct); await PrepareDomainChallenges(app, ct); Audit(actorAccountId, developerId, app.Id, "MiniAppCreated"); await SaveAsync(ct); return new(app.Id, app.ClientId, secret);
     }
 }

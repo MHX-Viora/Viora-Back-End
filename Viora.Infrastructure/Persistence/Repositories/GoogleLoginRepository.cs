@@ -36,6 +36,8 @@ public sealed class GoogleLoginRepository(AppDbContext dbContext)
             .SingleOrDefaultAsync(
                 candidate => candidate.Email == identity.Email,
                 cancellationToken);
+        if (account is not null && identity.RequireExplicitExistingAccountLink)
+            throw new AccountConflictException("ACCOUNT_LINK_REQUIRED", "Email đã có tài khoản ANKT. Hãy đăng nhập tài khoản ANKT hiện có; Google chưa được liên kết với tài khoản này.");
         if (account is null)
         {
             account = new Account

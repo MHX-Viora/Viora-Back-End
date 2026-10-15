@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Viora.Application.MiniApps;
@@ -6,7 +7,7 @@ using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.MiniApps;
 
-public sealed partial class MiniAppManagementService(AppDbContext db, IClientCredentialService credentials, IMiniAppDomainVerifier? domainVerifier = null, IMiniAppTechnicalProbe? technicalProbe = null) : IMiniAppManagementService, IDeveloperMiniAppService
+public sealed partial class MiniAppManagementService(AppDbContext db, IClientCredentialService credentials, IMiniAppDomainVerifier? domainVerifier = null, IMiniAppTechnicalProbe? technicalProbe = null, IDeveloperOrganizationContext? organizationContext = null, IDataProtectionProvider? dataProtection = null) : IMiniAppManagementService, IDeveloperMiniAppService, IDeveloperMembershipService
 {
     public async Task<MiniAppAdminDashboard> GetDashboardAsync(CancellationToken cancellationToken) => new(
         await db.MiniApps.CountAsync(app => app.DeletedAt == null, cancellationToken),
@@ -117,7 +118,7 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         ValidateDeveloper(input);
         if (await db.Developers.AnyAsync(d => d.Email == input.Email.Trim().ToLowerInvariant(), cancellationToken)) throw new MiniAppException("DEVELOPER_EXISTS", "Developer email already registered.", 409);
         if (input.AccountId is Guid owner && (!await db.Accounts.AnyAsync(a => a.Id == owner && a.DeletedAt == null && a.Status == AccountStatus.Active, cancellationToken) ||
-            await db.Developers.AnyAsync(d => d.AccountId == owner, cancellationToken) || await db.DeveloperMemberships.AnyAsync(m => m.AccountId == owner, cancellationToken))) throw new MiniAppException("MEMBERSHIP_EXISTS", "Owner must be an available active account.", 409);
+            await db.Developers.AnyAsync(d => d.AccountId == owner, cancellationToken))) throw new MiniAppException("MEMBERSHIP_EXISTS", "Owner must be an available active account.", 409);
         var developer = new Developer { AccountId = input.AccountId, Name = input.Name.Trim(), CompanyName = input.CompanyName?.Trim(), Email = input.Email.Trim().ToLowerInvariant(), Phone = input.Phone?.Trim(), Website = input.Website?.Trim(), Status = DeveloperStatus.Pending };
         db.Developers.Add(developer);
         if (input.AccountId is Guid ownerId) db.DeveloperMemberships.Add(new DeveloperMembership { DeveloperId = developer.Id, AccountId = ownerId, Role = DeveloperMembershipRole.Owner });
@@ -170,23 +171,28 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         var secret = credentials.CreateSecret();
         var app = new MiniApp { DeveloperId = developer.Id, ClientId = credentials.CreateClientId(), ClientSecretHash = credentials.HashSecret(secret), Status = MiniAppStatus.Draft };
         db.MiniApps.Add(app);
+        db.Set<MiniAppMembership>().Add(new() { MiniAppId = app.Id, AccountId = accountId, Role = DeveloperMembershipRole.Owner });
         await ApplyInput(app, input, false, cancellationToken);
+        await PrepareDomainChallenges(app, cancellationToken);
         db.MiniAppAuditLogs.Add(new MiniAppAuditLog { ActorAccountId = accountId, DeveloperId = developer.Id, MiniAppId = app.Id, Action = "MiniAppCreated" });
         await SaveAsync(cancellationToken);
-        return new(app.Id, app.ClientId, secret);
+        return new(app.Id, app.ClientId, app.ClientAuthenticationMethod == MiniAppClientAuthenticationMethod.None ? "" : secret);
     }
 
     public async Task<IReadOnlyList<MiniAppDeveloperView>> GetOwnedAsync(Guid accountId, CancellationToken cancellationToken)
     {
         await RequireActiveAccount(accountId, cancellationToken);
-        return (await AppQuery().AsNoTracking().Where(app => (app.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == app.DeveloperId && m.AccountId == accountId)) && app.DeletedAt == null).OrderByDescending(app => app.CreatedAt).ToListAsync(cancellationToken)).Select(ToView).ToArray();
+        var owned = await AppQuery().AsNoTracking().Where(app => (app.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == app.DeveloperId && m.AccountId == accountId) || db.Set<MiniAppMembership>().Any(m => m.MiniAppId == app.Id && m.AccountId == accountId)) && app.DeletedAt == null && (organizationContext == null || organizationContext.OrganizationId == null || app.DeveloperId == organizationContext.OrganizationId)).OrderByDescending(app => app.CreatedAt).ToListAsync(cancellationToken);
+        var views = new List<MiniAppDeveloperView>();
+        foreach (var app in owned) views.Add(ToView(app) with { MembershipRole = (await AppRoleFor(accountId, app, cancellationToken)).ToString() });
+        return views;
     }
 
     public async Task<MiniAppDeveloperView?> GetOwnedAsync(Guid accountId, Guid id, CancellationToken cancellationToken)
     {
         await RequireActiveAccount(accountId, cancellationToken);
-        var app = await AppQuery().AsNoTracking().SingleOrDefaultAsync(item => item.Id == id && (item.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == item.DeveloperId && m.AccountId == accountId)) && item.DeletedAt == null, cancellationToken);
-        return app is null ? null : ToView(app);
+        var app = await AppQuery().AsNoTracking().SingleOrDefaultAsync(item => item.Id == id && (item.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == item.DeveloperId && m.AccountId == accountId) || db.Set<MiniAppMembership>().Any(m => m.MiniAppId == item.Id && m.AccountId == accountId)) && item.DeletedAt == null, cancellationToken);
+        return app is null ? null : ToView(app) with { MembershipRole = (await AppRoleFor(accountId, app, cancellationToken)).ToString() };
     }
 
     public async Task UpdateOwnedAsync(Guid accountId, Guid id, MiniAppConfigurationInput input, CancellationToken cancellationToken)
@@ -194,6 +200,7 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         var app = await OwnedEditable(accountId, id, cancellationToken);
         await PreserveLegacyPublished(app, cancellationToken);
         await ApplyInput(app, input with { IsFeatured = app.IsFeatured }, false, cancellationToken);
+        await PrepareDomainChallenges(app, cancellationToken);
         if (app.Status == MiniAppStatus.Rejected) app.Status = MiniAppStatus.Draft;
         Audit(accountId, app.DeveloperId, id, "MiniAppUpdated");
         await SaveAsync(cancellationToken);
@@ -218,24 +225,13 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
         await SaveAsync(cancellationToken);
     }
 
-    public async Task<MiniAppCredentialResponse> RotateSecretAsync(Guid accountId, Guid id, CancellationToken cancellationToken)
-    {
-        var app = await AppQuery().SingleOrDefaultAsync(item => item.Id == id && (item.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == item.DeveloperId && m.AccountId == accountId)) && item.DeletedAt == null, cancellationToken)
-            ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
-        await RequireDeveloper(accountId, false, cancellationToken);
-        await RequireCapability(accountId, app.Developer, "manage", cancellationToken);
-        var secret = credentials.CreateSecret();
-        app.ClientSecretHash = credentials.HashSecret(secret);
-        app.SecretRotatedAt = DateTime.UtcNow;
-        db.MiniAppAuditLogs.Add(new MiniAppAuditLog { ActorAccountId = accountId, MiniAppId = app.Id, DeveloperId = app.DeveloperId, Action = "SecretRotated" });
-        await SaveAsync(cancellationToken);
-        return new(app.Id, app.ClientId, secret);
-    }
+    public Task<MiniAppCredentialResponse> RotateSecretAsync(Guid accountId, Guid id, CancellationToken cancellationToken)
+        => RotateSecretAsync(accountId, id, 0, cancellationToken);
 
     public async Task<MiniAppDeveloperView> GetPartnerConfigurationAsync(string clientId, string clientSecret, CancellationToken cancellationToken)
     {
         var app = await AppQuery().AsNoTracking().SingleOrDefaultAsync(item => item.ClientId == clientId && item.DeletedAt == null, cancellationToken);
-        if (app is null || !credentials.VerifySecret(clientSecret, app.ClientSecretHash)) throw new MiniAppException(MiniAppErrorCodes.InvalidClient, "Client credentials không hợp lệ.", 401);
+        if (app is null || !MiniAppSecretPolicy.Verify(credentials, app, clientSecret, DateTime.UtcNow)) throw new MiniAppException(MiniAppErrorCodes.InvalidClient, "Client credentials không hợp lệ.", 401);
         return ToView(app);
     }
 
@@ -243,11 +239,10 @@ public sealed partial class MiniAppManagementService(AppDbContext db, IClientCre
 
     private async Task<MiniApp> OwnedEditable(Guid accountId, Guid id, CancellationToken cancellationToken)
     {
-        var app = await AppQuery().SingleOrDefaultAsync(item => item.Id == id && (item.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == item.DeveloperId && m.AccountId == accountId)) && item.DeletedAt == null, cancellationToken)
+        var app = await AppQuery().SingleOrDefaultAsync(item => item.Id == id && (item.Developer.AccountId == accountId || db.DeveloperMemberships.Any(m => m.DeveloperId == item.DeveloperId && m.AccountId == accountId) || db.Set<MiniAppMembership>().Any(m => m.MiniAppId == item.Id && m.AccountId == accountId)) && item.DeletedAt == null, cancellationToken)
             ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
         if (app.PendingVersion != null || app.Status is MiniAppStatus.PendingReview or MiniAppStatus.Suspended or MiniAppStatus.Archived) throw new MiniAppException("MINI_APP_NOT_EDITABLE", "Mini App không thể sửa ở trạng thái hiện tại.", 409);
-        await RequireDeveloper(accountId, false, cancellationToken);
-        await RequireCapability(accountId, app.Developer, "edit", cancellationToken);
+        await RequireAppCapability(accountId, app, "edit", cancellationToken);
         return app;
     }
 

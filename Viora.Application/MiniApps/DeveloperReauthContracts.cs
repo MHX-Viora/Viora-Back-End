@@ -1,6 +1,6 @@
 namespace Viora.Application.MiniApps;
 
-public sealed record DeveloperReauthInput(string Password, string Operation, Guid? MiniAppId = null);
+public sealed record DeveloperReauthInput(string? Password, string Operation, Guid? MiniAppId = null, string? FirebaseToken = null, Guid? DeveloperId = null);
 public sealed record DeveloperReauthResponse(string Proof, DateTime ExpiresAt);
 public interface IDeveloperReauthenticationService
 {

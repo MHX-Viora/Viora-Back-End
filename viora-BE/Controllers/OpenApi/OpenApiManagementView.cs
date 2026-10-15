@@ -12,7 +12,12 @@ public sealed record OpenApiUsage(int Requests, int Successful, int Unauthorized
 public sealed record OpenApiRecentError(DateTime OccurredAt, string Path, int Status, string? CorrelationId);
 public sealed record OpenApiSsoReadiness(bool AutoLoginEnabled, bool OAuthConfigurationValid, bool CallbackDomainsVerified, bool PkceSupported, string SilentSsoStatus, string ConsentRequirements, string AccountLinkingStatus);
 public sealed record OpenApiManagementView(bool Enabled, string? Issuer, string? DiscoveryUrl, string? HostOrigin, string ClientId,
-    string[] ApprovedScopes, IReadOnlyList<string> ApprovedCallbackUrls, bool Eligible, int AccountLinks, OpenApiUsage Usage, IReadOnlyList<OpenApiRecentError>? RecentErrors = null, OpenApiSsoReadiness? SsoReadiness = null);
+    string[] ApprovedScopes, IReadOnlyList<string> ApprovedCallbackUrls, bool Eligible, int AccountLinks, OpenApiUsage Usage, IReadOnlyList<OpenApiRecentError>? RecentErrors = null, OpenApiSsoReadiness? SsoReadiness = null)
+{
+    public string? AuthorizationEndpoint => Enabled && Issuer is not null ? new Uri(new Uri(Issuer), "/oauth/authorize").ToString() : null;
+    public string? TokenEndpoint => Enabled && Issuer is not null ? new Uri(new Uri(Issuer), "/oauth/token").ToString() : null;
+    public string? JwksEndpoint => Enabled && Issuer is not null ? new Uri(new Uri(Issuer), "/oauth/jwks").ToString() : null;
+}
 
 internal static class OpenApiManagementViews
 {

@@ -73,7 +73,7 @@ public sealed partial class MiniAppManagementService
     public async Task<MiniAppTechnicalTestDto> RunTechnicalTestAsync(Guid accountId, Guid id, CancellationToken ct)
     {
         var app = await RequireOwned(accountId, id, ct);
-        await RequireCapability(accountId, app.Developer, "edit", ct);
+        await RequireAppCapability(accountId, app, "edit", ct);
         var hash = ConfigurationHash(app);
         var startedAt = DateTime.UtcNow;
         if (await db.MiniAppTechnicalTests.AnyAsync(t => t.MiniAppId == id && t.CreatedAt >= startedAt.AddSeconds(-30), ct))
@@ -147,7 +147,7 @@ public sealed partial class MiniAppManagementService
     public async Task PublishOwnedAsync(Guid accountId, Guid id, int versionNumber, CancellationToken ct)
     {
         var app = await RequireOwned(accountId, id, ct);
-        await RequireCapability(accountId, app.Developer, "edit", ct);
+        await RequireAppCapability(accountId, app, "edit", ct);
         if (app.Status is MiniAppStatus.Suspended or MiniAppStatus.Archived || app.PendingVersion != null)
             throw new MiniAppException("INVALID_STATUS_TRANSITION", "Ứng dụng đang bị khóa hoặc có phiên bản đang xét duyệt.", 409);
         var version = app.Versions.SingleOrDefault(v => v.Version == versionNumber && v.ReviewState == "Approved");
@@ -166,7 +166,7 @@ public sealed partial class MiniAppManagementService
     public async Task UnpublishOwnedAsync(Guid accountId, Guid id, CancellationToken ct)
     {
         var app = await RequireOwned(accountId, id, ct);
-        await RequireCapability(accountId, app.Developer, "manage", ct);
+        await RequireAppCapability(accountId, app, "manage", ct);
         if (app.Status != MiniAppStatus.Active) throw new MiniAppException("INVALID_STATUS_TRANSITION", "Chỉ có thể ngừng phát hành ứng dụng đang hoạt động.", 409);
         app.Status = MiniAppStatus.Unpublished;
         Audit(accountId, app.DeveloperId, id, "MiniAppUnpublished");

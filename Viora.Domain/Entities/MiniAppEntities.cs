@@ -54,6 +54,8 @@ public sealed class MiniApp : AuditableEntity
     public Guid DeveloperId { get; set; }
     public string ClientId { get; set; } = null!;
     public string ClientSecretHash { get; set; } = null!;
+    public string? PreviousClientSecretHash { get; set; }
+    public DateTime? PreviousClientSecretExpiresAt { get; set; }
     public DateTime? SecretRotatedAt { get; set; }
     public MiniAppStatus Status { get; set; } = MiniAppStatus.Draft;
     public bool IsFeatured { get; set; }
@@ -141,6 +143,10 @@ public sealed class MiniAppVersion : CreatedEntity
 
 public sealed class MiniAppVerifiedDomain : AuditableEntity
 {
+    public string? VerificationFileName { get; set; }
+    public string? ProtectedChallengeToken { get; set; }
+    public DateTime? ExpiresAt { get; set; }
+    public string? LastError { get; set; }
     public Guid MiniAppId { get; set; }
     public string Host { get; set; } = null!;
     public string ChallengeToken { get; set; } = null!;

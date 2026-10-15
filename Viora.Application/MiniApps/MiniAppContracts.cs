@@ -56,7 +56,7 @@ public sealed record MiniAppDeveloperView(
     int PublishedVersion = 0, int? PendingVersion = null,
     string? SupportEmail = null, string? PrivacyPolicyUrl = null, string? TermsUrl = null, string? DevelopmentUrl = null,
     string AgeRating = "Everyone", IReadOnlyList<string>? ReleaseRegions = null, string IntegrationType = "Website", string SsoMode = "Optional",
-    int? ApprovedVersion = null, string ReviewState = "Draft", string PublicationStatus = "Draft", bool AutoLogin = false, IReadOnlyList<string>? Screenshots = null);
+    int? ApprovedVersion = null, string ReviewState = "Draft", string PublicationStatus = "Draft", bool AutoLogin = false, IReadOnlyList<string>? Screenshots = null, string? MembershipRole = null);
 public sealed record DeveloperInput(string Name, string? CompanyName, string Email, string? Phone, string? Website, Guid? AccountId, string PartnerType = "Individual", string? LegalName = null,
     string? TradingName = null, string? BusinessRegistrationNumber = null, string? Country = null,
     string? Address = null, string? RepresentativeName = null, int? Version = null);
@@ -77,7 +77,12 @@ public sealed record MiniAppCategoryDto(Guid Id, string Name, string Slug, bool 
 public sealed record MiniAppCategoryInput(string Name, string Slug, bool IsActive = true, string Icon = "apps-outline", int SortOrder = 0);
 public sealed record MiniAppPermissionInput(string Code, string Name, string? Description, bool IsSensitive, bool IsActive = true);
 public sealed record MiniAppDomainInput(string Host);
-public sealed record MiniAppDomainDto(Guid Id, string Host, DateTime? VerifiedAt, string ChallengeToken);
+public sealed record MiniAppDomainDto(Guid Id, string Host, DateTime? VerifiedAt, string ChallengeToken,
+    string? VerificationFileName = null, string? VerificationUrl = null, DateTime? ExpiresAt = null,
+    string? FileContent = null, DateTime? LastCheckedAt = null, string? LastError = null);
+public sealed record MiniAppSecretRotationInput(int GraceMinutes = 0);
+public sealed record MiniAppCredentialMetadata(string ClientId, string ClientAuthenticationMethod, bool HasSecret, DateTime? PreviousSecretExpiresAt, DateTime? LastRotatedAt, bool CanRotate);
+public sealed record MiniAppDomainCheck(bool Verified, string? Code = null, string? Message = null);
 public sealed record MiniAppVersionDto(Guid Id, int Version, string Status, string? Reason, DateTime CreatedAt, DateTime? ReviewedAt, MiniAppConfigurationInput Configuration,
     string ReviewState = "Submitted", DateTime? TestedAt = null, string? ConfigurationHash = null, MiniAppTechnicalTestDto? TechnicalTest = null);
 public sealed record MiniAppTechnicalCheckDto(string Code, bool Passed, string Message, int? HttpStatus = null, long? DurationMs = null);
@@ -131,7 +136,7 @@ public interface IMiniAppManagementService
     Task<MiniAppCredentialResponse> CreateAdminAppAsync(Guid actorAccountId, Guid developerId, MiniAppConfigurationInput input, CancellationToken cancellationToken);
 }
 
-public sealed record MiniAppDomainVerificationDto(Guid Id, string Host, DateTime? VerifiedAt);
+public sealed record MiniAppDomainVerificationDto(Guid Id, string Host, DateTime? VerifiedAt, string? VerificationFileName = null, string? VerificationUrl = null, DateTime? ExpiresAt = null, DateTime? LastCheckedAt = null, string? LastError = null);
 public sealed record MiniAppAdminReviewContext(DeveloperDto Developer, IReadOnlyList<MiniAppDomainVerificationDto> Domains);
 
 public interface IDeveloperMiniAppService
@@ -157,6 +162,10 @@ public interface IDeveloperMiniAppService
     Task<IReadOnlyList<MiniAppDomainDto>> GetDomainsAsync(Guid accountId, Guid id, CancellationToken cancellationToken);
     Task<MiniAppDomainDto> AddDomainAsync(Guid accountId, Guid id, MiniAppDomainInput input, CancellationToken cancellationToken);
     Task<MiniAppDomainDto> VerifyDomainAsync(Guid accountId, Guid id, Guid domainId, CancellationToken cancellationToken);
+    Task<MiniAppDomainDto> RenewDomainAsync(Guid accountId, Guid id, Guid domainId, CancellationToken cancellationToken);
+    Task<MiniAppCredentialMetadata> GetCredentialsAsync(Guid accountId, Guid id, CancellationToken cancellationToken);
+    Task<MiniAppCredentialResponse> RotateSecretAsync(Guid accountId, Guid id, int graceMinutes, CancellationToken cancellationToken);
+    Task RevokePreviousSecretAsync(Guid accountId, Guid id, CancellationToken cancellationToken);
     Task<IReadOnlyList<MiniAppVersionDto>> GetOwnedVersionsAsync(Guid accountId, Guid id, CancellationToken cancellationToken);
     Task<MiniAppAnalyticsDto> GetAnalyticsAsync(Guid accountId, Guid id, CancellationToken cancellationToken);
     Task<MiniAppAdminPage<MiniAppAuditDto>> GetOwnedAuditAsync(Guid accountId, Guid id, int page, int pageSize, CancellationToken cancellationToken);
@@ -165,6 +174,8 @@ public interface IDeveloperMiniAppService
 public interface IMiniAppDomainVerifier
 {
     Task<bool> VerifyAsync(string host, string challengeToken, CancellationToken cancellationToken);
+    async Task<MiniAppDomainCheck> CheckAsync(string host, string fileName, string content, CancellationToken cancellationToken)
+        => await VerifyAsync(host, content, cancellationToken) ? new(true) : new(false, "DOMAIN_VERIFICATION_FAILED", "Nội dung file xác minh không đúng hoặc website không phản hồi.");
 }
 
 public interface IClientCredentialService

@@ -27,13 +27,6 @@ public sealed class DeveloperMiniAppsController(IDeveloperMiniAppService service
     [HttpPut("{id:guid}")]
     public async Task Update(Guid id, MiniAppConfigurationInput input, CancellationToken cancellationToken)
     {
-        var current = await service.GetOwnedAsync(AccountId(), id, cancellationToken)
-            ?? throw new MiniAppException(MiniAppErrorCodes.NotFound, "Mini App không tồn tại.", 404);
-        static string Host(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.IdnHost : "";
-        if (Host(current.WebUrl) != Host(input.WebUrl) || !current.AllowedDomains.Order().SequenceEqual((input.AllowedDomains ?? []).Order()) ||
-            !(current.CallbackUrls ?? []).Order().SequenceEqual((input.CallbackUrls ?? (string.IsNullOrWhiteSpace(input.CallbackUrl) ? [] : [input.CallbackUrl])).Order()) ||
-            !(current.AllowedOrigins ?? []).Order().SequenceEqual((input.AllowedOrigins ?? [Uri.TryCreate(input.WebUrl, UriKind.Absolute, out var uri) ? uri.GetLeftPart(UriPartial.Authority) : ""]).Order()))
-            await reauthentication.ConsumeAsync(AccountId(), "ChangeDomain", id, Request.Headers["X-Developer-Reauth"].FirstOrDefault(), cancellationToken);
         await service.UpdateOwnedAsync(AccountId(), id, input, cancellationToken);
     }
     [HttpPost("{id:guid}/submit-review")]
@@ -48,17 +41,29 @@ public sealed class DeveloperMiniAppsController(IDeveloperMiniAppService service
     [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("mini-app-launch")]
     public Task<MiniAppTechnicalTestDto> RunTechnicalTest(Guid id, CancellationToken ct) => service.RunTechnicalTestAsync(AccountId(), id, ct);
     [HttpPost("{id:guid}/rotate-secret")]
-    public async Task<MiniAppCredentialResponse> Rotate(Guid id, CancellationToken cancellationToken)
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("mini-app-launch")]
+    public async Task<MiniAppCredentialResponse> Rotate(Guid id, CancellationToken cancellationToken, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] MiniAppSecretRotationInput? input = null)
     {
         await reauthentication.ConsumeAsync(AccountId(), "RotateSecret", id, Request.Headers["X-Developer-Reauth"].FirstOrDefault(), cancellationToken);
-        return await service.RotateSecretAsync(AccountId(), id, cancellationToken);
+        return await service.RotateSecretAsync(AccountId(), id, input?.GraceMinutes ?? 0, cancellationToken);
     }
+    [HttpGet("{id:guid}/credentials")]
+    public Task<MiniAppCredentialMetadata> Credentials(Guid id, CancellationToken ct) => service.GetCredentialsAsync(AccountId(), id, ct);
+    [HttpPost("{id:guid}/revoke-previous-secret")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("mini-app-launch")]
+    public async Task RevokePreviousSecret(Guid id, CancellationToken ct)
+    {
+        await reauthentication.ConsumeAsync(AccountId(), "RotateSecret", id, Request.Headers["X-Developer-Reauth"].FirstOrDefault(), ct);
+        await service.RevokePreviousSecretAsync(AccountId(), id, ct);
+    }
+    [HttpPost("{id:guid}/domains/{domainId:guid}/renew")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("mini-app-launch")]
+    public Task<MiniAppDomainDto> RenewDomain(Guid id, Guid domainId, CancellationToken ct) => service.RenewDomainAsync(AccountId(), id, domainId, ct);
     [HttpGet("{id:guid}/domains")]
     public Task<IReadOnlyList<MiniAppDomainDto>> Domains(Guid id, CancellationToken ct) => service.GetDomainsAsync(AccountId(), id, ct);
     [HttpPost("{id:guid}/domains")]
     public async Task<MiniAppDomainDto> AddDomain(Guid id, MiniAppDomainInput input, CancellationToken ct)
     {
-        await reauthentication.ConsumeAsync(AccountId(), "ChangeDomain", id, Request.Headers["X-Developer-Reauth"].FirstOrDefault(), ct);
         return await service.AddDomainAsync(AccountId(), id, input, ct);
     }
     [HttpPost("{id:guid}/domains/{domainId:guid}/verify")]

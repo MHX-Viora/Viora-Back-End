@@ -56,6 +56,7 @@ internal sealed class MiniAppConfiguration : IEntityTypeConfiguration<MiniApp>
         builder.Property(x => x.CallbackUrl).HasMaxLength(2048).IsRequired();
         builder.Property(x => x.ClientId).HasMaxLength(80).IsRequired();
         builder.Property(x => x.ClientSecretHash).IsRequired();
+        builder.Property(x => x.PreviousClientSecretHash).HasMaxLength(512);
         builder.Property(x => x.AllowedDomains).HasColumnType("text[]");
         builder.Property(x => x.CallbackUrls).HasColumnType("text[]");
         builder.Property(x => x.AllowedOrigins).HasColumnType("text[]");
@@ -154,7 +155,7 @@ internal sealed class DeveloperMembershipConfiguration : IEntityTypeConfiguratio
     public void Configure(EntityTypeBuilder<DeveloperMembership> builder)
     {
         builder.HasIndex(x => new { x.DeveloperId, x.AccountId }).IsUnique();
-        builder.HasIndex(x => x.AccountId).IsUnique();
+        builder.HasIndex(x => x.AccountId);
         builder.HasOne(x => x.Developer).WithMany().HasForeignKey(x => x.DeveloperId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
     }
@@ -180,6 +181,9 @@ internal sealed class MiniAppVerifiedDomainConfiguration : IEntityTypeConfigurat
         builder.HasIndex(x => new { x.MiniAppId, x.Host }).IsUnique();
         builder.Property(x => x.Host).HasMaxLength(253).IsRequired();
         builder.Property(x => x.ChallengeToken).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.VerificationFileName).HasMaxLength(80);
+        builder.Property(x => x.ProtectedChallengeToken).HasMaxLength(2048);
+        builder.Property(x => x.LastError).HasMaxLength(500);
         builder.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
     }
 }

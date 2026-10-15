@@ -79,8 +79,7 @@ public sealed class MiniAppPlatformTests
         await Assert.ThrowsAsync<MiniAppException>(() => service.CreateAsync(f.Other.Id, Input(f) with { Slug = "another" }, default));
         await Assert.ThrowsAsync<MiniAppException>(() => service.UpdateTeamRoleAsync(f.Other.Id, member.Id, new("Owner"), default));
         await Assert.ThrowsAsync<MiniAppException>(() => service.AddDomainAsync(f.Other.Id, app.Id, new("another.example.com"), default));
-        if (role == "Viewer") await Assert.ThrowsAsync<MiniAppException>(() => service.GetAnalyticsAsync(f.Other.Id, app.Id, default));
-        else Assert.NotNull(await service.GetAnalyticsAsync(f.Other.Id, app.Id, default));
+        Assert.NotNull(await service.GetAnalyticsAsync(f.Other.Id, app.Id, default));
     }
 
     [Fact]
@@ -98,7 +97,7 @@ public sealed class MiniAppPlatformTests
     public async Task ReauthProofIsBoundToAccountTargetOperationAndSingleUse()
     {
         await using var f = await Fixture.Create(true);
-        var passwords = new AspNetIdentityPasswordHasher(); f.Owner.PasswordHash = passwords.Hash("fixture-password"); await f.Db.SaveChangesAsync();
+        var passwords = new AspNetIdentityPasswordHasher(); f.Owner.PasswordHash = passwords.Hash("fixture-password"); f.Owner.EmailVerifiedAt = DateTime.UtcNow; await f.Db.SaveChangesAsync();
         var service = new DeveloperReauthenticationService(f.Db, passwords);
         var app = await f.Management.CreateAsync(f.Owner.Id, Input(f), default);
         var proof = await service.VerifyAsync(f.Owner.Id, new("fixture-password", "RotateSecret", app.Id), default);
@@ -115,7 +114,7 @@ public sealed class MiniAppPlatformTests
     {
         await using var f = await Fixture.Create(true); var service = new DeveloperReauthenticationService(f.Db, new AspNetIdentityPasswordHasher());
         Assert.Equal("REAUTH_UNAVAILABLE", (await Assert.ThrowsAsync<MiniAppException>(() => service.VerifyAsync(f.Owner.Id, new("anything", "ManageTeam"), default))).Code);
-        f.Owner.PasswordHash = new AspNetIdentityPasswordHasher().Hash("fixture-password"); await f.Db.SaveChangesAsync();
+        f.Owner.PasswordHash = new AspNetIdentityPasswordHasher().Hash("fixture-password"); f.Owner.EmailVerifiedAt = DateTime.UtcNow; await f.Db.SaveChangesAsync();
         var proof = await service.VerifyAsync(f.Owner.Id, new("fixture-password", "ManageTeam"), default);
         await f.Db.DeveloperReauths.ExecuteUpdateAsync(update => update.SetProperty(p => p.ExpiresAt, DateTime.UtcNow.AddSeconds(-1)));
         await Assert.ThrowsAsync<MiniAppException>(() => service.ConsumeAsync(f.Owner.Id, "ManageTeam", null, proof.Proof, default));

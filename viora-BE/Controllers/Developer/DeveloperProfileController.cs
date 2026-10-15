@@ -20,6 +20,7 @@ public sealed class DeveloperProfileController(IDeveloperMiniAppService service,
     [HttpPut("profile")]
     public Task<DeveloperProfileDto> Update(DeveloperInput input, CancellationToken ct) => platform.SaveDraftAsync(AccountId(), input, ct);
     [HttpGet("terms")]
+    [AllowAnonymous]
     public DeveloperTermsDto Terms() => platform.GetTerms();
     [HttpPost("application/draft"), EnableRateLimiting("mini-app-launch")]
     public Task<DeveloperProfileDto> Draft(DeveloperInput input, CancellationToken ct) => platform.SaveDraftAsync(AccountId(), input, ct);

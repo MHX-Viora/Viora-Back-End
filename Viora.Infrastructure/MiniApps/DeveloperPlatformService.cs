@@ -9,7 +9,7 @@ using Viora.Domain.Entities;
 using Viora.Infrastructure.Persistence;
 namespace Viora.Infrastructure.MiniApps;
 
-public sealed class DeveloperPlatformService(AppDbContext db,IDeveloperVerificationMailer mailer,IOptions<DeveloperVerificationOptions> options,TimeProvider clock) : IDeveloperPlatformService
+public sealed class DeveloperPlatformService(AppDbContext db,IDeveloperVerificationMailer mailer,IOptions<DeveloperVerificationOptions> options,TimeProvider clock, IDeveloperOrganizationContext? organizationContext = null) : IDeveloperPlatformService
 {
     public const string TermsVersion="2026-10-13.1";
     private DateTime Now=>clock.GetUtcNow().UtcDateTime;
@@ -61,16 +61,15 @@ public sealed class DeveloperPlatformService(AppDbContext db,IDeveloperVerificat
     public async Task<DeveloperProfileDto?> GetProfileAsync(Guid accountId,CancellationToken ct)
     {
         await ActiveAccount(accountId,ct);
-        var d=await db.Developers.AsNoTracking().SingleOrDefaultAsync(d=>d.AccountId==accountId||db.DeveloperMemberships.Any(m=>m.DeveloperId==d.Id&&m.AccountId==accountId),ct);
+        var d=await DeveloperOrganizationSelection.Resolve(db, accountId, organizationContext?.OrganizationId, false, ct);
         return d is null?null:await Profile(d,accountId,false,ct);
     }
     public async Task<DeveloperProfileDto> SaveDraftAsync(Guid accountId,DeveloperInput input,CancellationToken ct)
     {
         await ActiveAccount(accountId,ct); var x=Normalize(input);
-        var d=await db.Developers.SingleOrDefaultAsync(d=>d.AccountId==accountId,ct);
+        var d=await DeveloperOrganizationSelection.Resolve(db, accountId, organizationContext?.OrganizationId, true, ct);
         if(d is null)
         {
-            if(await db.DeveloperMemberships.AnyAsync(m=>m.AccountId==accountId,ct)) throw new MiniAppException("MEMBERSHIP_EXISTS","Account belongs to another developer.",409);
             if(await db.Developers.AnyAsync(d=>d.Email==x.Email,ct)) throw new MiniAppException("DEVELOPER_EXISTS","Contact email already registered.",409);
             d=new Developer{AccountId=accountId,Status=DeveloperStatus.Draft,RegistrationVersion=1,RegistrationStatus="Draft"}; Apply(d,x);db.Developers.Add(d);db.DeveloperMemberships.Add(new(){DeveloperId=d.Id,AccountId=accountId,Role=DeveloperMembershipRole.Owner});
         }
@@ -87,13 +86,14 @@ public sealed class DeveloperPlatformService(AppDbContext db,IDeveloperVerificat
     }
     public async Task<DeveloperProfileDto> SubmitAsync(Guid accountId,DeveloperSubmitInput input,CancellationToken ct)
     {
-        await ActiveAccount(accountId,ct);var d=await db.Developers.SingleOrDefaultAsync(d=>d.AccountId==accountId,ct)??throw new MiniAppException("OWNER_REQUIRED","Owner required.",403);
+        await ActiveAccount(accountId,ct);var d=await DeveloperOrganizationSelection.Resolve(db, accountId, organizationContext?.OrganizationId, true, ct)??throw new MiniAppException("OWNER_REQUIRED","Owner required.",403);
         if(d.RegistrationVersion!=input.Version||d.RegistrationStatus!="Draft"||d.DraftApplicationJson is null) throw new MiniAppException("CONCURRENT_UPDATE","Current draft version required.",409);
-        if(!input.AcceptedTerms||input.TermsVersion!=TermsVersion) throw new MiniAppException("TERMS_REQUIRED","Accept the current Developer terms.",422);
+        var previousConsent=await db.DeveloperApplications.Where(a=>a.DeveloperId==d.Id&&a.SubmittedByAccountId==accountId&&a.TermsVersion==TermsVersion).OrderByDescending(a=>a.TermsAcceptedAt).Select(a=>(DateTime?)a.TermsAcceptedAt).FirstOrDefaultAsync(ct);
+        if(input.TermsVersion!=TermsVersion||!input.AcceptedTerms&&previousConsent is null) throw new MiniAppException("TERMS_REQUIRED","Accept the current Developer terms.",422);
         var x=Normalize(JsonSerializer.Deserialize<DeveloperInput>(d.DraftApplicationJson)!);
         if(await db.Developers.AnyAsync(other=>other.Id!=d.Id&&other.Email==x.Email,ct)) throw new MiniAppException("DEVELOPER_EXISTS","Contact email already registered.",409);
         var verifiedAt=await db.DeveloperEmailVerifications.Where(v=>v.AccountId==accountId&&v.Email==x.Email&&v.VerifiedAt!=null&&v.DeliverySucceeded).OrderByDescending(v=>v.VerifiedAt).Select(v=>v.VerifiedAt).FirstOrDefaultAsync(ct);
-        db.DeveloperApplications.Add(new(){DeveloperId=d.Id,Version=d.RegistrationVersion,ConfigurationJson=JsonSerializer.Serialize(x),TermsVersion=TermsVersion,TermsAcceptedAt=Now,SubmittedAt=Now,SubmittedByAccountId=accountId,EmailVerifiedAt=verifiedAt});
+        db.DeveloperApplications.Add(new(){DeveloperId=d.Id,Version=d.RegistrationVersion,ConfigurationJson=JsonSerializer.Serialize(x),TermsVersion=TermsVersion,TermsAcceptedAt=previousConsent??Now,SubmittedAt=Now,SubmittedByAccountId=accountId,EmailVerifiedAt=verifiedAt});
         d.DraftApplicationJson=null;d.RegistrationStatus="PendingReview";d.ConcurrencyStamp=Guid.NewGuid();if(d.Status!=DeveloperStatus.Active)d.Status=DeveloperStatus.Pending;
         Audit(accountId,d.Id,"DeveloperSubmitted"); await Notify(accountId,"Đã gửi hồ sơ Developer","Hồ sơ đang chờ xét duyệt.",ct);await Save(ct);return await Profile(d,accountId,false,ct);
     }

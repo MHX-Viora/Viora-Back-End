@@ -195,7 +195,10 @@ public sealed class OpenApiOAuthTests
     {
         await using var f = await Fixture.Create();
         foreach (var transaction in new[] { f.Transaction with { RedirectUri = "https://evil.example/callback" }, f.Transaction with { State = "short" }, f.Transaction with { Nonce = "short" }, f.Transaction with { Scopes = new[] { "openid", "wallet" } } })
-            Assert.Equal(HttpStatusCode.BadRequest, (await f.Prepare(transaction)).StatusCode);
+        {
+            var response = await f.Prepare(transaction);
+            Assert.True(response.StatusCode == HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+        }
         Assert.Equal(HttpStatusCode.Forbidden, (await f.Prepare(f.Transaction with { Scopes = new[] { "openid", "email" } })).StatusCode);
         using var scope = f.App.Services.CreateScope();
         Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<OpenApiDbContext>().Set<OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken>().CountAsync());

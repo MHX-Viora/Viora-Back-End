@@ -51,5 +51,25 @@ public sealed class DeveloperPlatformHttpTests
         submitted.EnsureSuccessStatusCode();
         Assert.Equal("PendingReview",(await submitted.Content.ReadFromJsonAsync<DeveloperProfileDto>())!.RegistrationStatus);
         Assert.Equal(HttpStatusCode.ServiceUnavailable,(await http.PostAsJsonAsync("/api/developer/email-verification/request",new DeveloperEmailRequest(draft.Email))).StatusCode);
+
+        // A Developer profile reuses the ANKT account, which may be passwordless.
+        http.DefaultRequestHeaders.Remove("Fixture-Account");
+        http.DefaultRequestHeaders.Add("Fixture-Account", f.Owner.Id.ToString());
+        f.Owner.PasswordHash = null;
+        await f.Db.SaveChangesAsync();
+        var createdResponse = await http.PostAsJsonAsync("/api/developer/mini-apps", f.SsoInput());
+        createdResponse.EnsureSuccessStatusCode();
+        var created = (await createdResponse.Content.ReadFromJsonAsync<MiniAppCredentialResponse>())!;
+        Assert.False(string.IsNullOrWhiteSpace(created.ClientSecret));
+        var detail = await http.GetStringAsync($"/api/developer/mini-apps/{created.Id}");
+        Assert.DoesNotContain(created.ClientSecret!, detail);
+        var updated = f.SsoInput() with { WebUrl = "https://new.example.com/app", AllowedDomains = ["new.example.com"], CallbackUrls = ["https://new.example.com/callback"], CallbackUrl = "https://new.example.com/callback", AllowedOrigins = ["https://new.example.com"] };
+        (await http.PutAsJsonAsync($"/api/developer/mini-apps/{created.Id}", updated)).EnsureSuccessStatusCode();
+        (await http.PostAsJsonAsync($"/api/developer/mini-apps/{created.Id}/domains", new MiniAppDomainInput("new.example.com"))).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Forbidden, (await http.PostAsync($"/api/developer/mini-apps/{created.Id}/rotate-secret", null)).StatusCode);
+        http.DefaultRequestHeaders.Remove("Fixture-Account");
+        http.DefaultRequestHeaders.Add("Fixture-Account", f.Other.Id.ToString());
+        Assert.Equal(HttpStatusCode.NotFound, (await http.PutAsJsonAsync($"/api/developer/mini-apps/{created.Id}", updated)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await http.PostAsJsonAsync($"/api/developer/mini-apps/{created.Id}/domains", new MiniAppDomainInput("new.example.com"))).StatusCode);
     }
 }

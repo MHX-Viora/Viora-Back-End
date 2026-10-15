@@ -13,8 +13,11 @@ public sealed class DeveloperReauthConfiguration : IEntityTypeConfiguration<Deve
         builder.Property(x => x.Operation).HasMaxLength(40).IsRequired();
         builder.Property(x => x.ProofHash).HasMaxLength(64).IsRequired();
         builder.HasIndex(x => x.ProofHash).IsUnique();
+        builder.Property(x => x.ProviderAuthenticationHash).HasMaxLength(64);
+        builder.HasIndex(x => x.ProviderAuthenticationHash).IsUnique();
         builder.HasIndex(x => x.ExpiresAt);
         builder.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<MiniApp>().WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Developer>().WithMany().HasForeignKey(x => x.DeveloperId).OnDelete(DeleteBehavior.Restrict);
     }
 }

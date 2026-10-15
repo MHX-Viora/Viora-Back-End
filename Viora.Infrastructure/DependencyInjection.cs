@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -241,6 +242,7 @@ public static class DependencyInjection
         services.AddScoped<IMiniAppService, MiniAppService>();
         services.AddScoped<IMiniAppCatalogService, MiniAppCatalogService>();
         services.AddScoped<IMiniAppEditorialService, MiniAppEditorialService>();
+        services.AddDataProtection().SetApplicationName("ANKT.DeveloperPlatform");
         services.AddSingleton<IMiniAppDomainVerifier, MiniAppDomainVerifier>();
         services.AddHostedService<MiniAppExpiryCleanup>();
         services.Configure<DeveloperVerificationOptions>(configuration.GetSection("DeveloperVerification"));
@@ -248,7 +250,9 @@ public static class DependencyInjection
         services.AddScoped<IDeveloperVerificationMailer, DeveloperVerificationMailer>();
         services.AddScoped<IDeveloperPlatformService, DeveloperPlatformService>();
         services.AddScoped<IDeveloperReauthenticationService, DeveloperReauthenticationService>();
+        services.AddScoped<IDeveloperAccountVerificationService, DeveloperAccountVerificationService>();
         services.AddScoped<MiniAppManagementService>();
+        services.AddScoped<IDeveloperMembershipService>(provider => provider.GetRequiredService<MiniAppManagementService>());
         services.AddScoped<IMiniAppManagementService>(provider => provider.GetRequiredService<MiniAppManagementService>());
         services.AddScoped<IDeveloperMiniAppService>(provider => provider.GetRequiredService<MiniAppManagementService>());
         return services;
