@@ -156,6 +156,7 @@ builder.Services.AddRateLimiter(options =>
 });
 builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration);
+viora_BE.Developer.DeveloperApi.AddDeveloperAccounts(builder.Services, builder.Configuration);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -272,6 +273,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
+viora_BE.Developer.DeveloperApi.UseDeveloperAccountBoundary(app);
 app.UseRateLimiter();
 app.UseAuthorization();
 
@@ -300,6 +302,7 @@ app.MapGet("/group/{inviteCode}", (string inviteCode) =>
 
 app.MapControllers();
 viora_BE.Developer.DeveloperEndpoints.MapDeveloperEndpoints(app);
+viora_BE.Developer.DeveloperApi.MapDeveloperAccountEndpoints(app);
 app.MapHub<RealtimeHub>("/hubs/realtime");
 app.MapHub<CallHub>("/hubs/calls");
 

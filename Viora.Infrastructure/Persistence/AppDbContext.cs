@@ -5,6 +5,11 @@ namespace Viora.Infrastructure.Persistence;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<Viora.Domain.Developers.DeveloperAccount> DeveloperAccounts => Set<Viora.Domain.Developers.DeveloperAccount>();
+    public DbSet<Viora.Domain.Developers.DeveloperSession> DeveloperSessions => Set<Viora.Domain.Developers.DeveloperSession>();
+    public DbSet<Viora.Domain.Developers.DeveloperActionToken> DeveloperActionTokens => Set<Viora.Domain.Developers.DeveloperActionToken>();
+    public DbSet<Viora.Domain.Developers.DeveloperExternalIdentity> DeveloperExternalIdentities => Set<Viora.Domain.Developers.DeveloperExternalIdentity>();
+    public DbSet<Viora.Domain.Developers.DeveloperAuditLog> DeveloperAuditLogs => Set<Viora.Domain.Developers.DeveloperAuditLog>();
     private const string InviteCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static readonly Random SharedRandom = Random.Shared;
 
