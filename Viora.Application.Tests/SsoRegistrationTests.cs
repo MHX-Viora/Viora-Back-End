@@ -143,6 +143,7 @@ public sealed class SsoRegistrationTests
         public Dictionary<string, string?> Config() => new()
         {
             ["Sso:Enabled"] = "true", ["Sso:Issuer"] = "https://issuer.example/",
+            ["Sso:FirstPartyOrigin"] = "https://app.example",
             ["Sso:SigningCertificatePath"] = Path.Combine(DirectoryPath, "signing.pfx"),
             ["Sso:SigningCertificatePassword"] = Password,
             ["Sso:EncryptionCertificatePath"] = Path.Combine(DirectoryPath, "encryption.pfx"),

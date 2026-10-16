@@ -140,4 +140,16 @@ Build: 0 warnings/errors. Full suite: 222 passed, 1 existing skip (223 total).
 Task 6 complete: additive `AddAnktSsoSessions` migration. PostgreSQL test executed
 up/down/up, account FK enforcement, hash uniqueness and conditional single-winner
 revocation; original Accounts row remained after rollback. Session-focused tests:
-3 passed. Build: 0 warnings/errors. Task 7 bootstrap is next; Tasks 7–28 remain incomplete.
+3 passed. Build: 0 warnings/errors.
+
+Task 7 complete: `/sso/start`, `/sso/bootstrap` and `/sso/complete`, dedicated
+cookie session scheme, exact configured first-party origin/CORS, signed social
+session binding, local authorization return paths, secure HttpOnly Lax cookies,
+no-store/no-referrer responses and independent process-local rate limiting.
+Top-level completion avoids third-party cookie dependence. Internal bootstrap
+transaction metadata is persisted by additive `AddSsoLoginTransactions` migration.
+Real JWT HTTP tests cover origin rejection, cookie binding, top-level completion
+and replay. PostgreSQL up/down/up and two concurrent completions issue exactly one
+session. Focused bootstrap/session/startup suite: 28 passed; solution build clean.
+Frontend bootstrap page is Task 8; partner authorization/token flow remains absent.
+Tasks 8–28 remain incomplete.

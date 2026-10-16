@@ -9,6 +9,7 @@ public sealed class SsoOptions
     public const string SectionName = "Sso";
     public bool Enabled { get; set; }
     public string Issuer { get; set; } = "";
+    public string FirstPartyOrigin { get; set; } = "";
     public int AuthorizationCodeSeconds { get; set; } = 60;
     public int AccessTokenSeconds { get; set; } = 300;
     public string SigningCertificatePath { get; set; } = "";
@@ -23,6 +24,9 @@ internal sealed class SsoOptionsValidator : IValidateOptions<SsoOptions>
     {
         if (!options.Enabled) return ValidateOptionsResult.Success;
         var errors = new List<string>();
+        if (!Uri.TryCreate(options.FirstPartyOrigin, UriKind.Absolute, out var origin) || origin.Scheme != Uri.UriSchemeHttps ||
+            origin.AbsolutePath != "/" || origin.UserInfo.Length != 0 || origin.Query.Length != 0 || origin.Fragment.Length != 0)
+            errors.Add("Sso:FirstPartyOrigin must be an absolute HTTPS origin without a path, credentials, query or fragment.");
         if (!Uri.TryCreate(options.Issuer, UriKind.Absolute, out var issuer) ||
             issuer.Scheme != Uri.UriSchemeHttps || string.IsNullOrEmpty(issuer.Host) ||
             issuer.UserInfo.Length != 0 || issuer.Query.Length != 0 || issuer.Fragment.Length != 0)

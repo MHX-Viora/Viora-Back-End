@@ -306,6 +306,7 @@ app.MapControllers();
 viora_BE.Developer.DeveloperEndpoints.MapDeveloperEndpoints(app);
 viora_BE.Developer.DeveloperApi.MapDeveloperAccountEndpoints(app);
 viora_BE.Developer.MiniAppApi.MapDeveloperMiniApps(app);
+if (app.Configuration.GetValue<bool>("Sso:Enabled")) viora_BE.Sso.SsoSessionEndpoints.MapSsoSessionEndpoints(app);
 app.MapHub<RealtimeHub>("/hubs/realtime");
 app.MapHub<CallHub>("/hubs/calls");
 

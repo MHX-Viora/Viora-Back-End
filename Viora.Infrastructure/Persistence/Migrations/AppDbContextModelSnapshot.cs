@@ -864,6 +864,46 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.ToTable("MiniAppRedirectUris", (string)null);
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.SsoLoginTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BrowserHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReturnUrl")
+                        .IsRequired()
+                        .HasMaxLength(8192)
+                        .HasColumnType("character varying(8192)");
+
+                    b.Property<Guid?>("SocialSessionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("SsoLoginTransactions", (string)null);
+                });
+
             modelBuilder.Entity("Viora.Domain.Entities.Account", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3885,6 +3925,14 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("MiniApp");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SsoLoginTransaction", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.AdminLog", b =>

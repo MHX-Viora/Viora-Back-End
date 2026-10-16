@@ -78,6 +78,16 @@ unverified. Historical Mini App migrations do not establish a current OIDC runti
   bootstrap and every SSO session use. Old access tokens remain valid for existing
   APIs and obtain `sid` through the existing refresh flow before SSO bootstrap.
   A client-supplied unsigned SessionId is not sufficient proof of session binding.
+  When issuer and first-party app have different origins, `/sso/start` is visited
+  at the top level first. It sets an HttpOnly browser-binding cookie and records a
+  two-minute internal login transaction. The first-party `/sso/login` page posts
+  its social Bearer credential and transaction ID to `/sso/bootstrap` (credentials
+  omitted), which enforces exact configured `Sso:FirstPartyOrigin`. Top-level
+  `/sso/complete` requires the original binding cookie and atomically consumes the
+  authenticated transaction before setting a fresh host-only SSO cookie. Only a
+  non-authenticating transaction identifier travels in navigation; no access token,
+  refresh token or session credential does. This internal first-party login step
+  does not replace standard OAuth/OIDC authorization for partner applications.
 - Four independent contexts: social user session, Developer Portal session,
   per-client Mini App authorization, and partner session.
 - ClientKey remains public client_id. Map registry clients to OpenIddict

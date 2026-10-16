@@ -2,6 +2,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
+using Microsoft.AspNetCore.Authentication;
+using System.Threading.RateLimiting;
 
 namespace viora_BE.Sso;
 
@@ -18,6 +20,13 @@ public static class SsoRegistration
         services.AddScoped<Viora.Infrastructure.Sso.MiniAppOidcRegistry>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<Viora.Infrastructure.Sso.SsoSessionService>();
+        services.AddScoped<Viora.Infrastructure.Sso.SsoBootstrapService>();
+        services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, SsoSessionHandler>(SsoSessionHandler.SchemeName, _ => { });
+        services.AddRateLimiter(options => options.AddPolicy("sso", context => RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
+        services.AddCors(options => options.AddPolicy("SsoBootstrap", policy => policy
+            .WithOrigins(section[nameof(SsoOptions.FirstPartyOrigin)]?.TrimEnd('/') ?? "https://invalid.example")
+            .WithMethods("POST").WithHeaders("Authorization", "Content-Type")));
         var openiddict = services.AddOpenIddict();
         openiddict.AddCore(core =>
         {

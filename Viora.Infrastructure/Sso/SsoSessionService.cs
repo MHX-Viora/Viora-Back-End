@@ -19,15 +19,21 @@ public sealed class SsoSessionService(AppDbContext db, TimeProvider clock)
     public async Task<IssuedSsoSession> CreateAsync(Guid accountId, Guid socialSessionId, CancellationToken ct)
     {
         var now = Now;
+        var expiresAt = await ValidateSocialSessionAsync(accountId, socialSessionId, ct);
+        var raw = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(64));
+        db.AnktSsoSessions.Add(new AnktSsoSession { AccountId = accountId, SocialSessionId = socialSessionId, TokenHash = Hash(raw), ExpiresAt = expiresAt });
+        await db.SaveChangesAsync(ct);
+        return new(raw, expiresAt);
+    }
+
+    public async Task<DateTime> ValidateSocialSessionAsync(Guid accountId, Guid socialSessionId, CancellationToken ct)
+    {
+        var now = Now;
         var expiry = await db.RefreshTokens.Where(x => x.AccountId == accountId && x.SessionId == socialSessionId && x.RevokedAt == null && x.ExpiresAt > now)
             .Select(x => (DateTime?)x.ExpiresAt).MaxAsync(ct);
         if (expiry == null || !await ActiveAccount(accountId, ct))
             throw new DeveloperAuthException(401, "SSO_SESSION_INVALID", "Phiên ANKT đã hết hạn. Vui lòng đăng nhập lại.");
-        var raw = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(64));
-        var expiresAt = expiry.Value < now.AddHours(8) ? expiry.Value : now.AddHours(8);
-        db.AnktSsoSessions.Add(new AnktSsoSession { AccountId = accountId, SocialSessionId = socialSessionId, TokenHash = Hash(raw), ExpiresAt = expiresAt });
-        await db.SaveChangesAsync(ct);
-        return new(raw, expiresAt);
+        return expiry.Value < now.AddHours(8) ? expiry.Value : now.AddHours(8);
     }
 
     public async Task<AnktSsoSession?> AuthenticateAsync(string? credential, CancellationToken ct)
