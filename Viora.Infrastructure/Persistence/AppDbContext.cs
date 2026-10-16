@@ -5,6 +5,7 @@ namespace Viora.Infrastructure.Persistence;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<Viora.Domain.Developers.MiniAppDomainVerification> MiniAppDomainVerifications => Set<Viora.Domain.Developers.MiniAppDomainVerification>();
     public DbSet<Viora.Domain.Developers.MiniApp> MiniApps => Set<Viora.Domain.Developers.MiniApp>();
     public DbSet<Viora.Domain.Developers.MiniAppOAuthClient> MiniAppOAuthClients => Set<Viora.Domain.Developers.MiniAppOAuthClient>();
     public DbSet<Viora.Domain.Developers.MiniAppClientSecret> MiniAppClientSecrets => Set<Viora.Domain.Developers.MiniAppClientSecret>();

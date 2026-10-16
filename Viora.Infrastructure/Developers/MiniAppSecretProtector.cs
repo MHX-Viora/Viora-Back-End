@@ -15,7 +15,7 @@ public sealed class MiniAppOptions
 // Versioned external keys allow old ciphertext to remain readable during key rotation.
 public sealed class MiniAppSecretProtector(IOptions<MiniAppOptions> options)
 {
-    public (string Ciphertext, string Version) Encrypt(string secret, Guid clientId)
+    public (string Ciphertext, string Version) Encrypt(string secret, Guid clientId, string purpose = "mini-app")
     {
         var version = options.Value.ActiveKeyVersion;
         var key = Key(version);
@@ -24,13 +24,13 @@ public sealed class MiniAppSecretProtector(IOptions<MiniAppOptions> options)
             var nonce = RandomNumberGenerator.GetBytes(12); var plaintext = Encoding.UTF8.GetBytes(secret);
             var ciphertext = new byte[plaintext.Length]; var tag = new byte[16];
             using var aes = new AesGcm(key, 16);
-            aes.Encrypt(nonce, plaintext, ciphertext, tag, Encoding.UTF8.GetBytes($"mini-app:{clientId:D}:{version}"));
+            aes.Encrypt(nonce, plaintext, ciphertext, tag, Encoding.UTF8.GetBytes($"{purpose}:{clientId:D}:{version}"));
             CryptographicOperations.ZeroMemory(plaintext);
             return (Convert.ToBase64String(nonce.Concat(tag).Concat(ciphertext).ToArray()), version);
         }
         finally { CryptographicOperations.ZeroMemory(key); }
     }
-    public string Decrypt(string encrypted, string version, Guid clientId)
+    public string Decrypt(string encrypted, string version, Guid clientId, string purpose = "mini-app")
     {
         var key = Key(version);
         try
@@ -42,7 +42,7 @@ public sealed class MiniAppSecretProtector(IOptions<MiniAppOptions> options)
             {
                 using var aes = new AesGcm(key, 16);
                 aes.Decrypt(bytes.AsSpan(0, 12), bytes.AsSpan(28), bytes.AsSpan(12, 16), plaintext,
-                    Encoding.UTF8.GetBytes($"mini-app:{clientId:D}:{version}"));
+                    Encoding.UTF8.GetBytes($"{purpose}:{clientId:D}:{version}"));
                 return Encoding.UTF8.GetString(plaintext);
             }
             finally { CryptographicOperations.ZeroMemory(plaintext); }

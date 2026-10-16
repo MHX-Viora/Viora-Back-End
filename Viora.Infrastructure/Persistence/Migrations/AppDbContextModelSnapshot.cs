@@ -300,6 +300,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<bool>("SsoEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<short>("Status")
                         .HasColumnType("smallint");
 
@@ -409,6 +412,87 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasFilter("\"RevokedAt\" IS NULL");
 
                     b.ToTable("MiniAppClientSecrets", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppDomainVerification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Hostname")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .HasColumnType("character varying(253)");
+
+                    b.Property<DateTime?>("LastCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SecretKeyVersion")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("VerificationFileName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("VerificationMaterialEncrypted")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("VerificationMethod")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("VerificationTokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Hostname");
+
+                    b.HasIndex("MiniAppId")
+                        .IsUnique()
+                        .HasFilter("\"RevokedAt\" IS NULL");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("VerificationFileName")
+                        .IsUnique();
+
+                    b.ToTable("MiniAppDomainVerifications", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppLogoUpload", b =>
@@ -3450,6 +3534,17 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("OAuthClient");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppDomainVerification", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniApp", "MiniApp")
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("MiniApp");
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppLogoUpload", b =>

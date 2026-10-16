@@ -15,11 +15,52 @@ using Microsoft.Extensions.Logging;
 using Viora.Application.Developers;
 using Viora.Infrastructure.Persistence;
 using Viora.Infrastructure.Persistence.Migrations;
+using Viora.Infrastructure.Developers;
 using viora_BE.Developer;
 using Xunit;
 
 public sealed class MiniAppApiTests
 {
+    [Fact]
+    public async Task Stage4EndpointsUseRealSessionsOwnerBoundFilesAndFixedVerificationDestination()
+    {
+        await using var host = await Host.Create(); var c = host.Client;
+        var missing = "/api/developer/mini-apps/app_" + new string('x',43);
+        foreach(var suffix in new[] {"/integration","/domain-verification","/domain-verification/file","/readiness"})
+            Assert.Equal(HttpStatusCode.Unauthorized,(await c.GetAsync(missing+suffix)).StatusCode);
+        c.DefaultRequestHeaders.Authorization = new("DeveloperSession",await host.Login("domain-a@example.test"));
+        var app = (await (await c.PostAsJsonAsync("/api/developer/mini-apps",new MiniAppCreateRequest("Domain API app","utilities",Guid.NewGuid()))).Content.ReadFromJsonAsync<MiniAppDto>())!;
+        var root = "/api/developer/mini-apps/"+app.AppId;
+        var request = new MiniAppIntegrationRequest("https://PARTNER.example.com/app","support@example.com","Description","Full description","https://policies.example.com/privacy","https://policies.example.com/terms",false,[]);
+        var saved=await c.PutAsJsonAsync(root+"/integration",request); Assert.Equal(HttpStatusCode.OK,saved.StatusCode);
+        Assert.Equal("https://partner.example.com/app",(await saved.Content.ReadFromJsonAsync<MiniAppIntegrationDto>())!.WebsiteUrl);
+        var download=await c.GetAsync(root+"/domain-verification/file"); Assert.Equal(HttpStatusCode.OK,download.StatusCode);
+        Assert.Equal("text/plain",download.Content.Headers.ContentType!.MediaType); Assert.Equal("attachment",download.Content.Headers.ContentDisposition!.DispositionType); Assert.Equal("no-store",download.Headers.CacheControl!.ToString());
+        var proof=await download.Content.ReadAsStringAsync(); Assert.Contains("app_id="+app.AppId,proof); Assert.DoesNotContain("cs_",proof);
+        host.Fetcher.Body=proof;
+        var verify=await c.PostAsJsonAsync(root+"/domain-verification/verify",new {url="https://127.0.0.1/metadata",status="Verified",verifiedAt=DateTime.UtcNow});
+        Assert.Equal(HttpStatusCode.OK,verify.StatusCode); Assert.Equal("Verified",(await verify.Content.ReadFromJsonAsync<MiniAppDomainDto>())!.Status);
+        Assert.Equal("partner.example.com",host.Fetcher.LastVerificationUri!.Host); Assert.StartsWith("/ankt-verify-",host.Fetcher.LastVerificationUri.AbsolutePath);
+        var read=await c.GetAsync(root+"/domain-verification"); Assert.Equal("Verified",(await read.Content.ReadFromJsonAsync<MiniAppDomainDto>())!.Status);
+        var readiness=await c.GetAsync(root+"/readiness"); Assert.Equal(HttpStatusCode.OK,readiness.StatusCode); Assert.False((await readiness.Content.ReadFromJsonAsync<MiniAppReadinessDto>())!.ReadyForSandbox);
+        var changed=await c.PutAsJsonAsync(root+"/integration",request with {WebsiteUrl="https://other.example.com"}); Assert.Equal(HttpStatusCode.OK,changed.StatusCode);
+        Assert.Equal("Pending",(await (await c.GetAsync(root+"/domain-verification")).Content.ReadFromJsonAsync<MiniAppDomainDto>())!.Status);
+        c.DefaultRequestHeaders.Authorization = new("DeveloperSession",await host.Login("domain-b@example.test"));
+        foreach(var suffix in new[] {"/integration","/domain-verification","/domain-verification/file","/readiness"}) Assert.Equal(HttpStatusCode.NotFound,(await c.GetAsync(root+suffix)).StatusCode);
+        foreach(var suffix in new[]{"/domain-verification/verify","/domain-verification/regenerate"}) Assert.Equal(HttpStatusCode.NotFound,(await c.PostAsJsonAsync(root+suffix,new {})).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,(await c.PutAsJsonAsync(root+"/integration",request)).StatusCode);
+    }
+
+    [Fact]
+    public void Stage4MigrationOnlyAddsProofTableAndSsoFlagWithReversibleDown()
+    {
+        var migration=new AddMiniAppDomainVerification();
+        var table=Assert.Single(migration.UpOperations.OfType<CreateTableOperation>()); Assert.Equal("MiniAppDomainVerifications",table.Name);
+        Assert.All(table.ForeignKeys,fk=>Assert.Equal(ReferentialAction.Restrict,fk.OnDelete));
+        var column=Assert.Single(migration.UpOperations.OfType<AddColumnOperation>()); Assert.Equal("SsoEnabled",column.Name); Assert.Equal("MiniApps",column.Table);
+        Assert.All(migration.UpOperations,op=>Assert.True(op is CreateTableOperation or CreateIndexOperation or AddColumnOperation));
+        Assert.Equal(2,migration.DownOperations.Count); Assert.Single(migration.DownOperations.OfType<DropTableOperation>()); Assert.Single(migration.DownOperations.OfType<DropColumnOperation>());
+    }
     [Fact]
     public async Task RealSessionCrudRotationAndAuthorization()
     {
@@ -80,9 +121,10 @@ public sealed class MiniAppApiTests
         public bool IsConfigured => true; public string Token = "";
         public Task SendAsync(string recipient, string subject, string text, CancellationToken ct) { Token = text.Split("#token=")[1].Split('\n')[0].Trim(); return Task.CompletedTask; }
     }
-    private sealed class Host(WebApplication app, SqliteConnection db, HttpClient client, Mail mail) : IAsyncDisposable
+    private sealed class Host(WebApplication app, SqliteConnection db, HttpClient client, Mail mail, MiniAppIntegrationTests.Fetcher fetcher) : IAsyncDisposable
     {
         public HttpClient Client => client;
+        public MiniAppIntegrationTests.Fetcher Fetcher => fetcher;
         public async Task<string> Login(string email)
         {
             const string password = "Mini App API test password 2026!";
@@ -101,10 +143,11 @@ public sealed class MiniAppApiTests
                 ["MiniApps:EncryptionKeys:test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             });
             b.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(connection)); b.Services.AddDeveloperAccounts(b.Configuration); b.Services.AddDeveloperMiniApps(b.Configuration);
+            var fetcher=new MiniAppIntegrationTests.Fetcher(); b.Services.AddSingleton<IPublicWebFetcher>(fetcher);
             var mail = new Mail(); b.Services.AddSingleton<IDeveloperEmailSender>(mail); var app = b.Build();
             using (var scope = app.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
             app.UseDeveloperAccountBoundary(); app.UseAuthentication(); app.UseRateLimiter(); app.UseAuthorization(); app.MapDeveloperAccountEndpoints(); app.MapDeveloperMiniApps();
-            await app.StartAsync(); return new(app, connection, app.GetTestClient(), mail);
+            await app.StartAsync(); return new(app, connection, app.GetTestClient(), mail, fetcher);
         }
         public async ValueTask DisposeAsync() { client.Dispose(); await app.DisposeAsync(); await db.DisposeAsync(); }
     }

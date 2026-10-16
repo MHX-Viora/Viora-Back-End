@@ -79,15 +79,17 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var app = await Own(owner, appId, ct);
+        var previousWebsite = app.WebsiteUrl;
         if (r.Name is not null) app.Name = MiniAppInput.Text(r.Name, 120, true);
         if (r.Category is not null) { if (!MiniAppInput.Categories.Contains(r.Category)) throw MiniAppInput.Invalid("Danh mục không hợp lệ."); app.Category = r.Category; }
         if (r.ShortDescription is not null) app.ShortDescription = MiniAppInput.Text(r.ShortDescription, 300);
         if (r.Description is not null) app.Description = MiniAppInput.Text(r.Description, 10000);
-        if (r.WebsiteUrl is not null) app.WebsiteUrl = MiniAppInput.Url(r.WebsiteUrl, environment.IsDevelopment());
-        if (r.PrivacyPolicyUrl is not null) app.PrivacyPolicyUrl = MiniAppInput.Url(r.PrivacyPolicyUrl, environment.IsDevelopment());
-        if (r.TermsOfServiceUrl is not null) app.TermsOfServiceUrl = MiniAppInput.Url(r.TermsOfServiceUrl, environment.IsDevelopment());
+        if (r.WebsiteUrl is not null) app.WebsiteUrl = PublicWebAddress.Normalize(r.WebsiteUrl, allowEmpty: true);
+        if (r.PrivacyPolicyUrl is not null) app.PrivacyPolicyUrl = PublicWebAddress.Normalize(r.PrivacyPolicyUrl, allowEmpty: true);
+        if (r.TermsOfServiceUrl is not null) app.TermsOfServiceUrl = PublicWebAddress.Normalize(r.TermsOfServiceUrl, allowEmpty: true);
         if (r.SupportEmail is not null) app.SupportEmail = string.IsNullOrWhiteSpace(r.SupportEmail) ? "" : DeveloperInput.Email(r.SupportEmail).ToLowerInvariant();
         await AttachLogo(app, owner, r.LogoUploadId, ct);
+        await MiniAppDomainLifecycle.ChangeWebsite(db, app, previousWebsite, protector, ct);
         // Only draft-era states may be computed by this feature.
         if (app.Status is MiniAppStatus.Draft or MiniAppStatus.ConfigurationIncomplete)
             app.Status = !string.IsNullOrEmpty(app.LogoUrl) && !string.IsNullOrEmpty(app.ShortDescription) && !string.IsNullOrEmpty(app.WebsiteUrl)
@@ -100,6 +102,7 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var app = await Own(owner, appId, ct); app.DeletedAt = DateTime.UtcNow; Touch(app);
+        await MiniAppDomainLifecycle.Revoke(db, app.Id, ct);
         var client = await db.MiniAppOAuthClients.SingleAsync(x => x.MiniAppId == app.Id, ct); client.RevokedAt = DateTime.UtcNow;
         await db.MiniAppClientSecrets.Where(x => x.OAuthClientId == client.Id && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
         await db.MiniAppLogoUploads.Where(x => x.MiniAppId == app.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.MiniAppId, (Guid?)null).SetProperty(x => x.ExpiresAt, DateTime.UtcNow.AddHours(1)), ct);

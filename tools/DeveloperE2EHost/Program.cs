@@ -29,6 +29,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 builder.Services.AddDeveloperAccounts(builder.Configuration);
 builder.Services.AddDeveloperMiniApps(builder.Configuration);
+await using var domainSite=Environment.GetEnvironmentVariable("ANKT_E2E_DOMAIN_FIXTURE")=="1"?await ControlledDomainSite.Start():null;
+if(domainSite is not null)builder.Services.AddSingleton<Viora.Application.Developers.IPublicWebFetcher>(domainSite.Fetcher());
 var app = builder.Build();
 using (var scope = app.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
 app.UseDeveloperAccountBoundary(); app.UseAuthentication(); app.UseRateLimiter(); app.UseAuthorization();

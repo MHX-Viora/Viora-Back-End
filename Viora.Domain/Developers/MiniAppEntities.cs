@@ -18,10 +18,31 @@ public sealed class MiniApp : AuditableEntity
     public string? PrivacyPolicyUrl { get; set; }
     public string? TermsOfServiceUrl { get; set; }
     public string? SupportEmail { get; set; }
+    public bool SsoEnabled { get; set; }
     public MiniAppStatus Status { get; set; }
     public DateTime? DeletedAt { get; set; }
     public Guid CreateRequestId { get; set; }
     public string CreateFingerprint { get; set; } = "";
+    public Guid Version { get; set; } = Guid.NewGuid();
+}
+
+public enum MiniAppDomainStatus { Pending, Verified, Failed, Expired, Revoked }
+public sealed class MiniAppDomainVerification : CreatedEntity
+{
+    public Guid MiniAppId { get; set; }
+    public MiniApp MiniApp { get; set; } = null!;
+    public string Hostname { get; set; } = "";
+    public string VerificationMethod { get; set; } = "RootFile";
+    public string VerificationFileName { get; set; } = "";
+    public string VerificationTokenHash { get; set; } = "";
+    public string VerificationMaterialEncrypted { get; set; } = "";
+    public string SecretKeyVersion { get; set; } = "";
+    public MiniAppDomainStatus Status { get; set; }
+    public DateTime? VerifiedAt { get; set; }
+    public DateTime? LastCheckedAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? RevokedAt { get; set; }
+    public string? LastErrorCode { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
 }
 

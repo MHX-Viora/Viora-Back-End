@@ -17,6 +17,7 @@ public static class MiniAppApi
         services.Configure<Viora.Infrastructure.Media.CloudinaryOptions>(config.GetSection("Cloudinary"));
         services.AddScoped<MiniAppSecretProtector>(); services.AddScoped<MiniAppService>(); services.AddScoped<MiniAppLogoStorage>();
         services.AddHostedService<MiniAppLogoCleanup>();
+        MiniAppIntegrationApi.AddServices(services);
         services.AddRateLimiter(o => o.AddPolicy("mini-app-sensitive", h => RateLimitPartition.GetFixedWindowLimiter(
             h.User.FindFirstValue("developer_id") ?? h.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
@@ -27,6 +28,7 @@ public static class MiniAppApi
         var g = endpoints.MapGroup("/api/developer/mini-apps").WithTags("Developer Mini Apps")
             .RequireAuthorization(DeveloperSessionHandler.Policy).RequireRateLimiting("developer-auth")
             .AddEndpointFilter<DeveloperApiFilter>().AddEndpointFilter<MiniAppConflictFilter>();
+        MiniAppIntegrationApi.MapEndpoints(g);
         g.MapGet("", async (MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.List(Owner(h), int.TryParse(h.Request.Query["page"], out var page) ? page : 1, ct)));
         g.MapPost("", async (MiniAppCreateRequest r, MiniAppService s, HttpContext h, CancellationToken ct) =>
             Results.Ok(await s.Create(Owner(h), r, ct))).RequireRateLimiting("mini-app-sensitive");
