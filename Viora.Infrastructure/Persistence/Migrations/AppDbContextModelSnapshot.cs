@@ -833,6 +833,40 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.ToTable("MiniAppOAuthClients", (string)null);
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppPairwiseSubject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "MiniAppId", "Environment")
+                        .IsUnique();
+
+                    b.HasIndex("MiniAppId", "Environment", "Subject")
+                        .IsUnique();
+
+                    b.ToTable("MiniAppPairwiseSubjects", (string)null);
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppRedirectUri", b =>
                 {
                     b.Property<Guid>("Id")
@@ -862,6 +896,66 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("MiniAppRedirectUris", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppUserConsent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorizationId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("GrantedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GrantedScopes")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OAuthClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorizationId");
+
+                    b.HasIndex("MiniAppId");
+
+                    b.HasIndex("OAuthClientId");
+
+                    b.HasIndex("AccountId", "OAuthClientId")
+                        .IsUnique()
+                        .HasFilter("\"RevokedAt\" IS NULL");
+
+                    b.ToTable("MiniAppUserConsents", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.SsoLoginTransaction", b =>
@@ -3916,6 +4010,21 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("MiniApp");
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppPairwiseSubject", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppRedirectUri", b =>
                 {
                     b.HasOne("Viora.Domain.Developers.MiniApp", "MiniApp")
@@ -3925,6 +4034,32 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("MiniApp");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppUserConsent", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreAuthorization", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorizationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppOAuthClient", null)
+                        .WithMany()
+                        .HasForeignKey("OAuthClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.SsoLoginTransaction", b =>

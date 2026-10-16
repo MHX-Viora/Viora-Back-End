@@ -199,3 +199,9 @@ version concurrency and nullable FK to the standard OpenIddict authorization.
 Library authorization deletion clears that reference without destroying consent
 history. Model/authorization tests: 10 passed; solution build clean. Actual
 PostgreSQL persistence/migration and concurrency checks follow in Task 11.
+
+Task 11 complete: additive `AddMiniAppConsents` migration. Isolated PostgreSQL
+verified up/down/up, sector uniqueness, independent environment subjects, active
+consent uniqueness, concurrent update rejection, authorization FK SET NULL and
+preservation of Accounts plus stable pairwise identity when authorization is
+deleted. Focused schema/PG suite: 2 passed; solution build clean.
