@@ -137,4 +137,7 @@ fixed parsing. A real signature/issuer/audience/lifetime validation regression t
 now protects social JWT compatibility. Upstream requires aligned IdentityModel
 versions: https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/wiki/IdentityModel-8x
 Build: 0 warnings/errors. Full suite: 222 passed, 1 existing skip (223 total).
-Task 6 migration is next; Tasks 6–28 remain incomplete.
+Task 6 complete: additive `AddAnktSsoSessions` migration. PostgreSQL test executed
+up/down/up, account FK enforcement, hash uniqueness and conditional single-winner
+revocation; original Accounts row remained after rollback. Session-focused tests:
+3 passed. Build: 0 warnings/errors. Task 7 bootstrap is next; Tasks 7–28 remain incomplete.
