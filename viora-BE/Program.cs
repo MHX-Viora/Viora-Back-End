@@ -158,6 +158,7 @@ builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration);
 viora_BE.Developer.DeveloperApi.AddDeveloperAccounts(builder.Services, builder.Configuration);
 viora_BE.Developer.MiniAppApi.AddDeveloperMiniApps(builder.Services, builder.Configuration);
+viora_BE.Sso.SsoRegistration.AddAnktSso(builder.Services, builder.Configuration);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
