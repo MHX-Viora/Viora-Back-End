@@ -23,6 +23,7 @@ public static class SsoRegistration
         services.AddScoped<Viora.Infrastructure.Sso.SsoBootstrapService>();
         services.AddScoped<Viora.Infrastructure.Sso.SsoClientReader>();
         services.AddScoped<Viora.Infrastructure.Sso.SsoConsentService>();
+        services.AddScoped<Viora.Infrastructure.Sso.SsoTokenService>();
         services.AddScoped<SsoConsentInteraction>();
         services.AddControllersWithViews();
         services.AddAntiforgery(options =>
@@ -36,6 +37,7 @@ public static class SsoRegistration
         services.AddCors(options => options.AddPolicy("SsoBootstrap", policy => policy
             .WithOrigins(section[nameof(SsoOptions.FirstPartyOrigin)]?.TrimEnd('/') ?? "https://invalid.example")
             .WithMethods("POST").WithHeaders("Authorization", "Content-Type")));
+        services.AddSingleton<Microsoft.AspNetCore.Cors.Infrastructure.ICorsPolicyProvider, SsoCorsPolicyProvider>();
         var openiddict = services.AddOpenIddict();
         openiddict.AddCore(core =>
         {
@@ -54,7 +56,7 @@ public static class SsoRegistration
                 .RequireProofKeyForCodeExchange()
                 .UseReferenceAccessTokens()
                 .RegisterScopes(OpenIddictConstants.Scopes.OpenId, OpenIddictConstants.Scopes.Profile, OpenIddictConstants.Scopes.Email);
-            server.UseAspNetCore().EnableAuthorizationEndpointPassthrough();
+            server.UseAspNetCore().EnableAuthorizationEndpointPassthrough().EnableTokenEndpointPassthrough().EnableUserInfoEndpointPassthrough();
         });
         services.AddOptions<OpenIddictServerOptions>()
             .Configure<IOptions<SsoOptions>, SsoCredentials>((server, configured, credentials) =>

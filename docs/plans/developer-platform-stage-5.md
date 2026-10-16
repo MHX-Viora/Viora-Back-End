@@ -231,3 +231,26 @@ UI/endpoint suite: 13 passed; solution build clean. Chrome checked actual render
 HTML (fixture hidden values redacted) at 320px: no overflow, 48px controls, no
 scripts or console errors. Live browser protocol E2E remains Tasks 25–27; this
 preview verifies rendering only. Production headers are verified by HTTP tests.
+
+Task 14 complete: OpenIddict still performs protocol validation and redemption;
+passthrough handlers additionally recheck registry/domain/environment, active
+account and exact live consent/authorization before exchange and every GET/POST
+UserInfo call. ID tokens are RSA-signed, nonce/client-bound and contain pairwise
+identity; persisted reference access tokens target the separate environment SSO
+resource. No refresh token issuance is enabled. Tests cryptographically validate
+ID tokens against real JWKS and reject wrong PKCE/redirect/client, code replay,
+suspension and revoked consent/domain/account. PostgreSQL concurrent redemption
+produced exactly one token response. Baseline auto-redemption was proven to fail
+the new suspension test before passthrough was enabled.
+
+Browser boundary: public metadata GET allows anonymous CORS; token/UserInfo only
+allow verified eligible Public Client callback origins, without credentials.
+Actual requests enforce the token client's own origin; Confidential Client calls
+with browser Origin are rejected. Existing Web/first-party policies are retained.
+Internal review fixes cover POST UserInfo and normalized root/default-port callback
+origins. CORS currently enumerates unrevoked public callbacks for normalization;
+large-registry optimization remains a measured operational concern, not a cached
+authorization decision. Related authorization/consent/token/CORS suite: 49 passed;
+solution build clean. Library reference:
+https://documentation.openiddict.com/configuration/claim-destinations.html and
+https://github.com/openiddict/openiddict-samples/tree/dev/samples/Velusia.

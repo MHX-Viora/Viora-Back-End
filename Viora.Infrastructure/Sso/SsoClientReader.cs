@@ -7,6 +7,18 @@ namespace Viora.Infrastructure.Sso;
 
 public sealed class SsoClientReader(AppDbContext db, TimeProvider clock)
 {
+    public async Task EnsureBrowserOriginAsync(MiniAppOAuthClient client, string? origin, CancellationToken ct)
+    {
+        if (origin == null) return; // Backend calls do not carry a browser Origin.
+        if (client.ClientType != "Public" || !Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != "https" ||
+            origin != uri.GetLeftPart(UriPartial.Authority)) throw OriginDenied();
+        var redirects = await db.MiniAppRedirectUris.AsNoTracking().Where(x => x.MiniAppId == client.MiniAppId && x.Environment == client.Environment)
+            .Select(x => x.RedirectUri).ToListAsync(ct);
+        if (!redirects.Any(x => Uri.TryCreate(x, UriKind.Absolute, out var redirect) && redirect.GetLeftPart(UriPartial.Authority) == origin)) throw OriginDenied();
+    }
+
+    private static DeveloperAuthException OriginDenied() => new(403, "SSO_ORIGIN_DENIED", "Origin không được phép sử dụng client này.");
+
     public async Task<MiniAppOAuthClient> EligibleAsync(string? clientId, IEnumerable<string> scopes, string? environment, CancellationToken ct)
     {
         var client = await db.MiniAppOAuthClients.AsNoTracking().Include(x => x.MiniApp).ThenInclude(x => x.Developer)

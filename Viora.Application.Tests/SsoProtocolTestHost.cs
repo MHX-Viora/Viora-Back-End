@@ -49,7 +49,9 @@ internal sealed class SsoProtocolTestHost : IAsyncDisposable
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(); builder.Services.AddAuthorization();
         builder.Services.AddControllers().AddApplicationPart(typeof(SsoAuthorizationController).Assembly);
         builder.Services.AddAnktSso(builder.Configuration);
-        host.app = builder.Build(); host.app.UseAuthentication(); host.app.UseRateLimiter(); host.app.UseAuthorization(); host.app.MapControllers();
+        builder.Services.AddCors(options => options.AddPolicy("Web", policy => policy.WithOrigins("https://firstparty.example")
+            .AllowAnyMethod().AllowAnyHeader().AllowCredentials()));
+        host.app = builder.Build(); host.app.UseRouting(); host.app.UseCors("Web"); host.app.UseAuthentication(); host.app.UseRateLimiter(); host.app.UseAuthorization(); host.app.MapControllers();
         await host.app.StartAsync(); host.Client = host.app.GetTestClient(); host.Client.BaseAddress = new("https://issuer.example");
         await using var scope = host.app.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>(); await db.Database.EnsureCreatedAsync();
