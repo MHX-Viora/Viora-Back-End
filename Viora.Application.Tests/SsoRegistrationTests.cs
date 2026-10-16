@@ -121,7 +121,7 @@ public sealed class SsoRegistrationTests
             foreach (var descriptor in Services(values)) services.Add(descriptor);
         }).Build();
 
-    private sealed class Certificates : IDisposable
+    internal sealed class Certificates : IDisposable
     {
         public const string Password = "isolated-test-password";
         public string DirectoryPath { get; } = Path.Combine(Path.GetTempPath(), "ankt-sso-" + Guid.NewGuid());

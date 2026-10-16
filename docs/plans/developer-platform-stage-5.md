@@ -6,7 +6,9 @@ Spec: `../specs/developer-platform-stage-5.md`.
 Tasks run sequentially in small slices, normally no more than five authored files.
 Generated migration/designer/snapshot changes form their own reviewable task.
 Each task begins with focused failing behavior tests and ends with build/tests.
-No sub-agent orchestration, deployment, production migration or Stage 6 work.
+Implementation stays sequential. Independent read-only adversarial review follows
+the applied doubt-driven-development skill; no parallel implementation streams.
+No deployment, production migration or Stage 6 work.
 
 Execution conditions: registry credentials are authoritative, fast SSO reuses valid
 user session and consent, environments remain isolated throughout authorization,
@@ -170,4 +172,15 @@ session cannot overwrite it. TDD regression covered the retry. Backend full suit
 Checkpoint 8: Tasks 1–8 verified as individual increments. Existing frontend
 dirty files are preserved; only SSO-specific layout hunks belong to this work.
 Authorization handler, consent, token exchange, SDK, bridge, portal SSO tab and
-complete public/confidential OIDC E2E remain outstanding. Tasks 9–28 remain incomplete.
+complete public/confidential OIDC E2E remain outstanding.
+
+Task 9 complete: authorization endpoint passthrough backed by OpenIddict protocol
+validation; explicit ANKT SSO cookie authentication; fresh registry lifecycle,
+domain, secret expiry and scope checks; exact redirect binding; mandatory nonce;
+prompt=none login/consent errors. Interactive anonymous users enter first-party
+bootstrap. Issuance remains securely denied until consent Tasks 10–12 land.
+Real library HTTP tests: 9 passed, covering untrusted client/redirect, S256-only,
+missing PKCE/nonce, unsupported flow/scope, session reuse and suspended app.
+Early library validation returns direct text errors before redirect validation;
+tests verify that response rather than expecting unsafe error redirects.
+Solution build clean. Tasks 10–28 remain incomplete.

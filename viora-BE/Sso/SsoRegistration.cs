@@ -21,6 +21,7 @@ public static class SsoRegistration
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<Viora.Infrastructure.Sso.SsoSessionService>();
         services.AddScoped<Viora.Infrastructure.Sso.SsoBootstrapService>();
+        services.AddScoped<Viora.Infrastructure.Sso.SsoClientReader>();
         services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, SsoSessionHandler>(SsoSessionHandler.SchemeName, _ => { });
         services.AddRateLimiter(options => options.AddPolicy("sso", context => RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
@@ -45,7 +46,7 @@ public static class SsoRegistration
                 .RequireProofKeyForCodeExchange()
                 .UseReferenceAccessTokens()
                 .RegisterScopes(OpenIddictConstants.Scopes.OpenId, OpenIddictConstants.Scopes.Profile, OpenIddictConstants.Scopes.Email);
-            server.UseAspNetCore(); // Retain HTTPS enforcement and the existing default scheme.
+            server.UseAspNetCore().EnableAuthorizationEndpointPassthrough();
         });
         services.AddOptions<OpenIddictServerOptions>()
             .Configure<IOptions<SsoOptions>, SsoCredentials>((server, configured, credentials) =>
