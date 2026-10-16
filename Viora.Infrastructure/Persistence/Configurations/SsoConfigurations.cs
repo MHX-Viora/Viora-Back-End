@@ -26,3 +26,31 @@ internal sealed class SsoLoginTransactionConfiguration : IEntityTypeConfiguratio
         b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class MiniAppPairwiseSubjectConfiguration : IEntityTypeConfiguration<MiniAppPairwiseSubject>
+{
+    public void Configure(EntityTypeBuilder<MiniAppPairwiseSubject> b)
+    {
+        b.ToTable("MiniAppPairwiseSubjects"); b.HasKey(x => x.Id);
+        b.Property(x => x.Subject).HasMaxLength(100).IsRequired();
+        b.HasIndex(x => new { x.AccountId, x.MiniAppId, x.Environment }).IsUnique();
+        b.HasIndex(x => new { x.MiniAppId, x.Environment, x.Subject }).IsUnique();
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<MiniApp>().WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class MiniAppUserConsentConfiguration : IEntityTypeConfiguration<MiniAppUserConsent>
+{
+    public void Configure(EntityTypeBuilder<MiniAppUserConsent> b)
+    {
+        b.ToTable("MiniAppUserConsents"); b.HasKey(x => x.Id);
+        b.Property(x => x.GrantedScopes).HasMaxLength(128).IsRequired(); b.Property(x => x.Version).IsConcurrencyToken();
+        b.HasIndex(x => new { x.AccountId, x.OAuthClientId }).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<MiniApp>().WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<MiniAppOAuthClient>().WithMany().HasForeignKey(x => x.OAuthClientId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreAuthorization>()
+            .WithMany().HasForeignKey(x => x.AuthorizationId).OnDelete(DeleteBehavior.SetNull);
+    }
+}

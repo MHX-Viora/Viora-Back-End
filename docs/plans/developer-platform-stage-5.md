@@ -191,4 +191,11 @@ reproduced by failing regression tests and fixed: browser-binding cookies now us
 expired/missing confidential credentials remove only their unavailable projection
 instead of rolling back healthy clients in another environment. Related HTTP/PG
 suite: 18 passed; build clean. Second scoped review found no remaining issues.
-No external cross-model CLI was invoked; its optional user choice remains pending.
+The user selected internal review only; no external cross-model CLI is authorized.
+
+Task 10 complete: pairwise mapping per account/app/environment with unique subject
+within each sector; owner/client/environment-bound consent, active-grant uniqueness,
+version concurrency and nullable FK to the standard OpenIddict authorization.
+Library authorization deletion clears that reference without destroying consent
+history. Model/authorization tests: 10 passed; solution build clean. Actual
+PostgreSQL persistence/migration and concurrency checks follow in Task 11.
