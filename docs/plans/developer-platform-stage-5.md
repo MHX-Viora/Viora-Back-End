@@ -123,4 +123,18 @@ corrected to compare contents. Solution build: 0 warnings/errors. Full suite:
 Checkpoint 4: Tasks 1–4 verified. No protocol exchange, user SSO session, consent,
 SDK, portal SSO tab, bridge or E2E completion is claimed. PostgreSQL tests use new
 disposable clusters; deployed database state remains unverified. Task 5 is next.
-Tasks 5–28 remain incomplete.
+Task 5 complete: opaque SSO sessions store hashes, expire within 8 hours or the
+source social-session expiry, and recheck account status plus live refresh-session
+family on every use. Explicit revoke, expiry, banned/deleted account and source
+session revocation are tested. Newly issued social access JWTs add signed `sid`;
+existing endpoints/default schemes remain intact. Older tokens refresh normally
+before bootstrap (Task 7–8).
+
+TDD exposed a dependency regression: OpenIddict brought IdentityModel 8.19.2 while
+JwtBearer's OpenIdConnect/Jwt assemblies remained 7.1.2; the legacy JWT reader
+silently skipped alternating claims. Pinning both remaining assemblies to 8.19.2
+fixed parsing. A real signature/issuer/audience/lifetime validation regression test
+now protects social JWT compatibility. Upstream requires aligned IdentityModel
+versions: https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/wiki/IdentityModel-8x
+Build: 0 warnings/errors. Full suite: 222 passed, 1 existing skip (223 total).
+Task 6 migration is next; Tasks 6–28 remain incomplete.

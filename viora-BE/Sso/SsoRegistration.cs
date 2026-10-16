@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
 
@@ -15,6 +16,8 @@ public static class SsoRegistration
 
         services.AddSingleton<SsoCredentials>();
         services.AddScoped<Viora.Infrastructure.Sso.MiniAppOidcRegistry>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<Viora.Infrastructure.Sso.SsoSessionService>();
         var openiddict = services.AddOpenIddict();
         openiddict.AddCore(core =>
         {

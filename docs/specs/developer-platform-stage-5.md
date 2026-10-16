@@ -73,6 +73,11 @@ unverified. Historical Mini App migrations do not establish a current OIDC runti
   Bind the bootstrap transaction to the initiating browser before creating the
   SSO session; prevent login CSRF and session fixation. An expired social session
   returns through the existing login UI with a validated first-party return path.
+  Bind the originating social session through an additive signed `sid` claim in
+  newly issued ANKT access tokens; validate its active refresh-session family on
+  bootstrap and every SSO session use. Old access tokens remain valid for existing
+  APIs and obtain `sid` through the existing refresh flow before SSO bootstrap.
+  A client-supplied unsigned SessionId is not sufficient proof of session binding.
 - Four independent contexts: social user session, Developer Portal session,
   per-client Mini App authorization, and partner session.
 - ClientKey remains public client_id. Map registry clients to OpenIddict
