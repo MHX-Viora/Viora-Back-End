@@ -218,3 +218,16 @@ handling defects; both were reproduced RED and fixed. Expired consent history is
 retained and serialization/deadlock conflicts return retryable HTTP 409. Related
 consent/authorization suite: 23 passed; solution build: 0 warnings/errors.
 The consent browser UI and token redemption remain Tasks 13 and 14.
+
+Task 13 complete: server-rendered Vietnamese consent page displays safe HTTPS
+logo, app/developer names, explanations of requested scopes and accessible native
+allow/deny controls. Razor encodes untrusted fields; nonce CSP disallows scripts
+and framing. Native document/form navigation avoids a separate JavaScript loading
+state. JSON responses remain available for explicit application/json clients.
+Internal review exposed decision parameter injection: a full HTTP regression
+proved duplicate allow/deny values could grant permission. Reserved query controls
+are now filtered, and POST rejects ambiguous controls; all regressions pass.
+UI/endpoint suite: 13 passed; solution build clean. Chrome checked actual rendered
+HTML (fixture hidden values redacted) at 320px: no overflow, 48px controls, no
+scripts or console errors. Live browser protocol E2E remains Tasks 25–27; this
+preview verifies rendering only. Production headers are verified by HTTP tests.

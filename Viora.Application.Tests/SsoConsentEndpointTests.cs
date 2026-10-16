@@ -9,6 +9,17 @@ using Xunit;
 
 public sealed class SsoConsentEndpointTests
 {
+    [Fact]
+    public async Task AmbiguousDecisionNeverGrantsConsent()
+    {
+        await using var host = await SsoProtocolTestHost.Create();
+        var form = (await Form(host)).ToList(); form.Add(new("decision", "deny"));
+        var response = await host.Client.PostAsync("/connect/authorize", new FormUrlEncodedContent(form));
+        Assert.True(response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Redirect);
+        if (response.Headers.Location != null) Assert.False(QueryHelpers.ParseQuery(response.Headers.Location.Query).ContainsKey("code"));
+        Assert.Equal(0, await host.WithServices(s => s.GetRequiredService<AppDbContext>().MiniAppUserConsents.CountAsync()));
+    }
+
     [Theory]
     [InlineData("40001")]
     [InlineData("40P01")]

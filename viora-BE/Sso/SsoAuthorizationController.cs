@@ -36,9 +36,19 @@ public sealed class SsoAuthorizationController(SsoClientReader clients, SsoConse
         if (request.GetPromptValues().Contains(OpenIddictConstants.PromptValues.None)) return Error(OpenIddictConstants.Errors.ConsentRequired);
         Response.Headers["Referrer-Policy"] = "no-referrer";
         var csrf = antiforgery.GetAndStoreTokens(HttpContext);
-        return Json(new { miniApp = client.MiniApp.Name, developer = client.MiniApp.Developer.FullName, logoUrl = client.MiniApp.LogoUrl,
-            scopes = request.GetScopes(), parameters = request.GetParameters().ToDictionary(x => x.Key, x => x.Value.ToString()),
-            csrfToken = csrf.RequestToken, consentTicket = interaction.Issue(accountId, request) });
+        var prompt = new { miniApp = client.MiniApp.Name, developer = client.MiniApp.Developer.FullName, logoUrl = client.MiniApp.LogoUrl,
+            scopes = request.GetScopes(), parameters = request.GetParameters()
+                .Where(x => x.Key is not ("decision" or "consent_ticket" or "__RequestVerificationToken"))
+                .ToDictionary(x => x.Key, x => x.Value.ToString()),
+            csrfToken = csrf.RequestToken, consentTicket = interaction.Issue(accountId, request) };
+        if (Request.GetTypedHeaders().Accept?.Any(x => x.MediaType.Value == "application/json") == true) return Json(prompt);
+        var nonce = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
+        Response.Headers["Content-Security-Policy"] = $"default-src 'none'; style-src 'nonce-{nonce}'; img-src https:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["X-Frame-Options"] = "DENY";
+        var logo = Uri.TryCreate(prompt.logoUrl, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.UserInfo.Length == 0 ? uri.AbsoluteUri : null;
+        return View("~/Views/Sso/Consent.cshtml", new SsoConsentPage(prompt.miniApp, prompt.developer, logo,
+            prompt.scopes.ToArray(), prompt.parameters, prompt.csrfToken!, prompt.consentTicket, nonce));
     }
 
     [HttpPost("~/connect/authorize")]
@@ -48,6 +58,7 @@ public sealed class SsoAuthorizationController(SsoClientReader clients, SsoConse
     {
         var request = HttpContext.GetOpenIddictServerRequest() ?? throw new InvalidOperationException("Missing validated OIDC request.");
         var accountId = Guid.Parse(User.FindFirst("sub")!.Value);
+        if (Request.Form["decision"].Count != 1 || Request.Form["consent_ticket"].Count != 1) return Error(OpenIddictConstants.Errors.InvalidRequest);
         if (!interaction.Validate(ticket, accountId, request)) return Error(OpenIddictConstants.Errors.InvalidRequest);
         if (decision == "deny") return Error(OpenIddictConstants.Errors.AccessDenied);
         if (decision != "allow") return Error(OpenIddictConstants.Errors.InvalidRequest);
