@@ -1,0 +1,111 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Viora.Application.Developers;
+using Viora.Infrastructure.Persistence;
+using Viora.Infrastructure.Persistence.Migrations;
+using viora_BE.Developer;
+using Xunit;
+
+public sealed class MiniAppApiTests
+{
+    [Fact]
+    public async Task RealSessionCrudRotationAndAuthorization()
+    {
+        await using var host = await Host.Create(); var c = host.Client;
+        var id = "app_" + new string('x', 43);
+        foreach (var path in new[] { "", "/" + id, $"/{id}/credentials", $"/{id}/redirect-uris", $"/{id}/activity" })
+            Assert.Equal(HttpStatusCode.Unauthorized, (await c.GetAsync("/api/developer/mini-apps" + path)).StatusCode);
+        c.DefaultRequestHeaders.Authorization = new("Bearer", "not-a-developer-session");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await c.PostAsJsonAsync("/api/developer/mini-apps", new { })).StatusCode);
+        var tokenA = await host.Login("a@example.test");
+        c.DefaultRequestHeaders.Authorization = new("DeveloperSession", tokenA);
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/api/developer/mini-apps", new { name = "", category = "other", requestId = Guid.NewGuid() })).StatusCode);
+        var request = new MiniAppCreateRequest("API app", "education", Guid.NewGuid());
+        var response = await c.PostAsJsonAsync("/api/developer/mini-apps", request); Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var app = (await response.Content.ReadFromJsonAsync<MiniAppDto>())!; var root = "/api/developer/mini-apps/" + app.AppId;
+        var repeated = await c.PostAsJsonAsync("/api/developer/mini-apps", request);
+        Assert.Equal(app.AppId, (await repeated.Content.ReadFromJsonAsync<MiniAppDto>())!.AppId);
+        var credentialsResponse = await c.GetAsync(root + "/credentials"); Assert.Equal("no-store", credentialsResponse.Headers.CacheControl!.ToString());
+        var before = (await credentialsResponse.Content.ReadFromJsonAsync<MiniAppCredentialsDto>())!;
+        Assert.DoesNotContain(before.ClientSecret, await (await c.GetAsync("/api/developer/mini-apps")).Content.ReadAsStringAsync());
+        var rotation = await c.PostAsJsonAsync(root + "/credentials/rotate", new { }); Assert.Equal(HttpStatusCode.OK, rotation.StatusCode);
+        var after = (await rotation.Content.ReadFromJsonAsync<MiniAppCredentialsDto>())!;
+        Assert.Equal(before.ClientKey, after.ClientKey); Assert.NotEqual(before.ClientSecret, after.ClientSecret);
+        var patch = await c.PatchAsJsonAsync(root, new { name = "Persisted", status = "Approved", appId = "hijacked", clientKey = "hijacked" });
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode); var saved = (await patch.Content.ReadFromJsonAsync<MiniAppDto>())!;
+        Assert.Equal("Persisted", saved.Name); Assert.NotEqual("Approved", saved.Status); Assert.Equal(app.AppId, saved.AppId);
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PutAsJsonAsync(root + "/redirect-uris", new { redirectUris = new[] { "https://example.com/#bad" } })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await c.PutAsJsonAsync(root + "/redirect-uris", new { redirectUris = new[] { "https://example.com/cb" } })).StatusCode);
+        using var image = new ByteArrayContent(new byte[30]); image.Headers.ContentType = new("image/png");
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsync("/api/developer/mini-apps/logo", image)).StatusCode);
+        var tokenB = await host.Login("b@example.test"); c.DefaultRequestHeaders.Authorization = new("DeveloperSession", tokenB);
+        foreach (var path in new[] { "", "/credentials", "/redirect-uris", "/activity" }) Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync(root + path)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PatchAsJsonAsync(root, new { name = "Attacker" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsJsonAsync(root + "/credentials/rotate", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PutAsJsonAsync(root + "/redirect-uris", new { redirectUris = Array.Empty<string>() })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.DeleteAsync(root)).StatusCode);
+        c.DefaultRequestHeaders.Authorization = new("DeveloperSession", tokenA);
+        Assert.Equal(HttpStatusCode.NoContent, (await c.DeleteAsync(root)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync(root)).StatusCode);
+    }
+
+    [Fact]
+    public void MigrationIsAdditiveAndRollbackOnlyDropsItsSixTables()
+    {
+        var migration = new AddDeveloperMiniAppManagement();
+        var allowed = new[] { "MiniApps", "MiniAppOAuthClients", "MiniAppClientSecrets", "MiniAppRedirectUris", "MiniAppAuditLogs", "MiniAppLogoUploads" };
+        Assert.Equal(6, migration.UpOperations.OfType<CreateTableOperation>().Count());
+        Assert.All(migration.UpOperations, op => Assert.True(op is CreateTableOperation or CreateIndexOperation));
+        Assert.All(migration.UpOperations.OfType<CreateTableOperation>(), table => {
+            Assert.Contains(table.Name, allowed); Assert.All(table.ForeignKeys, fk => Assert.Equal(ReferentialAction.Restrict, fk.OnDelete));
+        });
+        Assert.Equal(6, migration.DownOperations.Count);
+        Assert.All(migration.DownOperations, op => Assert.Contains(Assert.IsType<DropTableOperation>(op).Name, allowed));
+    }
+
+    private sealed class Mail : IDeveloperEmailSender
+    {
+        public bool IsConfigured => true; public string Token = "";
+        public Task SendAsync(string recipient, string subject, string text, CancellationToken ct) { Token = text.Split("#token=")[1].Split('\n')[0].Trim(); return Task.CompletedTask; }
+    }
+    private sealed class Host(WebApplication app, SqliteConnection db, HttpClient client, Mail mail) : IAsyncDisposable
+    {
+        public HttpClient Client => client;
+        public async Task<string> Login(string email)
+        {
+            const string password = "Mini App API test password 2026!";
+            Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/developer/auth/register", new DeveloperRegisterRequest("Test Developer", email, password, password, true))).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/developer/auth/verify-email", new { token = mail.Token })).StatusCode);
+            var response = await client.PostAsJsonAsync("/api/developer/auth/login", new DeveloperLoginRequest(email, password));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<DeveloperLoginResult>())!.SessionToken;
+        }
+        public static async Task<Host> Create()
+        {
+            var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); connection.CreateFunction<string?, int>("char_length", s => s?.Length ?? 0);
+            var b = WebApplication.CreateBuilder(); b.WebHost.UseTestServer(); b.Logging.ClearProviders();
+            b.Configuration.AddInMemoryCollection(new Dictionary<string, string?> {
+                ["DeveloperAuth:PortalUrl"] = "https://mxh.ankt.vn/developers", ["MiniApps:ActiveKeyVersion"] = "test",
+                ["MiniApps:EncryptionKeys:test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            });
+            b.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(connection)); b.Services.AddDeveloperAccounts(b.Configuration); b.Services.AddDeveloperMiniApps(b.Configuration);
+            var mail = new Mail(); b.Services.AddSingleton<IDeveloperEmailSender>(mail); var app = b.Build();
+            using (var scope = app.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
+            app.UseDeveloperAccountBoundary(); app.UseAuthentication(); app.UseRateLimiter(); app.UseAuthorization(); app.MapDeveloperAccountEndpoints(); app.MapDeveloperMiniApps();
+            await app.StartAsync(); return new(app, connection, app.GetTestClient(), mail);
+        }
+        public async ValueTask DisposeAsync() { client.Dispose(); await app.DisposeAsync(); await db.DisposeAsync(); }
+    }
+}

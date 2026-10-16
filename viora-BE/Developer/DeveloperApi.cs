@@ -54,11 +54,13 @@ public static class DeveloperApi
                 var authentication = await context.AuthenticateAsync(DeveloperSessionHandler.SchemeName);
                 if (authentication.Succeeded) context.User = authentication.Principal!;
             }
+            var maxBytes = context.Request.Path == "/api/developer/mini-apps/logo" ? MiniAppLogoStorage.MaxBytes : 65536;
+            if (!context.Request.Path.StartsWithSegments("/api/developer/mini-apps")) maxBytes = 16384;
             var limit = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
-            if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = 16384;
+            if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = maxBytes;
             try
             {
-                if (context.Request.ContentLength > 16384) throw new BadHttpRequestException("Request too large", 413);
+                if (context.Request.ContentLength > maxBytes) throw new BadHttpRequestException("Request too large", 413);
                 await next(context);
             }
             catch (BadHttpRequestException ex) when (!context.Response.HasStarted)
