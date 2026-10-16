@@ -16,7 +16,7 @@ public static class SsoSessionEndpoints
         {
             var state = await bootstrap.StartAsync(returnUrl, context.RequestAborted);
             context.Response.Cookies.Append(BindingCookie(state.TransactionId), state.BrowserCredential,
-                new CookieOptions { Secure = true, HttpOnly = true, SameSite = SameSiteMode.Lax, Path = "/sso", Expires = new DateTimeOffset(state.ExpiresAt) });
+                new CookieOptions { Secure = true, HttpOnly = true, SameSite = SameSiteMode.Lax, Path = "/", Expires = new DateTimeOffset(state.ExpiresAt) });
             return Results.Redirect(configured.Value.FirstPartyOrigin.TrimEnd('/') + "/sso/login?transaction=" + state.TransactionId);
         })).RequireRateLimiting("sso");
 
@@ -36,12 +36,12 @@ public static class SsoSessionEndpoints
             var completed = await bootstrap.CompleteAsync(transaction, binding, context.RequestAborted);
             context.Response.Cookies.Append(SsoSessionHandler.CookieName, completed.Session.Credential,
                 new CookieOptions { Secure = true, HttpOnly = true, SameSite = SameSiteMode.Lax, Path = "/", Expires = new DateTimeOffset(completed.Session.ExpiresAt) });
-            context.Response.Cookies.Delete(BindingCookie(transaction), new CookieOptions { Secure = true, HttpOnly = true, SameSite = SameSiteMode.Lax, Path = "/sso" });
+            context.Response.Cookies.Delete(BindingCookie(transaction), new CookieOptions { Secure = true, HttpOnly = true, SameSite = SameSiteMode.Lax, Path = "/" });
             return Results.LocalRedirect(completed.ReturnUrl);
         })).RequireRateLimiting("sso");
     }
 
-    private static string BindingCookie(Guid transaction) => "__Secure-AnktSsoBinding-" + transaction.ToString("N");
+    private static string BindingCookie(Guid transaction) => "__Host-AnktSsoBinding-" + transaction.ToString("N");
     public static bool TrustedOrigin(HttpContext context, SsoOptions options) => context.Request.Headers.Origin.Count == 1 &&
         string.Equals(context.Request.Headers.Origin.ToString(), options.FirstPartyOrigin.TrimEnd('/'), StringComparison.Ordinal);
 

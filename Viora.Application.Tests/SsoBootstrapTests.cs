@@ -77,6 +77,8 @@ public sealed class SsoBootstrapTests
         Assert.StartsWith("https://app.example/sso/login?transaction=", start.Headers.Location!.AbsoluteUri);
         var transaction = Guid.Parse(QueryHelpers.ParseQuery(start.Headers.Location.Query)["transaction"].ToString());
         var binding = Assert.Single(start.Headers.GetValues("Set-Cookie"));
+        Assert.StartsWith("__Host-AnktSsoBinding-", binding); Assert.Contains("path=/;", binding, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("domain=", binding, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("secure", binding, StringComparison.OrdinalIgnoreCase); Assert.Contains("httponly", binding, StringComparison.OrdinalIgnoreCase);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtTokenService(Options.Create(new JwtOptions { Key = key })).CreateTokens(f.Account, f.SocialId).Tokens.AccessToken);
         client.DefaultRequestHeaders.Add("Origin", "https://evil.example");

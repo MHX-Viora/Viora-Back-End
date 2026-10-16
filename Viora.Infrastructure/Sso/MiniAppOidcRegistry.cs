@@ -36,7 +36,11 @@ public sealed class MiniAppOidcRegistry(AppDbContext db, MiniAppSecretProtector 
             {
                 var secret = await db.MiniAppClientSecrets.SingleOrDefaultAsync(x => x.OAuthClientId == client.Id && x.RevokedAt == null, ct);
                 if (secret == null || secret.ExpiresAt <= DateTime.UtcNow)
-                    throw new DeveloperAuthException(409, "SECRET_EXPIRED", "Client Secret chưa sẵn sàng hoặc đã hết hạn.");
+                {
+                    // An unavailable environment must fail closed without blocking recovery in another.
+                    if (existing != null) await applications.DeleteAsync(existing, ct);
+                    continue;
+                }
                 descriptor.ClientSecret = protector.Decrypt(secret.SecretEncrypted, secret.SecretKeyVersion, client.Id);
             }
             descriptor.Properties["registry_client_id"] = JsonSerializer.SerializeToElement(client.Id.ToString());

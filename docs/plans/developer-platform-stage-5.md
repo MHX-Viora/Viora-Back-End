@@ -184,3 +184,11 @@ missing PKCE/nonce, unsupported flow/scope, session reuse and suspended app.
 Early library validation returns direct text errors before redirect validation;
 tests verify that response rather than expecting unsafe error redirects.
 Solution build clean. Tasks 10–28 remain incomplete.
+
+Independent adversarial review before consent found two actionable issues, both
+reproduced by failing regression tests and fixed: browser-binding cookies now use
+`__Host-` with Path=/ (including deletion) to reject sibling-domain injection;
+expired/missing confidential credentials remove only their unavailable projection
+instead of rolling back healthy clients in another environment. Related HTTP/PG
+suite: 18 passed; build clean. Second scoped review found no remaining issues.
+No external cross-model CLI was invoked; its optional user choice remains pending.

@@ -60,6 +60,14 @@ public sealed class SsoRegistryTests
         Assert.Equal("https://production.example.test/callback", Assert.Single(await manager.GetRedirectUrisAsync(publicProjection)));
         Assert.Equal("https://sandbox.example.test/callback", Assert.Single(await manager.GetRedirectUrisAsync(projected)));
         Assert.DoesNotContain(OpenIddictConstants.Permissions.Prefixes.Scope + "profile", await manager.GetPermissionsAsync(publicProjection));
+        publicClient.ClientType = "Confidential";
+        var protector = scope.ServiceProvider.GetRequiredService<MiniAppSecretProtector>();
+        var expired = protector.Encrypt("expired-production-only", publicClient.Id);
+        var productionSecret = new MiniAppClientSecret { OAuthClientId = publicClient.Id, SecretEncrypted = expired.Ciphertext, SecretKeyVersion = expired.Version, ExpiresAt = DateTime.UtcNow.AddSeconds(-1) };
+        db.MiniAppClientSecrets.Add(productionSecret); await db.SaveChangesAsync();
+        after = await service.Credentials(owner.Id, dto.AppId, true, default);
+        Assert.Null(await manager.FindByClientIdAsync(publicClient.ClientKey));
+        publicClient.ClientType = "Public"; productionSecret.RevokedAt = DateTime.UtcNow; await db.SaveChangesAsync();
         var authoritative = await db.MiniAppOAuthClients.SingleAsync(x => x.Environment == MiniAppOAuthEnvironment.Sandbox); authoritative.ClientType = "Invalid"; await db.SaveChangesAsync();
         await Assert.ThrowsAsync<DeveloperAuthException>(() => service.Credentials(owner.Id, dto.AppId, true, default));
         db.ChangeTracker.Clear();
