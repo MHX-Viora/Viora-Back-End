@@ -27,14 +27,23 @@ internal sealed class SsoProtocolTestHost : IAsyncDisposable
     public const string RedirectUri = "https://partner.example.com/callback";
     public const string Verifier = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private Guid accountId, socialId, miniAppId;
+    public Guid AccountId => accountId;
+    public async Task<T> WithServices<T>(Func<IServiceProvider,Task<T>> action)
+    {
+        await using var scope = app.Services.CreateAsyncScope(); return await action(scope.ServiceProvider);
+    }
 
-    public static async Task<SsoProtocolTestHost> Create()
+    public static async Task<SsoProtocolTestHost> Create(IsolatedPostgres? postgres = null, Action<DbContextOptionsBuilder>? configureDatabase = null)
     {
         var host = new SsoProtocolTestHost(); await host.connection.OpenAsync();
         host.connection.CreateFunction<string?,int>("char_length", x => x?.Length ?? 0);
         var builder = WebApplication.CreateBuilder(); builder.WebHost.UseTestServer(); builder.Logging.ClearProviders();
         builder.Configuration.AddInMemoryCollection(host.certificates.Config());
-        builder.Services.AddDbContext<AppDbContext>(x => x.UseSqlite(host.connection));
+        builder.Services.AddDbContext<AppDbContext>(x =>
+        {
+            if (postgres == null) x.UseSqlite(host.connection); else x.UseNpgsql(postgres.ConnectionString);
+            configureDatabase?.Invoke(x);
+        });
         builder.Services.AddSingleton(Options.Create(new MiniAppOptions { ActiveKeyVersion = "test", EncryptionKeys = new() { ["test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) } }));
         builder.Services.AddSingleton<MiniAppSecretProtector>();
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(); builder.Services.AddAuthorization();

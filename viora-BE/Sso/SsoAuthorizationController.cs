@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using Viora.Application.Developers;
@@ -8,13 +11,15 @@ using Viora.Infrastructure.Sso;
 
 namespace viora_BE.Sso;
 
-public sealed class SsoAuthorizationController(SsoClientReader clients) : Controller
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public sealed class SsoAuthorizationController(SsoClientReader clients, SsoConsentService consents, SsoConsentInteraction interaction, IAntiforgery antiforgery) : Controller
 {
     [HttpGet("~/connect/authorize")]
     public async Task<IActionResult> Authorize(CancellationToken ct)
     {
         var request = HttpContext.GetOpenIddictServerRequest() ?? throw new InvalidOperationException("Missing validated OIDC request.");
-        try { await clients.EligibleAsync(request.ClientId, request.GetScopes(), null, ct); }
+        Viora.Domain.Developers.MiniAppOAuthClient client;
+        try { client = await clients.EligibleAsync(request.ClientId, request.GetScopes(), null, ct); }
         catch (DeveloperAuthException e) { return Error(e.Code == "SSO_INVALID_SCOPE" ? OpenIddictConstants.Errors.InvalidScope : OpenIddictConstants.Errors.AccessDenied); }
         if (string.IsNullOrEmpty(request.Nonce)) return Error(OpenIddictConstants.Errors.InvalidRequest);
         var user = await HttpContext.AuthenticateAsync(SsoSessionHandler.SchemeName);
@@ -23,9 +28,40 @@ public sealed class SsoAuthorizationController(SsoClientReader clients) : Contro
             if (request.GetPromptValues().Contains(OpenIddictConstants.PromptValues.None)) return Error(OpenIddictConstants.Errors.LoginRequired);
             return Redirect("/sso/start?returnUrl=" + Uri.EscapeDataString(Request.Path + Request.QueryString));
         }
-        // Consent persistence/issuance follows in Tasks 10–12. Until then deny securely.
-        return Error(OpenIddictConstants.Errors.ConsentRequired);
+        HttpContext.User = user.Principal!;
+        var accountId = Guid.Parse(user.Principal!.FindFirst("sub")!.Value);
+        var grant = await consents.FindAsync(accountId, request.ClientId!, request.GetScopes(), ct);
+        if (grant != null && !request.GetPromptValues().Contains(OpenIddictConstants.PromptValues.Consent))
+            return SignIn(await consents.PrincipalAsync(accountId, request.ClientId!, request.GetScopes(), ct), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        if (request.GetPromptValues().Contains(OpenIddictConstants.PromptValues.None)) return Error(OpenIddictConstants.Errors.ConsentRequired);
+        Response.Headers["Referrer-Policy"] = "no-referrer";
+        var csrf = antiforgery.GetAndStoreTokens(HttpContext);
+        return Json(new { miniApp = client.MiniApp.Name, developer = client.MiniApp.Developer.FullName, logoUrl = client.MiniApp.LogoUrl,
+            scopes = request.GetScopes(), parameters = request.GetParameters().ToDictionary(x => x.Key, x => x.Value.ToString()),
+            csrfToken = csrf.RequestToken, consentTicket = interaction.Issue(accountId, request) });
     }
+
+    [HttpPost("~/connect/authorize")]
+    [Authorize(AuthenticationSchemes = SsoSessionHandler.SchemeName)]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Consent([FromForm] string decision, [FromForm(Name = "consent_ticket")] string? ticket, CancellationToken ct)
+    {
+        var request = HttpContext.GetOpenIddictServerRequest() ?? throw new InvalidOperationException("Missing validated OIDC request.");
+        var accountId = Guid.Parse(User.FindFirst("sub")!.Value);
+        if (!interaction.Validate(ticket, accountId, request)) return Error(OpenIddictConstants.Errors.InvalidRequest);
+        if (decision == "deny") return Error(OpenIddictConstants.Errors.AccessDenied);
+        if (decision != "allow") return Error(OpenIddictConstants.Errors.InvalidRequest);
+        try
+        {
+            await consents.GrantAsync(accountId, request.ClientId!, request.GetScopes(), ct);
+            return SignIn(await consents.PrincipalAsync(accountId, request.ClientId!, request.GetScopes(), ct), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
+        catch (DeveloperAuthException) { return Error(OpenIddictConstants.Errors.AccessDenied); }
+        catch (DbUpdateException) { return ConsentConflict(); }
+        catch (Npgsql.PostgresException e) when (e.SqlState is "40001" or "40P01") { return ConsentConflict(); }
+    }
+
+    private ConflictObjectResult ConsentConflict() => Conflict(new { error = new { code = "SSO_CONSENT_CONFLICT", message = "Quyền vừa thay đổi. Vui lòng tải lại và thử lại." } });
 
     private ForbidResult Error(string error) => Forbid(new AuthenticationProperties(new Dictionary<string,string?>
     { [OpenIddictServerAspNetCoreConstants.Properties.Error] = error }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);

@@ -205,3 +205,16 @@ verified up/down/up, sector uniqueness, independent environment subjects, active
 consent uniqueness, concurrent update rejection, authorization FK SET NULL and
 preservation of Accounts plus stable pairwise identity when authorization is
 deleted. Focused schema/PG suite: 2 passed; solution build clean.
+
+Task 12 complete: consent is bound to the authenticated owner, exact validated
+request, environment and scopes through antiforgery plus a five-minute protected
+interaction ticket. Real authorization codes are issued only after approval;
+unchanged grants take the fast path, prompt=consent forces interaction, and
+prompt=none returns consent_required without a grant. Pairwise subjects remain
+stable; principals disclose only explicitly scoped profile/verified email claims.
+Isolated PostgreSQL concurrent approvals leave one consistent active consent.
+Internal review found expired consent renewal and raw PostgreSQL commit-conflict
+handling defects; both were reproduced RED and fixed. Expired consent history is
+retained and serialization/deadlock conflicts return retryable HTTP 409. Related
+consent/authorization suite: 23 passed; solution build: 0 warnings/errors.
+The consent browser UI and token redemption remain Tasks 13 and 14.

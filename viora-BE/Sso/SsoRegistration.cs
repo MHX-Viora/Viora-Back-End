@@ -22,6 +22,14 @@ public static class SsoRegistration
         services.AddScoped<Viora.Infrastructure.Sso.SsoSessionService>();
         services.AddScoped<Viora.Infrastructure.Sso.SsoBootstrapService>();
         services.AddScoped<Viora.Infrastructure.Sso.SsoClientReader>();
+        services.AddScoped<Viora.Infrastructure.Sso.SsoConsentService>();
+        services.AddScoped<SsoConsentInteraction>();
+        services.AddControllersWithViews();
+        services.AddAntiforgery(options =>
+        {
+            options.Cookie.Name = "__Host-AnktSsoCsrf"; options.Cookie.Path = "/";
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always; options.Cookie.HttpOnly = true; options.Cookie.SameSite = SameSiteMode.Lax;
+        });
         services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, SsoSessionHandler>(SsoSessionHandler.SchemeName, _ => { });
         services.AddRateLimiter(options => options.AddPolicy("sso", context => RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
