@@ -152,4 +152,22 @@ Real JWT HTTP tests cover origin rejection, cookie binding, top-level completion
 and replay. PostgreSQL up/down/up and two concurrent completions issue exactly one
 session. Focused bootstrap/session/startup suite: 28 passed; solution build clean.
 Frontend bootstrap page is Task 8; partner authorization/token flow remains absent.
-Tasks 8–28 remain incomplete.
+Task 8 complete: Expo `/sso/login` page, existing login/Google/profile return
+integration, fixed-issuer bootstrap adapter, one refresh retry for legacy/expired
+access JWTs, timeout/cancel/error states and validated local pending return.
+Frontend tests: 32 passed (7 SSO + 25 existing Developer), TypeScript and focused
+ESLint passed; Expo web export passed (Metro recovered from an existing cache
+deserialization warning). Real Chrome verified error/retry, accessibility tree and
+320px layout with scrollWidth=innerWidth=320. No console errors; one pre-existing
+shared `shadow*` deprecation warning. Browser success-path OIDC E2E remains for
+Tasks 25–27, not represented by unit transport doubles.
+
+Bootstrap retry refinement: the same account/signed social session may repeat an
+unconsumed authenticated transaction after a lost response; another account or
+session cannot overwrite it. TDD regression covered the retry. Backend full suite:
+231 passed, 1 existing skip (232 total); solution build clean.
+
+Checkpoint 8: Tasks 1–8 verified as individual increments. Existing frontend
+dirty files are preserved; only SSO-specific layout hunks belong to this work.
+Authorization handler, consent, token exchange, SDK, bridge, portal SSO tab and
+complete public/confidential OIDC E2E remain outstanding. Tasks 9–28 remain incomplete.

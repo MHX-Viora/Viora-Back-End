@@ -115,6 +115,8 @@ public sealed class SsoBootstrapTests
         await Assert.ThrowsAsync<DeveloperAuthException>(() => f.Bootstrap.CompleteAsync(start.TransactionId, start.BrowserCredential, default));
         await Assert.ThrowsAsync<DeveloperAuthException>(() => f.Bootstrap.AuthenticateAsync(start.TransactionId, f.Account.Id, Guid.NewGuid(), default));
         await f.Bootstrap.AuthenticateAsync(start.TransactionId, f.Account.Id, f.SocialId, default);
+        // A lost HTTP response may be retried by the same authenticated user/session.
+        await f.Bootstrap.AuthenticateAsync(start.TransactionId, f.Account.Id, f.SocialId, default);
         await Assert.ThrowsAsync<DeveloperAuthException>(() => f.Bootstrap.CompleteAsync(start.TransactionId, "wrong-browser", default));
         var result = await f.Bootstrap.CompleteAsync(start.TransactionId, start.BrowserCredential, default);
         Assert.Equal("/connect/authorize?client_id=test", result.ReturnUrl);

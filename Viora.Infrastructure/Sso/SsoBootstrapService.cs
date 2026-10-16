@@ -33,7 +33,8 @@ public sealed class SsoBootstrapService(AppDbContext db, SsoSessionService sessi
         var now = Now;
         var count = await db.SsoLoginTransactions.Where(x => x.Id == transactionId && x.ConsumedAt == null && x.ExpiresAt > now && x.AccountId == null)
             .ExecuteUpdateAsync(x => x.SetProperty(t => t.AccountId, accountId).SetProperty(t => t.SocialSessionId, signedSocialSessionId), ct);
-        if (count != 1) throw Invalid();
+        if (count != 1 && !await db.SsoLoginTransactions.AsNoTracking().AnyAsync(x => x.Id == transactionId &&
+            x.ConsumedAt == null && x.ExpiresAt > now && x.AccountId == accountId && x.SocialSessionId == signedSocialSessionId, ct)) throw Invalid();
     }
 
     public async Task<SsoBootstrapComplete> CompleteAsync(Guid transactionId, string? browserCredential, CancellationToken ct)
