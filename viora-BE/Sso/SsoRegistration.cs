@@ -15,7 +15,8 @@ public static class SsoRegistration
 
         services.AddSingleton<SsoCredentials>();
         var openiddict = services.AddOpenIddict();
-        openiddict.AddCore(); // Persistent store integration follows in Task 2.
+        openiddict.AddCore(core => core.UseEntityFrameworkCore()
+            .UseDbContext<Viora.Infrastructure.Persistence.AppDbContext>());
         openiddict.AddServer(server =>
         {
             server.SetAuthorizationEndpointUris("/connect/authorize")

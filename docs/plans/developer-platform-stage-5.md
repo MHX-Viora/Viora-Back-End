@@ -89,7 +89,12 @@ Commands: `dotnet build viora-BE.sln --no-restore --verbosity quiet -m:1
 Viora.Application.Tests/Viora.Application.Tests.csproj --no-build --no-restore
 --verbosity quiet -m:1`.
 
-Task 2 is next. PostgreSQL 18 binaries were found locally; only a new isolated
-cluster/database may be used for its migration/transaction/concurrency checks.
+Task 2 complete: standard OpenIddict EF Core stores share AppDbContext. Additive
+`20261016071639_AddOpenIddictStores` creates only the four library tables/indexes.
+Real isolated PostgreSQL 18.6 verified migration up/down/up, preservation of an
+unrelated table, transaction rollback, unique client ID and optimistic concurrency.
+The fixture creates its own loopback-only cluster and stops/removes it; it never
+reads application database configuration. Initial process-pipe hang was corrected.
+Build: 0 warnings/errors. Full backend suite: 206 passed, 1 existing skip.
 No database migration, production configuration, deployment or SDK publication
-has been performed. Tasks 2–28 and all protocol/E2E checks remain incomplete.
+has been performed against production. Tasks 3–28 and all protocol/E2E checks remain incomplete.
