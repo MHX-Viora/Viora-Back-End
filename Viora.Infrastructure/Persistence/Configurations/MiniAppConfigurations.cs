@@ -26,7 +26,9 @@ internal sealed class MiniAppClientConfiguration : IEntityTypeConfiguration<Mini
     {
         b.ToTable("MiniAppOAuthClients"); b.HasKey(x => x.Id);
         b.Property(x => x.ClientKey).HasMaxLength(64).IsRequired(); b.HasIndex(x => x.ClientKey).IsUnique();
-        b.Property(x => x.ClientType).HasMaxLength(24).IsRequired(); b.HasIndex(x => x.MiniAppId).IsUnique();
+        b.Property(x => x.ClientType).HasMaxLength(24).IsRequired();
+        b.Property(x => x.AllowedScopes).HasMaxLength(128).IsRequired(); b.Property(x => x.Version).IsConcurrencyToken();
+        b.HasIndex(x => new { x.MiniAppId, x.Environment }).IsUnique();
         b.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
     }
 }
@@ -45,7 +47,7 @@ internal sealed class MiniAppRedirectConfiguration : IEntityTypeConfiguration<Mi
     public void Configure(EntityTypeBuilder<MiniAppRedirectUri> b)
     {
         b.ToTable("MiniAppRedirectUris"); b.HasKey(x => x.Id); b.Property(x => x.RedirectUri).HasMaxLength(1024).IsRequired();
-        b.HasIndex(x => new { x.MiniAppId, x.RedirectUri }).IsUnique();
+        b.HasIndex(x => new { x.MiniAppId, x.Environment, x.RedirectUri }).IsUnique();
         b.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
     }
 }

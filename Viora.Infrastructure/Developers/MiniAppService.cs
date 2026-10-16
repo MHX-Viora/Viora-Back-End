@@ -103,8 +103,9 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var app = await Own(owner, appId, ct); app.DeletedAt = DateTime.UtcNow; Touch(app);
         await MiniAppDomainLifecycle.Revoke(db, app.Id, ct);
-        var client = await db.MiniAppOAuthClients.SingleAsync(x => x.MiniAppId == app.Id, ct); client.RevokedAt = DateTime.UtcNow;
-        await db.MiniAppClientSecrets.Where(x => x.OAuthClientId == client.Id && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
+        var clients = db.MiniAppOAuthClients.Where(x => x.MiniAppId == app.Id);
+        await clients.ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
+        await db.MiniAppClientSecrets.Where(x => clients.Select(c => c.Id).Contains(x.OAuthClientId) && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
         await db.MiniAppLogoUploads.Where(x => x.MiniAppId == app.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.MiniAppId, (Guid?)null).SetProperty(x => x.ExpiresAt, DateTime.UtcNow.AddHours(1)), ct);
         Audit(app, owner, "mini_app.deleted"); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
     }
@@ -112,7 +113,7 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var app = await Own(owner, appId, ct);
-        var client = await db.MiniAppOAuthClients.SingleAsync(x => x.MiniAppId == app.Id && x.RevokedAt == null, ct);
+        var client = await db.MiniAppOAuthClients.SingleAsync(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox && x.RevokedAt == null, ct);
         MiniAppClientSecret secret;
         if (rotate)
         {
@@ -135,7 +136,7 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
     public async Task<string[]> Redirects(Guid owner, string appId, CancellationToken ct)
     {
         var app = await Own(owner, appId, ct);
-        return await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id).OrderBy(x => x.RedirectUri).Select(x => x.RedirectUri).ToArrayAsync(ct);
+        return await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox).OrderBy(x => x.RedirectUri).Select(x => x.RedirectUri).ToArrayAsync(ct);
     }
     public async Task<string[]> SaveRedirects(Guid owner, string appId, MiniAppRedirectRequest r, CancellationToken ct)
     {
@@ -143,7 +144,7 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         var urls = r.RedirectUris.Select(x => MiniAppInput.Url(x, environment.IsDevelopment(), true)).Distinct(StringComparer.Ordinal).ToArray();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var app = await Own(owner, appId, ct); Touch(app);
-        await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id).ExecuteDeleteAsync(ct);
+        await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox).ExecuteDeleteAsync(ct);
         db.MiniAppRedirectUris.AddRange(urls.Select(url => new MiniAppRedirectUri { MiniAppId = app.Id, RedirectUri = url }));
         Audit(app, owner, "callbacks.updated"); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return urls;
     }

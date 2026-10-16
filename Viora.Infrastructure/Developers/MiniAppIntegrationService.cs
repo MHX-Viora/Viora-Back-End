@@ -16,7 +16,7 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
         ?? throw new DeveloperAuthException(404, "MINI_APP_NOT_FOUND", "Không tìm thấy Mini App.");
     private void Audit(MiniApp app, string action) => db.MiniAppAuditLogs.Add(new() { MiniAppId = app.Id, ActorDeveloperId = app.DeveloperAccountId, Action = action });
     private static void Touch(MiniApp app) => app.Version = Guid.NewGuid();
-    private Task<string[]> Redirects(Guid id, CancellationToken ct) => db.MiniAppRedirectUris.Where(x => x.MiniAppId == id).OrderBy(x => x.RedirectUri).Select(x => x.RedirectUri).ToArrayAsync(ct);
+    private Task<string[]> Redirects(Guid id, CancellationToken ct) => db.MiniAppRedirectUris.Where(x => x.MiniAppId == id && x.Environment == MiniAppOAuthEnvironment.Sandbox).OrderBy(x => x.RedirectUri).Select(x => x.RedirectUri).ToArrayAsync(ct);
     private Task<MiniAppDomainVerification?> Current(Guid id, CancellationToken ct) => db.MiniAppDomainVerifications.SingleOrDefaultAsync(x => x.MiniAppId == id && x.RevokedAt == null, ct);
     private static MiniAppIntegrationDto Map(MiniApp a, string[] redirects) => new(a.WebsiteUrl ?? "", a.SupportEmail ?? "", a.ShortDescription ?? "", a.Description ?? "", a.PrivacyPolicyUrl ?? "", a.TermsOfServiceUrl ?? "", a.SsoEnabled, redirects);
     private static string RequireHost(MiniApp app) => MiniAppDomainLifecycle.Host(app.WebsiteUrl) ?? throw MiniAppInput.Invalid("Lưu Website URL HTTPS công khai trước khi xác minh domain.");
@@ -40,7 +40,7 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
         app.WebsiteUrl = website; app.PrivacyPolicyUrl = privacy; app.TermsOfServiceUrl = terms;
         app.SupportEmail = email; app.ShortDescription = shortDescription; app.Description = description; app.SsoEnabled = r.SsoEnabled;
         await MiniAppDomainLifecycle.ChangeWebsite(db, app, previous, protector, ct);
-        await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id).ExecuteDeleteAsync(ct);
+        await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox).ExecuteDeleteAsync(ct);
         db.MiniAppRedirectUris.AddRange(redirects.Select(uri => new MiniAppRedirectUri { MiniAppId = app.Id, RedirectUri = uri }));
         if (app.Status is MiniAppStatus.Draft or MiniAppStatus.ConfigurationIncomplete)
             app.Status = !string.IsNullOrWhiteSpace(app.LogoUrl) && website != "" && privacy != "" && terms != "" && email != "" && shortDescription != "" ? MiniAppStatus.Draft : MiniAppStatus.ConfigurationIncomplete;

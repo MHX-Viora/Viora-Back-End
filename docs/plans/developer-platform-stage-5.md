@@ -97,4 +97,15 @@ The fixture creates its own loopback-only cluster and stops/removes it; it never
 reads application database configuration. Initial process-pipe hang was corrected.
 Build: 0 warnings/errors. Full backend suite: 206 passed, 1 existing skip.
 No database migration, production configuration, deployment or SDK publication
-has been performed against production. Tasks 3–28 and all protocol/E2E checks remain incomplete.
+has been performed against production.
+
+Task 3 complete: client and redirect environment bindings, opt-in Sandbox,
+allowed scopes, client concurrency version and lifecycle/domain/scope policy.
+Existing legacy credentials/callback APIs address Sandbox explicitly; app deletion
+revokes every environment. Generated `AddSsoClientEnvironments` is additive except
+for replacing uniqueness indexes with environment-aware indexes. Existing migrated
+clients default to disabled Sandbox with empty scopes (configuration required).
+Rollback requires resolving duplicate environments explicitly; no data is silently
+discarded. 12 policy cases plus actual PostgreSQL migration/index/preservation
+checks passed; related suite: 58 passed. Solution build: 0 warnings/errors.
+Tasks 4–28 and all protocol/E2E checks remain incomplete.

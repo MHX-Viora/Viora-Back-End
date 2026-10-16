@@ -747,6 +747,11 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AllowedScopes")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<string>("ClientKey")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -760,21 +765,31 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
                     b.Property<Guid>("MiniAppId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("SandboxEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ClientKey")
                         .IsUnique();
 
-                    b.HasIndex("MiniAppId")
+                    b.HasIndex("MiniAppId", "Environment")
                         .IsUnique();
 
                     b.ToTable("MiniAppOAuthClients", (string)null);
@@ -789,6 +804,9 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
                     b.Property<Guid>("MiniAppId")
                         .HasColumnType("uuid");
 
@@ -802,7 +820,7 @@ namespace Viora.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MiniAppId", "RedirectUri")
+                    b.HasIndex("MiniAppId", "Environment", "RedirectUri")
                         .IsUnique();
 
                     b.ToTable("MiniAppRedirectUris", (string)null);

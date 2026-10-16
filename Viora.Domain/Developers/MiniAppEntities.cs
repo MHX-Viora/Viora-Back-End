@@ -46,12 +46,17 @@ public sealed class MiniAppDomainVerification : CreatedEntity
     public Guid Version { get; set; } = Guid.NewGuid();
 }
 
+public enum MiniAppOAuthEnvironment { Sandbox, Production }
 public sealed class MiniAppOAuthClient : AuditableEntity
 {
     public Guid MiniAppId { get; set; }
     public MiniApp MiniApp { get; set; } = null!;
     public string ClientKey { get; set; } = "";
     public string ClientType { get; set; } = "Confidential";
+    public MiniAppOAuthEnvironment Environment { get; set; }
+    public bool SandboxEnabled { get; set; }
+    public string AllowedScopes { get; set; } = "openid profile email";
+    public Guid Version { get; set; } = Guid.NewGuid();
     public DateTime? RevokedAt { get; set; }
 }
 
@@ -71,6 +76,7 @@ public sealed class MiniAppRedirectUri : AuditableEntity
     public Guid MiniAppId { get; set; }
     public MiniApp MiniApp { get; set; } = null!;
     public string RedirectUri { get; set; } = "";
+    public MiniAppOAuthEnvironment Environment { get; set; }
 }
 
 public sealed class MiniAppAuditLog : CreatedEntity
