@@ -8,7 +8,8 @@ using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.Developers;
 
-public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProtector protector, IPublicWebFetcher fetcher, IHostEnvironment environment, TimeProvider clock)
+public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProtector protector, IPublicWebFetcher fetcher, IHostEnvironment environment, TimeProvider clock,
+    Viora.Infrastructure.Sso.MiniAppOidcRegistry? oidcRegistry = null)
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
     private async Task<MiniApp> Own(Guid owner, string appId, CancellationToken ct) => await db.MiniApps
@@ -44,7 +45,9 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
         db.MiniAppRedirectUris.AddRange(redirects.Select(uri => new MiniAppRedirectUri { MiniAppId = app.Id, RedirectUri = uri }));
         if (app.Status is MiniAppStatus.Draft or MiniAppStatus.ConfigurationIncomplete)
             app.Status = !string.IsNullOrWhiteSpace(app.LogoUrl) && website != "" && privacy != "" && terms != "" && email != "" && shortDescription != "" ? MiniAppStatus.Draft : MiniAppStatus.ConfigurationIncomplete;
-        Touch(app); Audit(app, "integration.updated"); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        Touch(app); Audit(app, "integration.updated"); await db.SaveChangesAsync(ct);
+        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
+        await tx.CommitAsync(ct);
         return Map(app, redirects);
     }
 

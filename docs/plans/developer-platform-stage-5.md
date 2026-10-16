@@ -108,4 +108,19 @@ clients default to disabled Sandbox with empty scopes (configuration required).
 Rollback requires resolving duplicate environments explicitly; no data is silently
 discarded. 12 policy cases plus actual PostgreSQL migration/index/preservation
 checks passed; related suite: 58 passed. Solution build: 0 warnings/errors.
-Tasks 4–28 and all protocol/E2E checks remain incomplete.
+Task 4 complete: `MiniAppOidcRegistry` projects existing ClientKey/type/secret,
+PKCE requirement, environment, scopes and redirects through the standard library
+manager in the same AppDbContext transaction as registry writes. Existing create,
+update, rotation, callback, integration and delete paths participate when SSO is
+enabled. Entity caching is disabled; Public Client credentials API rejects secret
+retrieval/rotation. Deletion/SSO disablement removes projections and their grants.
+PostgreSQL tests prove hash-only projection, old-secret rejection, atomic failure
+rollback, Public Client without secret, environment-specific callbacks/scopes,
+and removal of both environment projections. An ImmutableArray assertion was
+corrected to compare contents. Solution build: 0 warnings/errors. Full suite:
+220 passed, 1 pre-existing skip (221 total).
+
+Checkpoint 4: Tasks 1–4 verified. No protocol exchange, user SSO session, consent,
+SDK, portal SSO tab, bridge or E2E completion is claimed. PostgreSQL tests use new
+disposable clusters; deployed database state remains unverified. Task 5 is next.
+Tasks 5–28 remain incomplete.

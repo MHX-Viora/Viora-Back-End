@@ -14,9 +14,13 @@ public static class SsoRegistration
         if (!section.GetValue<bool>(nameof(SsoOptions.Enabled))) return services;
 
         services.AddSingleton<SsoCredentials>();
+        services.AddScoped<Viora.Infrastructure.Sso.MiniAppOidcRegistry>();
         var openiddict = services.AddOpenIddict();
-        openiddict.AddCore(core => core.UseEntityFrameworkCore()
-            .UseDbContext<Viora.Infrastructure.Persistence.AppDbContext>());
+        openiddict.AddCore(core =>
+        {
+            core.DisableEntityCaching();
+            core.UseEntityFrameworkCore().UseDbContext<Viora.Infrastructure.Persistence.AppDbContext>();
+        });
         openiddict.AddServer(server =>
         {
             server.SetAuthorizationEndpointUris("/connect/authorize")

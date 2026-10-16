@@ -12,7 +12,8 @@ using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.Developers;
 
-public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector protector, IOptions<MiniAppOptions> options, IHostEnvironment environment)
+public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector protector, IOptions<MiniAppOptions> options, IHostEnvironment environment,
+    Viora.Infrastructure.Sso.MiniAppOidcRegistry? oidcRegistry = null)
 {
     private static string RandomId(string prefix) => prefix + WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
     private static DeveloperAuthException Missing() => new(404, "MINI_APP_NOT_FOUND", "Không tìm thấy Mini App.");
@@ -54,7 +55,9 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         var client = new MiniAppOAuthClient { MiniAppId = app.Id, ClientKey = RandomId("ck_") };
         db.MiniAppOAuthClients.Add(client); AddSecret(client);
         Audit(app, owner, "mini_app.created");
-        await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        await db.SaveChangesAsync(ct);
+        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
+        await tx.CommitAsync(ct);
         return Map(app);
     }
     private MiniAppClientSecret AddSecret(MiniAppOAuthClient client)
@@ -96,7 +99,9 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
                 && !string.IsNullOrEmpty(app.SupportEmail) && !string.IsNullOrEmpty(app.PrivacyPolicyUrl) && !string.IsNullOrEmpty(app.TermsOfServiceUrl)
                 ? MiniAppStatus.Draft : MiniAppStatus.ConfigurationIncomplete;
         Touch(app); Audit(app, owner, "mini_app.updated");
-        await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return Map(app);
+        await db.SaveChangesAsync(ct);
+        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
+        await tx.CommitAsync(ct); return Map(app);
     }
     public async Task Delete(Guid owner, string appId, CancellationToken ct)
     {
@@ -107,13 +112,16 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         await clients.ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
         await db.MiniAppClientSecrets.Where(x => clients.Select(c => c.Id).Contains(x.OAuthClientId) && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
         await db.MiniAppLogoUploads.Where(x => x.MiniAppId == app.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.MiniAppId, (Guid?)null).SetProperty(x => x.ExpiresAt, DateTime.UtcNow.AddHours(1)), ct);
-        Audit(app, owner, "mini_app.deleted"); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        Audit(app, owner, "mini_app.deleted"); await db.SaveChangesAsync(ct);
+        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
+        await tx.CommitAsync(ct);
     }
     public async Task<MiniAppCredentialsDto> Credentials(Guid owner, string appId, bool rotate, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var app = await Own(owner, appId, ct);
         var client = await db.MiniAppOAuthClients.SingleAsync(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox && x.RevokedAt == null, ct);
+        if (client.ClientType == "Public") throw new DeveloperAuthException(409, "PUBLIC_CLIENT_NO_SECRET", "Public Client chỉ sử dụng PKCE và không có Client Secret.");
         MiniAppClientSecret secret;
         if (rotate)
         {
@@ -130,7 +138,9 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
             Audit(app, owner, "credentials.viewed");
         }
         var plaintext = protector.Decrypt(secret.SecretEncrypted, secret.SecretKeyVersion, client.Id);
-        await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        await db.SaveChangesAsync(ct);
+        if (rotate && oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
+        await tx.CommitAsync(ct);
         return new(app.AppId, client.ClientKey, plaintext, client.ClientType, secret.CreatedAt);
     }
     public async Task<string[]> Redirects(Guid owner, string appId, CancellationToken ct)
@@ -146,7 +156,9 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         var app = await Own(owner, appId, ct); Touch(app);
         await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox).ExecuteDeleteAsync(ct);
         db.MiniAppRedirectUris.AddRange(urls.Select(url => new MiniAppRedirectUri { MiniAppId = app.Id, RedirectUri = url }));
-        Audit(app, owner, "callbacks.updated"); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return urls;
+        Audit(app, owner, "callbacks.updated"); await db.SaveChangesAsync(ct);
+        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
+        await tx.CommitAsync(ct); return urls;
     }
     public async Task<MiniAppActivityDto[]> Activity(Guid owner, string appId, CancellationToken ct)
     {
