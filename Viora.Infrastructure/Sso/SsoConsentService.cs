@@ -14,7 +14,7 @@ namespace Viora.Infrastructure.Sso;
 public sealed record SsoGrant(string Subject, string AuthorizationId, MiniAppOAuthEnvironment Environment);
 
 public sealed class SsoConsentService(AppDbContext db, SsoClientReader clients, IOpenIddictApplicationManager applications,
-    IOpenIddictAuthorizationManager authorizations, TimeProvider clock)
+    IOpenIddictAuthorizationManager authorizations, IOpenIddictTokenManager tokens, TimeProvider clock)
 {
     public async Task<SsoGrant?> FindAsync(Guid accountId, string clientId, IEnumerable<string> requested, CancellationToken ct)
     {
@@ -57,13 +57,12 @@ public sealed class SsoConsentService(AppDbContext db, SsoClientReader clients, 
             {
                 var previous = await authorizations.FindByIdAsync(consent.AuthorizationId, ct);
                 if (previous != null && !await authorizations.TryRevokeAsync(previous, ct)) throw Denied();
+                await tokens.RevokeByAuthorizationIdAsync(consent.AuthorizationId, ct);
             }
-            if (consent.ExpiresAt <= clock.GetUtcNow().UtcDateTime)
-            {
-                consent.RevokedAt = clock.GetUtcNow().UtcDateTime; consent.Version = Guid.NewGuid();
-                await db.SaveChangesAsync(ct);
-                consent = null;
-            }
+            // Every new explicit approval retains the previous scope decision in owner history.
+            consent.RevokedAt = clock.GetUtcNow().UtcDateTime; consent.Version = Guid.NewGuid();
+            await db.SaveChangesAsync(ct);
+            consent = null;
         }
         if (consent == null)
         {

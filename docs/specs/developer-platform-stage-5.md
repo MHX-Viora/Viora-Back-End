@@ -120,6 +120,32 @@ unverified. Historical Mini App migrations do not establish a current OIDC runti
 
 ## Storage and migration
 
+### Account-link proof refinement (user selected 2026-10-17)
+
+Use the partner's existing authenticated server session with a one-use challenge.
+Only an eligible Confidential Client backend may attest ownership, authenticated
+with its current registry secret through OpenIddict's application manager. The
+backend derives the opaque partner account ID from its own session and supplies
+the intended pairwise `sub` from a validated ANKT OIDC identity. It must protect
+its initiation route against CSRF; neither ID may come from an unchecked browser
+form. ANKT binds the challenge to that subject's account, app, client and environment.
+
+The challenge is 32 random bytes, stored only as SHA-256, expires after two minutes,
+and travels in POST bodies only. It grants no session or token. The live first-party
+social user previews the app/account reference and explicitly approves via a Bearer
+authenticated POST. A different ANKT user, expired proof, Public Client, stale
+secret, disabled registry or missing live consent fails closed. Confirmation and
+link persistence are atomic; concurrent/repeated confirmation has at most one winner.
+Email is never used to find or merge accounts. The partner owns the truth of its
+local session; ANKT verifies its backend attestation and both identity bindings.
+
+Unlink requires the live ANKT owner. Retain tombstones and unique app/environment
+subject and partner-account bindings to prevent reassignment; relinking the same
+pair preserves the subject. Unlink does not revoke consent or log out either system.
+Audit records contain only bounded event names, internal IDs and time, never proof,
+partner account reference, token, verifier, code, email or client secret. Additive
+schema validation and disposable PostgreSQL replay/concurrency tests are Task 18.
+
 Use OpenIddict's standard application/authorization/token tables. Add session,
 pairwise subject, consent, account-link and bounded redacted auth audit storage.
 Add per-client environment, redirect and allowed-scope bindings with uniqueness,

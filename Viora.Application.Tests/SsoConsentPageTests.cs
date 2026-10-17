@@ -43,6 +43,9 @@ public sealed class SsoConsentPageTests
         Assert.Contains("name=\"__RequestVerificationToken\"", html);
         Assert.Contains("Protocol test", html); Assert.Contains("profile", html);
         Assert.Contains("frame-ancestors 'none'", response.Headers.GetValues("Content-Security-Policy").Single());
+        var policy = response.Headers.GetValues("Content-Security-Policy").Single();
+        Assert.Contains("form-action 'self' https://partner.example.com;", policy);
+        Assert.DoesNotContain("form-action *", policy);
         Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
         Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
     }

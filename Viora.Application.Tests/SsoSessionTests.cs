@@ -41,11 +41,16 @@ public sealed class SsoSessionTests
         await db.Database.EnsureCreatedAsync();
         var account = new Account { Email = "sso@example.test" }; var socialId = Guid.NewGuid();
         db.Accounts.Add(account);
-        db.RefreshTokens.Add(new RefreshToken { AccountId = account.Id, SessionId = socialId, TokenHash = "test-refresh-hash", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+        var sourceExpiry = DateTime.UtcNow.AddHours(1);
+        db.RefreshTokens.Add(new RefreshToken { AccountId = account.Id, SessionId = socialId, TokenHash = "test-refresh-hash", ExpiresAt = sourceExpiry });
         await db.SaveChangesAsync();
         var service = new SsoSessionService(db, TimeProvider.System);
         await Assert.ThrowsAsync<DeveloperAuthException>(() => service.CreateAsync(account.Id, Guid.NewGuid(), default));
         var first = await service.CreateAsync(account.Id, socialId, default);
+        // Relational providers may materialize UTC database values as Unspecified.
+        // Cookie expiry must keep UTC semantics, including when source expiry wins the cap.
+        Assert.Equal(DateTimeKind.Utc, first.ExpiresAt.Kind);
+        Assert.Equal(sourceExpiry, first.ExpiresAt);
         var second = await service.CreateAsync(account.Id, socialId, default);
         Assert.NotEqual(first.Credential, second.Credential);
         Assert.DoesNotContain(first.Credential, string.Join(" ", await db.AnktSsoSessions.Select(x => x.TokenHash).ToListAsync()));

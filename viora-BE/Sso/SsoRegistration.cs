@@ -24,6 +24,8 @@ public static class SsoRegistration
         services.AddScoped<Viora.Infrastructure.Sso.SsoClientReader>();
         services.AddScoped<Viora.Infrastructure.Sso.SsoConsentService>();
         services.AddScoped<Viora.Infrastructure.Sso.SsoTokenService>();
+        services.AddScoped<Viora.Infrastructure.Sso.SsoAuthorizationOwnerService>();
+        services.AddScoped<Viora.Infrastructure.Sso.SsoAccountLinkService>();
         services.AddScoped<SsoConsentInteraction>();
         services.AddControllersWithViews();
         services.AddAntiforgery(options =>
@@ -46,6 +48,9 @@ public static class SsoRegistration
         });
         openiddict.AddServer(server =>
         {
+            server.AddEventHandler<OpenIddictServerEvents.ValidateIntrospectionRequestContext>(handler => handler
+                .UseScopedHandler<SsoIntrospectionPolicy>()
+                .SetOrder(OpenIddictServerHandlers.Introspection.ValidateAuthorizedParty.Descriptor.Order + 1_000));
             server.SetAuthorizationEndpointUris("/connect/authorize")
                 .SetTokenEndpointUris("/connect/token")
                 .SetUserInfoEndpointUris("/connect/userinfo")
@@ -67,10 +72,12 @@ public static class SsoRegistration
                 server.AccessTokenLifetime = TimeSpan.FromSeconds(options.AccessTokenSeconds);
                 server.CodeChallengeMethods.Clear();
                 server.CodeChallengeMethods.Add(OpenIddictConstants.CodeChallengeMethods.Sha256);
-                server.SigningCredentials.Add(new(new Microsoft.IdentityModel.Tokens.X509SecurityKey(credentials.Signing),
-                    Microsoft.IdentityModel.Tokens.SecurityAlgorithms.RsaSha256));
-                server.EncryptionCredentials.Add(new(new Microsoft.IdentityModel.Tokens.X509SecurityKey(credentials.Encryption),
-                    Microsoft.IdentityModel.Tokens.SecurityAlgorithms.RsaOAEP, Microsoft.IdentityModel.Tokens.SecurityAlgorithms.Aes256CbcHmacSha512));
+                foreach (var certificate in credentials.SigningCertificates)
+                    server.SigningCredentials.Add(new(new Microsoft.IdentityModel.Tokens.X509SecurityKey(certificate),
+                        Microsoft.IdentityModel.Tokens.SecurityAlgorithms.RsaSha256));
+                foreach (var certificate in credentials.EncryptionCertificates)
+                    server.EncryptionCredentials.Add(new(new Microsoft.IdentityModel.Tokens.X509SecurityKey(certificate),
+                        Microsoft.IdentityModel.Tokens.SecurityAlgorithms.RsaOAEP, Microsoft.IdentityModel.Tokens.SecurityAlgorithms.Aes256CbcHmacSha512));
             });
         services.AddHostedService<SsoStartupValidation>();
         return services;

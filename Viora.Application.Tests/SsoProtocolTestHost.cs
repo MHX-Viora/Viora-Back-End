@@ -1,4 +1,7 @@
 using System.Security.Cryptography;
+using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -27,18 +30,28 @@ internal sealed class SsoProtocolTestHost : IAsyncDisposable
     public const string RedirectUri = "https://partner.example.com/callback";
     public const string Verifier = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private Guid accountId, socialId, miniAppId;
+    private readonly SymmetricSecurityKey socialKey = new(RandomNumberGenerator.GetBytes(32));
+    public string SocialAccessToken(Guid? owner = null, string tokenType = "access") => new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+    {
+        Issuer = "https://social.example", Audience = "ankt-social", Expires = DateTime.UtcNow.AddMinutes(5),
+        Subject = new ClaimsIdentity([new Claim("sub", (owner ?? accountId).ToString()), new Claim("sid", socialId.ToString()), new Claim("token_type", tokenType)]),
+        SigningCredentials = new(socialKey, SecurityAlgorithms.HmacSha256)
+    });
     public Guid AccountId => accountId;
     public async Task<T> WithServices<T>(Func<IServiceProvider,Task<T>> action)
     {
         await using var scope = app.Services.CreateAsyncScope(); return await action(scope.ServiceProvider);
     }
 
-    public static async Task<SsoProtocolTestHost> Create(IsolatedPostgres? postgres = null, Action<DbContextOptionsBuilder>? configureDatabase = null)
+    public static async Task<SsoProtocolTestHost> Create(IsolatedPostgres? postgres = null, Action<DbContextOptionsBuilder>? configureDatabase = null,
+        bool allowIntrospection = false, Action<Dictionary<string, string?>>? configureSso = null, TimeProvider? timeProvider = null)
     {
         var host = new SsoProtocolTestHost(); await host.connection.OpenAsync();
         host.connection.CreateFunction<string?,int>("char_length", x => x?.Length ?? 0);
         var builder = WebApplication.CreateBuilder(); builder.WebHost.UseTestServer(); builder.Logging.ClearProviders();
-        builder.Configuration.AddInMemoryCollection(host.certificates.Config());
+        var ssoConfiguration = host.certificates.Config(); configureSso?.Invoke(ssoConfiguration);
+        builder.Configuration.AddInMemoryCollection(ssoConfiguration);
+        if (allowIntrospection) builder.Configuration.AddInMemoryCollection(new Dictionary<string,string?> { ["Sso:IntrospectionClientIds:0"] = ClientId });
         builder.Services.AddDbContext<AppDbContext>(x =>
         {
             if (postgres == null) x.UseSqlite(host.connection); else x.UseNpgsql(postgres.ConnectionString);
@@ -46,8 +59,19 @@ internal sealed class SsoProtocolTestHost : IAsyncDisposable
         });
         builder.Services.AddSingleton(Options.Create(new MiniAppOptions { ActiveKeyVersion = "test", EncryptionKeys = new() { ["test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) } }));
         builder.Services.AddSingleton<MiniAppSecretProtector>();
-        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(); builder.Services.AddAuthorization();
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
+        {
+            options.MapInboundClaims = false;
+            options.TokenValidationParameters = new() { ValidIssuer = "https://social.example", ValidAudience = "ankt-social",
+                IssuerSigningKey = host.socialKey, ValidateLifetime = true, ValidAlgorithms = [SecurityAlgorithms.HmacSha256] };
+            options.Events = new() { OnTokenValidated = context =>
+            {
+                if (context.Principal?.FindFirst("token_type")?.Value != "access") context.Fail("Invalid token type.");
+                return Task.CompletedTask;
+            } };
+        }); builder.Services.AddAuthorization();
         builder.Services.AddControllers().AddApplicationPart(typeof(SsoAuthorizationController).Assembly);
+        if (timeProvider != null) builder.Services.AddSingleton(timeProvider);
         builder.Services.AddAnktSso(builder.Configuration);
         builder.Services.AddCors(options => options.AddPolicy("Web", policy => policy.WithOrigins("https://firstparty.example")
             .AllowAnyMethod().AllowAnyHeader().AllowCredentials()));
@@ -75,6 +99,18 @@ internal sealed class SsoProtocolTestHost : IAsyncDisposable
         var values = new Dictionary<string,string?> { ["client_id"] = ClientId, ["redirect_uri"] = RedirectUri, ["response_type"] = "code", ["scope"] = "openid profile", ["state"] = "protocol-test-state-unguessable", ["nonce"] = "protocol-test-nonce", ["code_challenge_method"] = "S256", ["code_challenge"] = WebEncoders.Base64UrlEncode(SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(Verifier))) };
         if (changes != null) foreach (var pair in changes) values[pair.Key] = pair.Value;
         return QueryHelpers.AddQueryString("/connect/authorize", values);
+    }
+    public async Task MakeConfidential(string secret)
+    {
+        await WithServices(async services =>
+        {
+            var db = services.GetRequiredService<AppDbContext>(); var client = await db.MiniAppOAuthClients.SingleAsync();
+            client.ClientType = "Confidential";
+            var encrypted = services.GetRequiredService<MiniAppSecretProtector>().Encrypt(secret, client.Id);
+            db.MiniAppClientSecrets.Add(new() { OAuthClientId = client.Id, SecretEncrypted = encrypted.Ciphertext, SecretKeyVersion = encrypted.Version });
+            await using var transaction = await db.Database.BeginTransactionAsync(); await db.SaveChangesAsync();
+            await services.GetRequiredService<MiniAppOidcRegistry>().SynchronizeAsync(client.MiniAppId, default); await transaction.CommitAsync(); return true;
+        });
     }
     public async Task<string> UserCookie()
     {

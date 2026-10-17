@@ -3,6 +3,9 @@
 Status: conditionally approved 2026-10-16; all six conditions incorporated.
 Spec: `../specs/developer-platform-stage-5.md`.
 
+Current execution checkpoint: Tasks 1–28 complete in the controlled local environment.
+Public-domain deployment and native runtime remain separate release prerequisites.
+
 Tasks run sequentially in small slices, normally no more than five authored files.
 Generated migration/designer/snapshot changes form their own reviewable task.
 Each task begins with focused failing behavior tests and ends with build/tests.
@@ -254,3 +257,176 @@ authorization decision. Related authorization/consent/token/CORS suite: 49 passe
 solution build clean. Library reference:
 https://documentation.openiddict.com/configuration/claim-destinations.html and
 https://github.com/openiddict/openiddict-samples/tree/dev/samples/Velusia.
+
+Task 15 complete (2026-10-17): library-backed revocation, operator-allowlisted
+Confidential Client introspection with own-token and fresh registry/consent/account
+checks; browser Origin introspection is rejected. Social owner list/detail/history
+and idempotent revoke require live signed social sessions; list pages are bounded
+to 100, with validated offset. Grant and persisted tokens revoke transactionally.
+Internal review reproduced historical tokens remaining valid after reapproval;
+regression now checks actual stored statuses and replacement revokes them too.
+Isolated PostgreSQL proved concurrent owner revoke and rollback on consent-write
+failure, preserving the prior authorization/token states. Library authentication,
+token validity and ownership checks remain enabled.
+
+Task 16 complete: refresh issuance remains disabled for Public and Confidential
+Clients. Tests exercise successful code exchanges without refresh tokens, rejected
+refresh grants/offline_access, and discovery advertising no refresh capability.
+No unproven refresh rotation/family reuse policy is enabled.
+
+Task 17 complete: user selected partner-session backend attestation with a one-use
+challenge. Refined contract is recorded in the spec. Standard application-manager
+secret verification, serializable credential snapshot, exact credential-ID binding,
+hashed two-minute proof, live first-party owner confirmation and active consent
+protect account linking. Permanent app/environment subject/local-account bindings
+survive unlink/relink and cannot be reassigned. Email never identifies a link.
+Internal review found a credential-expiry race producing HTTP 500; deterministic
+clock regression reproduced it and nullable lookup now returns structured denial.
+HTTP tests reject browser/backend mixup, Developer JWTs and implicit approval.
+
+Task 18 complete: generated additive `20261017014703_AddSsoAccountLinks` contains
+only three new tables/indexes/FKs/check constraint. Disposable PostgreSQL exercised
+up/down/up, single-winner concurrent proof consumption, tombstone uniqueness,
+identity/consent preservation after rollback and audit/proof redaction. Model
+snapshot check reports no pending changes. Audit stores fixed bounded event names
+and internal IDs only. Rollback deletes these new link/proof/audit records; it
+preserves existing accounts, pairwise identities and consents. Never run down on
+production without an explicit data-retention decision.
+
+Checkpoint 18: complete backend suite 305 passed, 1 pre-existing skip (306 total).
+PostgreSQL/HTTPS tests required unsandboxed execution; sandbox cannot start its
+isolated PostgreSQL processes. No application/production DB was contacted. First
+Task 18 checkpoint had one failing test; after the expiry fix and assertion cleanup,
+the focused PostgreSQL test and full suite passed. Tasks 19–28 remain outstanding.
+
+Task 19 complete: independent private ESM `../viora/packages/miniapp-sdk`, TypeScript
+declarations/build, version, typed redacted errors and strict immutable public-client
+configuration. Exact openid-client 6.8.8 dependency and isolated lockfile; no React
+or shared frontend dependency edits, no secrets and no package publication.
+
+Task 20 complete at unit level: actual library discovery/code/PKCE/state/nonce and
+RS256/JWKS signature validation (explicit nonrepudiation checks), issuer/audience/
+expiry validation, UserInfo subject binding, bounded timeout, five-minute one-use
+transient transaction, memory-only tokens, reload and local logout semantics.
+All endpoints are constrained to the issuer HTTPS origin, fetch omits cookies and
+rejects redirects. 13 SDK tests/build passed, including bad signatures/claims,
+wrong callback/state, endpoint substitution, expiry, UserInfo mismatch and logout
+during exchange. Tests use intercepted HTTP with real signed JWT/JWKS fixtures;
+real public/confidential server/browser E2E remains Tasks 25–27.
+
+SDK command: from `../viora/packages/miniapp-sdk`, `npm test` (build plus Node tests).
+Node tests use existing repo's no-process-isolation convention because sandbox
+child process creation returns EPERM. Independent internal SDK review found no
+actionable issues. Tasks 21–28 remain incomplete.
+
+Task 21 complete: standalone SDK host-bridge connector returns insideHost only
+after a verified handshake. Namespaced v1 envelopes, exact origin/source/schema,
+UUID request IDs, 32 pending request cap, bounded timeout, method permission checks,
+pagehide/dispose cleanup and typed errors are covered. Only controlled getContext
+and close are exposed; arbitrary payloads and native/social auth are unsupported.
+Internal review reproduced array-to-string coercion in the environment schema;
+the failing regression now passes with an explicit string check. SDK suite/build:
+19 passed. Latest frontend TypeScript check also passed before bridge addition;
+final cross-project verification follows below.
+
+Task 22 complete: independent `tools/SsoBridgeHost` fixture, ephemeral self-signed
+HTTPS on two loopback origins, restrictive CSP, sandboxed child iframe and exact
+host protocol allowlist. Real Chrome verified handshake, user-triggered context
+response and close (counts 1/1/1), then no console warnings/errors. Browser required
+a local certificate-warning exception; system trust was not modified. Initial
+TLS failed because direct certificate creation was not Schannel compatible; the
+fixture now uses the same export/import approach as the existing HTTPS fixture.
+Private-key TLS use required approved unsandboxed execution. Fixture has no app
+configuration/database dependencies and claims no mobile/native runtime support.
+
+Checkpoint 22: Tasks 1–22 implemented; Tasks 23–28 remain incomplete. Stage 5 overall
+is not complete. Developer SSO configuration/diagnostics tab, public SPA and
+confidential backend examples, real browser OIDC E2E, full 27-case attack mapping
+and final operational/key-rotation handoff remain required. Package not published.
+
+Final checkpoint validation (2026-10-17): solution build 0 warnings/errors; backend
+305 passed/1 pre-existing skip; frontend `npx tsc --noEmit` passed after SDK/bridge
+addition; Developer Portal + SSO bootstrap regression 32 passed; SDK 19 passed.
+The default frontend test runner failed with sandbox child-process EPERM; the same
+test files passed using approved unsandboxed Node/tsx with process isolation off.
+`git diff --check` passed. Full frontend production export was not rerun because no
+existing app UI/runtime imports changed; the new SDK compiles as its own package.
+The controlled bridge fixture was stopped after verification. No commits were made;
+pre-existing unfinished Task 15 files were completed in place and unrelated edits
+remain unchanged. Next implementation starts at Task 23, reusing existing Developer
+Session/BFF CSRF boundaries and authoritative registry transactions.
+
+Task 23 complete (2026-10-17): owned DeveloperSession GET `/api/developer/mini-apps/{appId}/sso`
+and PUT `/sso/{Sandbox|Production}` configure actual clients, scopes, redirects and
+Sandbox eligibility. The app-wide SSO toggle is explicit; Production configuration
+does not grant Published status or user consent. App/client concurrency versions,
+existing registry transactions and standard application manager remain authoritative.
+Callbacks canonicalize identically to the library. Diagnostics compare actual
+projection type, redirects, PKCE and permissions, and return actual library issuer/
+discovery/endpoints only when runtime is enabled; disabled runtime returns null URLs.
+Legacy HTTP callback text remains editable but is diagnosed invalid for SSO.
+
+Confidential secrets are encrypted server-side and never in configuration DTOs,
+the SSO tab or its snippets. Direct owner-backend GET `/sso/{env}/credential` and
+POST `/sso/{env}/credential/rotate` are rate-limited/no-store and reject browser
+Origin/Sec-Fetch-Site; rotation requires current ClientVersion. BFF only allowlists
+configuration GET/PUT and rejects both credential routes. Public credentials are
+rejected; switching to Public revokes old secrets. Legacy Sandbox rotation now
+also bumps client.Version so it cannot bypass the new stale-writer boundary.
+Audit contains fixed action names only. Disposable PostgreSQL verified single-writer
+configuration, atomic projection-failure rollback, expired secret recovery and
+rotation rejecting old secrets/stale writers. HTTP tests verify ownership and that
+diagnostic URLs match actual enabled discovery. No schema/migration was added.
+
+Task 24 complete: integrated `Đăng nhập ANKT` tab, explicit environments/types,
+scopes/callbacks, global and Sandbox switches, readiness/error explanations,
+copy fields and public/confidential guidance without secrets. Request generation
+guards, dirty navigation/create-discard/reset, retry, loading/error and empty
+Production defaults are implemented. Browser preview used the actual detail/panel
+components with isolated transport/navigation fixtures: save, empty Production
+callback, create-discard/cancel preserving saved baseline, controlled 503/retry,
+and 320px viewport with scrollWidth=innerWidth=320 passed. Its only console error
+was the deliberately injected 503. This verifies rendering/interactions, not live
+portal-to-OIDC E2E. Native/runtime publication claims remain excluded.
+
+Checkpoint 24 regression: backend 318 passed/1 pre-existing skip (319 total),
+solution build 0 warnings/errors; frontend/BFF/SSO 34 passed, TypeScript and focused
+lint and final Expo web export passed, including legacy-empty-scope editing. Full-suite verification
+exposed a pre-existing wrapped PostgreSQL 40001/40P01 in link confirmation: exact
+wrapped conflicts now become structured 409 after transaction disposal, without
+automatic retry or proof consumption. Deterministic HTTP and actual PG regressions
+pass. Internal review issues (projection permissions/canonical redirects, dirty
+reset and mixed rotation versions) each informed targeted fixes. Full backend TRX:
+`.codex-tmp/test-results/stage5-checkpoint24.trx`. No deploy, production migration,
+package publication or commit. The next implementation at this historical checkpoint was Task 25.
+
+## Final checkpoint — Tasks 25–28
+
+Completed 2026-10-17. Actual Public SPA and Confidential backend examples execute
+standard library discovery/code exchange/JWKS/UserInfo with independent identities
+and storage. `tools/SsoE2EHost` creates only loopback HTTPS/temporary keys/accounts/
+SQLite and a private partner config; no configured application database is used.
+Real Chrome verified first/repeat/forced consent, reload/local logout, owner
+revocation and reauthorization. Public deny and confidential server-only session
+behavior were observed. `npm run test:sso:e2e` also repeats real protocol/session
+lifecycles plus CSRF and callback-injection checks; it does not substitute for
+browser SameSite/CSP checks. Successful pages have no console errors/warnings.
+
+Task 27 adds a registered cross-client redemption attack, deterministic TimeProvider
+code/access expiry, post-code environment/domain changes, social/URL credential
+rejection and JWKS overlap. Task 28 adds bounded previous signing/encryption key
+configuration; failing-then-passing tests prove missing/duplicate overlap fails
+closed. Old-key code remains redeemable after new-key promotion. No migration or
+new dependency in this final increment. Internal review completed.
+
+Final checks: backend 329 passed/1 existing skip, solution build 0 warnings/errors;
+SDK 23 passed and built; Developer/BFF 27 and first-party bootstrap 7 passed;
+root TypeScript passed; real HTTPS E2E 1 passed. Earlier final Expo export passed
+at Task 24; no later app UI/runtime import change requires another export.
+TRX `.codex-tmp/test-results/stage5-final.trx`.
+
+Full [security matrix](../testing/developer-platform-stage-5-security.md),
+[integration/operations/key rotation](../operations/developer-platform-stage-5.md)
+and [18-category handoff](../handoffs/developer-platform-stage-5.md) record evidence,
+initial failures, limits and release prerequisites. No deployment, application DB
+migration, publication, commit or Stage 6 work. Unrelated edits preserved.

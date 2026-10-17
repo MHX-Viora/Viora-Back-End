@@ -126,6 +126,7 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         if (rotate)
         {
             Touch(app);
+            client.Version = Guid.NewGuid();
             // Persist revocation before inserting the new row to honor the active-secret unique index.
             await db.MiniAppClientSecrets.Where(x => x.OAuthClientId == client.Id && x.RevokedAt == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);

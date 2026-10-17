@@ -51,6 +51,9 @@ public sealed class MiniAppOidcRegistry(AppDbContext db, MiniAppSecretProtector 
                 OpenIddictConstants.Permissions.Endpoints.Revocation, OpenIddictConstants.Permissions.GrantTypes.AuthorizationCode,
                 OpenIddictConstants.Permissions.ResponseTypes.Code
             ]);
+            // Server policy additionally requires explicit operator opt-in at request time.
+            if (client.ClientType == "Confidential")
+                descriptor.Permissions.Add(OpenIddictConstants.Permissions.Endpoints.Introspection);
             foreach (var scope in client.AllowedScopes.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (!SsoClientPolicy.SupportedScopes.Contains(scope, StringComparer.Ordinal))

@@ -586,6 +586,58 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.ToTable("MiniApps", (string)null);
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppAccountLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PartnerAccountId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UnlinkedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "MiniAppId", "Environment")
+                        .IsUnique();
+
+                    b.HasIndex("MiniAppId", "Environment", "PartnerAccountId")
+                        .IsUnique();
+
+                    b.HasIndex("MiniAppId", "Environment", "Subject")
+                        .IsUnique();
+
+                    b.ToTable("MiniAppAccountLinks", (string)null);
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppAuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -956,6 +1008,107 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasFilter("\"RevokedAt\" IS NULL");
 
                     b.ToTable("MiniAppUserConsents", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SsoAccountLinkAudit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("LinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LinkId");
+
+                    b.HasIndex("AccountId", "CreatedAt");
+
+                    b.ToTable("SsoAccountLinkAudits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SsoAccountLinkAudits_Action", "\"Action\" IN ('link', 'unlink', 'relink')");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SsoAccountLinkChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClientSecretId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OAuthClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PartnerAccountId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ProofHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("ClientSecretId");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("MiniAppId");
+
+                    b.HasIndex("OAuthClientId");
+
+                    b.HasIndex("ProofHash")
+                        .IsUnique();
+
+                    b.ToTable("SsoAccountLinkChallenges", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.SsoLoginTransaction", b =>
@@ -3940,6 +4093,21 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("Developer");
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppAccountLink", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppAuditLog", b =>
                 {
                     b.HasOne("Viora.Domain.Developers.DeveloperAccount", "Actor")
@@ -4048,6 +4216,42 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AuthorizationId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppOAuthClient", null)
+                        .WithMany()
+                        .HasForeignKey("OAuthClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SsoAccountLinkAudit", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniAppAccountLink", null)
+                        .WithMany()
+                        .HasForeignKey("LinkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SsoAccountLinkChallenge", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppClientSecret", null)
+                        .WithMany()
+                        .HasForeignKey("ClientSecretId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("Viora.Domain.Developers.MiniApp", null)
                         .WithMany()

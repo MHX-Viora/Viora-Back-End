@@ -14,6 +14,41 @@ using Xunit;
 public sealed class SsoRegistrationTests
 {
     [Fact]
+    public async Task RotationRetainsPreviousSigningAndEncryptionKeysWithoutChangingDefaults()
+    {
+        using var current = new Certificates();
+        using var previous = new Certificates();
+        var config = current.Config();
+        foreach (var purpose in new[] { "Signing", "Encryption" })
+        {
+            config[$"Sso:Previous{purpose}Certificates:0:Path"] = previous.Config()[$"Sso:{purpose}CertificatePath"];
+            config[$"Sso:Previous{purpose}Certificates:0:Password"] = Certificates.Password;
+        }
+        using var host = Host(config); await host.StartAsync();
+        var server = host.Services.GetRequiredService<IOptionsMonitor<OpenIddictServerOptions>>().CurrentValue;
+        Assert.Equal(2, server.SigningCredentials.Count);
+        Assert.Equal(2, server.EncryptionCredentials.Count);
+        Assert.Equal(4, server.SigningCredentials.Select(x => x.Key.KeyId)
+            .Concat(server.EncryptionCredentials.Select(x => x.Key.KeyId)).Distinct().Count());
+        await host.StopAsync();
+    }
+
+    [Theory]
+    [InlineData("Signing", "missing")]
+    [InlineData("Encryption", "same")]
+    public async Task InvalidRotationKeysFailClosedWithoutCredentialDetails(string purpose, string kind)
+    {
+        using var certificates = new Certificates(); var config = certificates.Config();
+        config[$"Sso:Previous{purpose}Certificates:0:Path"] = kind == "same"
+            ? config["Sso:SigningCertificatePath"] : Path.Combine(certificates.DirectoryPath, "missing.pfx");
+        config[$"Sso:Previous{purpose}Certificates:0:Password"] = Certificates.Password;
+        using var host = Host(config);
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(() => host.StartAsync());
+        Assert.DoesNotContain(certificates.DirectoryPath, error.Message);
+        Assert.DoesNotContain(Certificates.Password, error.Message);
+    }
+
+    [Fact]
     public async Task DisabledByDefaultPreservesAuthenticationAndRegistersNoServer()
     {
         var services = Services(new());

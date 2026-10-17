@@ -33,7 +33,9 @@ public sealed class SsoSessionService(AppDbContext db, TimeProvider clock)
             .Select(x => (DateTime?)x.ExpiresAt).MaxAsync(ct);
         if (expiry == null || !await ActiveAccount(accountId, ct))
             throw new DeveloperAuthException(401, "SSO_SESSION_INVALID", "Phiên ANKT đã hết hạn. Vui lòng đăng nhập lại.");
-        return expiry.Value < now.AddHours(8) ? expiry.Value : now.AddHours(8);
+        // Stored session timestamps are UTC; some providers omit DateTime.Kind.
+        // Preserve that contract before callers construct cookie DateTimeOffsets.
+        return DateTime.SpecifyKind(expiry.Value < now.AddHours(8) ? expiry.Value : now.AddHours(8), DateTimeKind.Utc);
     }
 
     public async Task<AnktSsoSession?> AuthenticateAsync(string? credential, CancellationToken ct)

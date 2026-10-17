@@ -43,7 +43,10 @@ public sealed class SsoAuthorizationController(SsoClientReader clients, SsoConse
             csrfToken = csrf.RequestToken, consentTicket = interaction.Issue(accountId, request) };
         if (Request.GetTypedHeaders().Accept?.Any(x => x.MediaType.Value == "application/json") == true) return Json(prompt);
         var nonce = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
-        Response.Headers["Content-Security-Policy"] = $"default-src 'none'; style-src 'nonce-{nonce}'; img-src https:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+        // Chromium applies form-action to the subsequent OIDC redirect as well.
+        // OpenIddict has already validated this exact registered redirect URI.
+        var callbackOrigin = new Uri(request.RedirectUri!).GetLeftPart(UriPartial.Authority);
+        Response.Headers["Content-Security-Policy"] = $"default-src 'none'; style-src 'nonce-{nonce}'; img-src https:; form-action 'self' {callbackOrigin}; base-uri 'none'; frame-ancestors 'none'";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
         Response.Headers["X-Frame-Options"] = "DENY";
         var logo = Uri.TryCreate(prompt.logoUrl, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.UserInfo.Length == 0 ? uri.AbsoluteUri : null;
