@@ -45,3 +45,7 @@ public interface IPublicWebFetcher
 {
     Task<PublicFetchResult> FetchAsync(Uri uri, int maxBytes, bool verificationFile, CancellationToken ct);
 }
+public interface IPublicJsonFetcher
+{
+    Task<PublicFetchResult> FetchJsonAsync(Uri uri, int maxBytes, CancellationToken ct);
+}

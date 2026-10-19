@@ -5,6 +5,12 @@ namespace Viora.Infrastructure.Persistence;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxSession> MiniAppSandboxSessions => Set<Viora.Domain.Developers.MiniAppSandboxSession>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxTestRun> MiniAppSandboxTestRuns => Set<Viora.Domain.Developers.MiniAppSandboxTestRun>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxTestResult> MiniAppSandboxTestResults => Set<Viora.Domain.Developers.MiniAppSandboxTestResult>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxDiagnostic> MiniAppSandboxDiagnostics => Set<Viora.Domain.Developers.MiniAppSandboxDiagnostic>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxProtocolEvidence> MiniAppSandboxProtocolEvidence => Set<Viora.Domain.Developers.MiniAppSandboxProtocolEvidence>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxLaunchGrant> MiniAppSandboxLaunchGrants => Set<Viora.Domain.Developers.MiniAppSandboxLaunchGrant>();
     public DbSet<Viora.Domain.Developers.AnktSsoSession> AnktSsoSessions => Set<Viora.Domain.Developers.AnktSsoSession>();
     public DbSet<Viora.Domain.Developers.SsoLoginTransaction> SsoLoginTransactions => Set<Viora.Domain.Developers.SsoLoginTransaction>();
     public DbSet<Viora.Domain.Developers.MiniAppPairwiseSubject> MiniAppPairwiseSubjects => Set<Viora.Domain.Developers.MiniAppPairwiseSubject>();

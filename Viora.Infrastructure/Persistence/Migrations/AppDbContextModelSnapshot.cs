@@ -950,6 +950,399 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.ToTable("MiniAppRedirectUris", (string)null);
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxDiagnostic", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("Category")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("Code")
+                        .HasColumnType("smallint");
+
+                    b.Property<int?>("Count")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("EvidenceSource")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("Level")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("SandboxSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TestRunId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("TestRunId", "SandboxSessionId");
+
+                    b.HasIndex("SandboxSessionId", "CreatedAt", "Id");
+
+                    b.ToTable("MiniAppSandboxDiagnostics", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SandboxDiagnostics_Category", "\"Category\" IN (0,1,2,3,4,5)");
+
+                            t.HasCheckConstraint("CK_SandboxDiagnostics_Code", "\"Code\" IN (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23)");
+
+                            t.HasCheckConstraint("CK_SandboxDiagnostics_Count", "\"Count\" IS NULL OR \"Count\" BETWEEN 0 AND 1000000");
+
+                            t.HasCheckConstraint("CK_SandboxDiagnostics_Level", "\"Level\" IN (0,1,2)");
+
+                            t.HasCheckConstraint("CK_SandboxDiagnostics_Source", "\"EvidenceSource\" IN (0,1,2,3,4)");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxLaunchGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("BrowserNonceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GrantHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("SandboxSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("GrantHash")
+                        .IsUnique();
+
+                    b.HasIndex("SandboxSessionId");
+
+                    b.ToTable("MiniAppSandboxLaunchGrants", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppSandboxLaunchGrants_Expiry", "\"ExpiresAt\" > \"CreatedAt\"");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxProtocolEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorizationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<short>("Outcome")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("Stage")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("TestKey")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("TestRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EventKey")
+                        .IsUnique();
+
+                    b.HasIndex("TestRunId", "TestKey");
+
+                    b.ToTable("MiniAppSandboxProtocolEvidence", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SandboxProtocol_Binding", "(\"Stage\" = 0 AND \"TestKey\" = 15) OR (\"Stage\" = 1 AND \"TestKey\" = 16) OR (\"Stage\" = 2 AND \"TestKey\" = 17)");
+
+                            t.HasCheckConstraint("CK_SandboxProtocol_EventKey", "char_length(\"EventKey\") = 64");
+
+                            t.HasCheckConstraint("CK_SandboxProtocol_Key", "\"TestKey\" IN (15,16,17)");
+
+                            t.HasCheckConstraint("CK_SandboxProtocol_Outcome", "\"Outcome\" IN (0,1,2,3,4)");
+
+                            t.HasCheckConstraint("CK_SandboxProtocol_Stage", "\"Stage\" IN (0,1,2)");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorAdminAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorDeveloperAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActorType")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<string>("ConfigurationFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeveloperAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DroppedDiagnosticCount")
+                        .HasColumnType("integer");
+
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastActivityAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OAuthClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PartnerOrigin")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RuntimeCredentialHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("SourceDeveloperSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SourceSocialSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WebsiteUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeveloperAccountId");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("OAuthClientId");
+
+                    b.HasIndex("RuntimeCredentialHash")
+                        .IsUnique()
+                        .HasFilter("\"RuntimeCredentialHash\" IS NOT NULL");
+
+                    b.HasIndex("SourceDeveloperSessionId");
+
+                    b.HasIndex("MiniAppId", "CreatedAt");
+
+                    b.HasIndex("ActorAdminAccountId", "RevokedAt", "ExpiresAt");
+
+                    b.HasIndex("ActorDeveloperAccountId", "RevokedAt", "ExpiresAt");
+
+                    b.ToTable("MiniAppSandboxSessions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppSandboxSessions_Actor", "(\"ActorType\" = 'Developer' AND \"ActorDeveloperAccountId\" IS NOT NULL AND \"ActorDeveloperAccountId\" = \"DeveloperAccountId\" AND \"SourceDeveloperSessionId\" IS NOT NULL AND \"ActorAdminAccountId\" IS NULL AND \"SourceSocialSessionId\" IS NULL) OR (\"ActorType\" = 'Admin' AND \"ActorAdminAccountId\" IS NOT NULL AND \"SourceSocialSessionId\" IS NOT NULL AND \"ActorDeveloperAccountId\" IS NULL AND \"SourceDeveloperSessionId\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_MiniAppSandboxSessions_DroppedDiagnostics", "\"DroppedDiagnosticCount\" BETWEEN 0 AND 1000000");
+
+                            t.HasCheckConstraint("CK_MiniAppSandboxSessions_Environment", "\"Environment\" = 0");
+
+                            t.HasCheckConstraint("CK_MiniAppSandboxSessions_Expiry", "\"ExpiresAt\" > \"CreatedAt\"");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxTestResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("EvidenceAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("EvidenceSource")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("MessageCode")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("TestKey")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("TestRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MiniAppSandboxTestResults", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SandboxResults_Duration", "\"DurationMs\" BETWEEN 0 AND 1800000");
+
+                            t.HasCheckConstraint("CK_SandboxResults_Key", "\"TestKey\" IN (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17)");
+
+                            t.HasCheckConstraint("CK_SandboxResults_Message", "\"MessageCode\" IN (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23)");
+
+                            t.HasCheckConstraint("CK_SandboxResults_PassedEvidence", "\"Status\" <> 0 OR (\"EvidenceAt\" IS NOT NULL AND \"EvidenceSource\" IN (0,3,4))");
+
+                            t.HasCheckConstraint("CK_SandboxResults_ProtocolProof", "\"Status\" <> 0 OR \"TestKey\" NOT IN (15,16,17) OR \"EvidenceSource\" = 3");
+
+                            t.HasCheckConstraint("CK_SandboxResults_RuntimeProof", "\"Status\" <> 0 OR \"TestKey\" NOT IN (13,14) OR \"EvidenceSource\" = 4");
+
+                            t.HasCheckConstraint("CK_SandboxResults_Source", "\"EvidenceSource\" IN (0,1,2,3,4)");
+
+                            t.HasCheckConstraint("CK_SandboxResults_Status", "\"Status\" IN (0,1,2,3,4)");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxTestRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConfigurationFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("DeadlineAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("SandboxSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("SummaryCode")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompletedAt");
+
+                    b.HasIndex("SandboxSessionId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN (0,1)");
+
+                    b.HasIndex("SandboxSessionId", "ConfigurationFingerprint");
+
+                    b.HasIndex("SandboxSessionId", "CreatedAt");
+
+                    b.HasIndex("Status", "DeadlineAt");
+
+                    b.ToTable("MiniAppSandboxTestRuns", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SandboxRuns_Completion", "(\"Status\" IN (0,1) AND \"CompletedAt\" IS NULL) OR (\"Status\" IN (2,3,4) AND \"CompletedAt\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_SandboxRuns_Environment", "\"Environment\" = 0");
+
+                            t.HasCheckConstraint("CK_SandboxRuns_Fingerprint", "char_length(\"ConfigurationFingerprint\") = 64");
+
+                            t.HasCheckConstraint("CK_SandboxRuns_Started", "\"Status\" <> 1 OR \"StartedAt\" IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_SandboxRuns_Status", "\"Status\" IN (0,1,2,3,4)");
+
+                            t.HasCheckConstraint("CK_SandboxRuns_Summary", "\"SummaryCode\" IN (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23)");
+
+                            t.HasCheckConstraint("CK_SandboxRuns_Times", "\"DeadlineAt\" > \"CreatedAt\" AND (\"StartedAt\" IS NULL OR \"StartedAt\" >= \"CreatedAt\") AND (\"CompletedAt\" IS NULL OR \"CompletedAt\" >= \"CreatedAt\") AND (\"StartedAt\" IS NULL OR \"CompletedAt\" IS NULL OR \"CompletedAt\" >= \"StartedAt\")");
+                        });
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppUserConsent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4202,6 +4595,95 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("MiniApp");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxDiagnostic", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniAppSandboxSession", null)
+                        .WithMany()
+                        .HasForeignKey("SandboxSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppSandboxTestRun", null)
+                        .WithMany()
+                        .HasForeignKey("TestRunId", "SandboxSessionId")
+                        .HasPrincipalKey("Id", "SandboxSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxLaunchGrant", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniAppSandboxSession", null)
+                        .WithMany()
+                        .HasForeignKey("SandboxSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxProtocolEvidence", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniAppSandboxTestResult", null)
+                        .WithMany()
+                        .HasForeignKey("TestRunId", "TestKey")
+                        .HasPrincipalKey("TestRunId", "TestKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxSession", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ActorAdminAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.DeveloperAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ActorDeveloperAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.DeveloperAccount", null)
+                        .WithMany()
+                        .HasForeignKey("DeveloperAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppOAuthClient", null)
+                        .WithMany()
+                        .HasForeignKey("OAuthClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.DeveloperSession", null)
+                        .WithMany()
+                        .HasForeignKey("SourceDeveloperSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxTestResult", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniAppSandboxTestRun", null)
+                        .WithMany()
+                        .HasForeignKey("TestRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxTestRun", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniAppSandboxSession", null)
+                        .WithMany()
+                        .HasForeignKey("SandboxSessionId", "ConfigurationFingerprint")
+                        .HasPrincipalKey("Id", "ConfigurationFingerprint")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppUserConsent", b =>

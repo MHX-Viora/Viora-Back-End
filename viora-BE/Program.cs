@@ -215,6 +215,7 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+viora_BE.Developer.MiniAppSandboxRuntimeApi.UseBoundary(app);
 app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
 
 app.UseExceptionHandler(errorApp =>

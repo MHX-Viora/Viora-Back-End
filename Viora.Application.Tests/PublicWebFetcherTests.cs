@@ -12,6 +12,19 @@ using Xunit;
 
 public sealed class PublicWebFetcherTests
 {
+    [Theory]
+    [InlineData("application/json",true)]
+    [InlineData("application/jwk-set+json",true)]
+    [InlineData("text/html",false)]
+    public async Task JsonModeUsesPinnedCredentialFreeTlsAndStrictMedia(string media,bool accepted)
+    {
+        await using var site=new ControlledHttpsSite("{\"keys\":[]}",contentType:media);
+        var dns=new Resolver();var connector=new Connector(site.Port);var fetcher=Create(site,dns,connector);
+        if(accepted)Assert.Equal(media,(await fetcher.FetchJsonAsync(new("https://partner.example.com/discovery"),4096,default)).ContentType);
+        else Assert.Equal("INVALID_CONTENT_TYPE",(await Assert.ThrowsAsync<PublicFetchException>(()=>fetcher.FetchJsonAsync(new("https://partner.example.com/discovery"),4096,default))).Code);
+        Assert.Equal(1,dns.Calls);Assert.Equal(IPAddress.Parse("8.8.8.8"),Assert.Single(connector.Addresses));
+        Assert.Contains("Accept: application/json",site.Request);Assert.DoesNotContain("Cookie:",site.Request);Assert.DoesNotContain("Authorization:",site.Request);
+    }
     [Fact]
     public async Task CertificateAiaCannotFetchInternalAddressesOutsidePinnedTransport()
     {

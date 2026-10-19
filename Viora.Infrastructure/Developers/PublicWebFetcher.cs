@@ -49,12 +49,14 @@ public sealed class PublicSocketConnector : IPublicSocketConnector
     }
 }
 
-public sealed class PublicWebFetcher(IPublicDnsResolver resolver, IPublicSocketConnector connector) : IPublicWebFetcher
+public sealed class PublicWebFetcher(IPublicDnsResolver resolver, IPublicSocketConnector connector) : IPublicWebFetcher, IPublicJsonFetcher
 {
     // Tests may install a private test root CA on this handler only; production DI never supplies this hook.
     internal Action<SocketsHttpHandler>? ConfigureTestHandler { get; init; }
     internal TimeSpan Deadline { get; init; } = TimeSpan.FromSeconds(8);
-    public async Task<PublicFetchResult> FetchAsync(Uri uri, int maxBytes, bool verificationFile, CancellationToken ct)
+    public Task<PublicFetchResult> FetchAsync(Uri uri,int maxBytes,bool verificationFile,CancellationToken ct)=>FetchCoreAsync(uri,maxBytes,verificationFile,false,ct);
+    public Task<PublicFetchResult> FetchJsonAsync(Uri uri,int maxBytes,CancellationToken ct)=>FetchCoreAsync(uri,maxBytes,false,true,ct);
+    private async Task<PublicFetchResult> FetchCoreAsync(Uri uri, int maxBytes, bool verificationFile,bool json, CancellationToken ct)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct); deadline.CancelAfter(Deadline);
         var token = deadline.Token;
@@ -90,14 +92,14 @@ public sealed class PublicWebFetcher(IPublicDnsResolver resolver, IPublicSocketC
             ConfigureTestHandler?.Invoke(handler);
             using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
             using var request = new HttpRequestMessage(HttpMethod.Get, uri) { Version = HttpVersion.Version11, VersionPolicy = HttpVersionPolicy.RequestVersionExact };
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(verificationFile ? "text/plain" : "text/html"));
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(json ? "application/json" : verificationFile ? "text/plain" : "text/html"));
             request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true, NoStore = true };
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             if ((int)response.StatusCode is >= 300 and < 400) throw new PublicFetchException("REDIRECT_REJECTED", "Website chuyển hướng. Hãy dùng URL HTTPS truy cập trực tiếp.");
             if (response.StatusCode == HttpStatusCode.NotFound) throw new PublicFetchException("FILE_NOT_FOUND", "Không tìm thấy file hoặc trang chính sách (404).");
             if (response.StatusCode != HttpStatusCode.OK) throw new PublicFetchException("HTTP_ERROR", "Website chưa trả HTTP 200 công khai.");
             var media = response.Content.Headers.ContentType?.MediaType?.ToLowerInvariant() ?? "";
-            var allowed = verificationFile ? media == "text/plain" : media is "text/html" or "application/xhtml+xml" or "text/plain" or "application/pdf";
+            var allowed = json ? media is "application/json" or "application/jwk-set+json" : verificationFile ? media == "text/plain" : media is "text/html" or "application/xhtml+xml" or "text/plain" or "application/pdf";
             if (!allowed || response.Content.Headers.ContentEncoding.Count != 0) throw new PublicFetchException("INVALID_CONTENT_TYPE", "Nội dung cần đúng định dạng và không nén.");
             if (response.Content.Headers.ContentLength > maxBytes) throw new PublicFetchException("RESPONSE_TOO_LARGE", "Nội dung website vượt giới hạn kiểm tra.");
             await using var stream = await response.Content.ReadAsStreamAsync(token);

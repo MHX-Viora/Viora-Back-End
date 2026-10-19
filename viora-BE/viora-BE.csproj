@@ -28,5 +28,9 @@
     <ProjectReference Include="..\Viora.Application\Viora.Application.csproj" />
     <ProjectReference Include="..\Viora.Infrastructure\Viora.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Developer/SandboxHost/bridge.mjs" LogicalName="Ankt.SandboxHost.Bridge" />
+    <EmbeddedResource Include="Developer/SandboxHost/host.mjs" LogicalName="Ankt.SandboxHost.Script" />
+  </ItemGroup>
 
 </Project>

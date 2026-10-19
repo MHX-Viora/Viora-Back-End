@@ -17,10 +17,14 @@ using Viora.Infrastructure.Developers;
 using Viora.Infrastructure.Persistence;
 using Viora.Infrastructure.Sso;
 using viora_BE.Sso;
+using viora_BE.Developer;
 
 // This executable cannot load application settings/connection strings. All identities,
 // domain proofs, keys and storage belong to this one loopback-only fixture instance.
 const string issuer="https://127.0.0.1:5490/";
+var sandboxFeasibility=args.Contains("--sandbox-feasibility",StringComparer.Ordinal);
+const string sandboxPortalOrigin="https://portal.ankt.localhost:5494";
+const string sandboxHostOrigin="https://sandbox.ankt.localhost:5493";
 var directory=Path.Combine(Path.GetTempPath(),"ankt-oidc-browser-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(directory);
 using var certificates=new FixtureCertificates(directory);
 WebApplication? app=null;
@@ -32,6 +36,13 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string,string?>{
     ["Sso:SigningCertificatePath"]=certificates.SigningPath,["Sso:EncryptionCertificatePath"]=certificates.EncryptionPath
 });
 builder.WebHost.ConfigureKestrel(o=>o.Listen(IPAddress.Loopback,5490,listen=>listen.UseHttps(certificates.Tls)));
+if(sandboxFeasibility)
+{
+    builder.WebHost.ConfigureKestrel(o=>{o.Listen(IPAddress.Loopback,5493,l=>l.UseHttps(certificates.Tls));o.Listen(IPAddress.Loopback,5494,l=>l.UseHttps(certificates.Tls));});
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string,string?>{
+        ["MiniAppSandbox:Enabled"]="true",["MiniAppSandbox:PortalOrigin"]=sandboxPortalOrigin,["MiniAppSandbox:HostOrigin"]=sandboxHostOrigin,["MiniAppSandbox:Issuer"]=issuer});
+    MiniAppSandboxApi.AddServices(builder.Services,builder.Configuration);
+}
 builder.Services.AddDbContext<AppDbContext>(o=>{
     var connection=new SqliteConnection("Data Source="+Path.Combine(directory,"fixture.sqlite"));
     connection.CreateFunction<string?,int>("char_length",v=>v?.Length??0);o.UseSqlite(connection,contextOwnsConnection:true);
@@ -45,6 +56,7 @@ builder.Services.AddAuthorization();builder.Services.AddControllers().AddApplica
 builder.Services.AddAnktSso(builder.Configuration);builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
 builder.Services.AddCors(o=>o.AddPolicy("Web",p=>p.WithOrigins(issuer.TrimEnd('/')).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 app=builder.Build();
+if(sandboxFeasibility)MiniAppSandboxRuntimeApi.UseBoundary(app);
 Guid accountId,socialId;var confidentialSecret="cs_"+Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 using(var scope=app.Services.CreateScope()){
     var services=scope.ServiceProvider;var db=services.GetRequiredService<AppDbContext>();await db.Database.EnsureCreatedAsync();
@@ -55,6 +67,8 @@ using(var scope=app.Services.CreateScope()){
         var mini=new MiniApp{Developer=developer,CreateRequestId=Guid.NewGuid(),AppId="app_e2e_"+id,Name="ANKT "+type+" example",Category="utilities",SsoEnabled=true,WebsiteUrl="https://partner.example.com",Status=MiniAppStatus.Draft};
         var client=new MiniAppOAuthClient{MiniApp=mini,ClientKey="e2e-"+id,ClientType=type,SandboxEnabled=true};db.MiniAppOAuthClients.Add(client);
         db.MiniAppRedirectUris.Add(new(){MiniApp=mini,RedirectUri=origin+"/callback"});
+        if(sandboxFeasibility && type=="Public")db.MiniAppRedirectUris.Add(new(){MiniApp=mini,RedirectUri=origin+"/fixture-callback"});
+        if(sandboxFeasibility && type=="Public")db.MiniAppRedirectUris.Add(new(){MiniApp=mini,RedirectUri=origin+"/fixture-coop-callback"});
         db.MiniAppDomainVerifications.Add(new(){MiniApp=mini,VerificationFileName="fixture-"+id+".txt",Hostname="partner.example.com",Status=MiniAppDomainStatus.Verified,ExpiresAt=DateTime.UtcNow.AddHours(1)});
         if(type=="Confidential"){
             var encrypted=services.GetRequiredService<MiniAppSecretProtector>().Encrypt(confidentialSecret,client.Id);
@@ -64,8 +78,15 @@ using(var scope=app.Services.CreateScope()){
         await services.GetRequiredService<MiniAppOidcRegistry>().SynchronizeAsync(mini.Id,default);await tx.CommitAsync();
     }
 }
-await File.WriteAllTextAsync(Path.Combine(directory,"fixture.json"),JsonSerializer.Serialize(new{issuer,publicOrigin="https://localhost:5491",confidentialOrigin="https://127.0.0.2:5492",publicClientId="e2e-public",confidentialClientId="e2e-confidential",confidentialSecret}));
+await File.WriteAllTextAsync(Path.Combine(directory,"fixture.json"),JsonSerializer.Serialize(new{issuer,publicOrigin="https://localhost:5491",confidentialOrigin="https://127.0.0.2:5492",publicClientId="e2e-public",confidentialClientId="e2e-confidential",confidentialSecret,
+    sandboxPortalOrigin=sandboxFeasibility?sandboxPortalOrigin:null,sandboxHostOrigin=sandboxFeasibility?sandboxHostOrigin:null}));
 app.UseRouting();app.UseCors("Web");app.UseAuthentication();app.UseRateLimiter();app.UseAuthorization();app.UseAntiforgery();app.MapControllers();app.MapSsoSessionEndpoints();
+if(sandboxFeasibility)
+{
+    MiniAppSandboxRuntimeApi.MapEndpoints(app);MiniAppSandboxHostApi.MapEndpoints(app);
+    SandboxFeasibility.Map(app,sandboxPortalOrigin,sandboxHostOrigin);
+    Console.WriteLine("Sandbox browser feasibility: "+sandboxPortalOrigin+"/fixture/sandbox");
+}
 string Page(string body)=>"<!doctype html><html lang=vi><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href='data:,'><title>ANKT isolated OIDC fixture</title><main><h1>ANKT isolated OIDC fixture</h1>"+body+"</main></html>";
 string Csrf(HttpContext http,IAntiforgery csrf){var tokens=csrf.GetAndStoreTokens(http);return "<input type=hidden name='"+HtmlEncoder.Default.Encode(tokens.FormFieldName)+"' value='"+HtmlEncoder.Default.Encode(tokens.RequestToken!)+"'>";}
 app.Use(async(http,next)=>{http.Response.Headers.CacheControl="no-store";http.Response.Headers["Referrer-Policy"]="no-referrer";await next();});

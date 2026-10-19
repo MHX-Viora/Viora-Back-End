@@ -19,6 +19,7 @@ internal sealed class FixtureCertificates : IDisposable
         using var key=RSA.Create(2048);
         var leaf=new CertificateRequest("CN=localhost",key,HashAlgorithmName.SHA256,RSASignaturePadding.Pkcs1);
         var san=new SubjectAlternativeNameBuilder();san.AddDnsName("localhost");san.AddIpAddress(IPAddress.Loopback);san.AddIpAddress(IPAddress.Parse("127.0.0.2"));
+        san.AddDnsName("portal.ankt.localhost");san.AddDnsName("sandbox.ankt.localhost");
         leaf.CertificateExtensions.Add(san.Build());
         leaf.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature|X509KeyUsageFlags.KeyEncipherment,true));
         leaf.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection{new("1.3.6.1.5.5.7.3.1")},true));

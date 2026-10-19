@@ -13,6 +13,7 @@ public static class MiniAppIntegrationApi
         services.AddSingleton<IPublicDnsResolver, PublicDnsResolver>();
         services.AddSingleton<IPublicSocketConnector, PublicSocketConnector>();
         services.AddSingleton<IPublicWebFetcher, PublicWebFetcher>();
+        services.AddSingleton<IPublicJsonFetcher, PublicWebFetcher>();
         services.AddScoped<MiniAppIntegrationService>();
         services.AddRateLimiter(o => o.AddPolicy("mini-app-verification", h => RateLimitPartition.GetFixedWindowLimiter(
             h.User.FindFirstValue("developer_id") ?? "anonymous", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));

@@ -2,6 +2,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -157,14 +161,19 @@ public sealed class MiniAppApiTests
         Assert.All(migration.DownOperations, op => Assert.Contains(Assert.IsType<DropTableOperation>(op).Name, allowed));
     }
 
-    private sealed class Mail : IDeveloperEmailSender
+    internal sealed class Mail : IDeveloperEmailSender
     {
         public bool IsConfigured => true; public string Token = "";
         public Task SendAsync(string recipient, string subject, string text, CancellationToken ct) { Token = text.Split("#token=")[1].Split('\n')[0].Trim(); return Task.CompletedTask; }
     }
-    private sealed class Host(WebApplication app, SqliteConnection db, HttpClient client, Mail mail, MiniAppIntegrationTests.Fetcher fetcher) : IAsyncDisposable
+    internal sealed class Host(WebApplication app, SqliteConnection db, HttpClient client, Mail mail, MiniAppIntegrationTests.Fetcher fetcher, SecurityKey adminKey) : IAsyncDisposable
     {
         public HttpClient Client => client;
+        public HttpClient RuntimeClient()=>app.GetTestClient();
+        public string AdminToken(Guid id,Guid source)=>new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor {
+            Issuer="https://sandbox-test-identity.example",Audience="sandbox-admin-test",Expires=DateTime.UtcNow.AddMinutes(15),
+            SigningCredentials=new(adminKey,SecurityAlgorithms.HmacSha256),Subject=new ClaimsIdentity(new[]{
+                new Claim("sub",id.ToString()),new Claim("sid",source.ToString()),new Claim("role","2"),new Claim("token_type","access")})});
         public MiniAppIntegrationTests.Fetcher Fetcher => fetcher;
         public async Task<string> Login(string email)
         {
@@ -175,21 +184,38 @@ public sealed class MiniAppApiTests
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             return (await response.Content.ReadFromJsonAsync<DeveloperLoginResult>())!.SessionToken;
         }
-        public static async Task<Host> Create(SsoRegistrationTests.Certificates? certificates=null)
+        public async Task<T> WithServices<T>(Func<IServiceProvider,Task<T>> action)
+        { await using var scope=app.Services.CreateAsyncScope(); return await action(scope.ServiceProvider); }
+        public static async Task<Host> Create(SsoRegistrationTests.Certificates? certificates=null, bool sandbox=false)
         {
-            var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); connection.CreateFunction<string?, int>("char_length", s => s?.Length ?? 0);
+            var connection = new SqliteConnection(sandbox?$"Data Source=sandbox-api-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;Pooling=False":"Data Source=:memory:");
+            await connection.OpenAsync(); connection.CreateFunction<string?, int>("char_length", s => s?.Length ?? 0);
             var b = WebApplication.CreateBuilder(); b.WebHost.UseTestServer(); b.Logging.ClearProviders();
+            var adminKey=new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(32));
+            if(sandbox)b.Services.AddAuthentication().AddJwtBearer(options=>{options.MapInboundClaims=false;options.TokenValidationParameters=new(){
+                ValidIssuer="https://sandbox-test-identity.example",ValidAudience="sandbox-admin-test",IssuerSigningKey=adminKey,RoleClaimType="role",ValidAlgorithms=[SecurityAlgorithms.HmacSha256]};});
             b.Configuration.AddInMemoryCollection(new Dictionary<string, string?> {
                 ["DeveloperAuth:PortalUrl"] = "https://mxh.ankt.vn/developers", ["MiniApps:ActiveKeyVersion"] = "test",
                 ["MiniApps:EncryptionKeys:test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             });
+            if(sandbox) b.Configuration.AddInMemoryCollection(new Dictionary<string,string?> {
+                ["MiniAppSandbox:Enabled"]="true",["MiniAppSandbox:PortalOrigin"]="https://portal.ankt.example",
+                ["MiniAppSandbox:HostOrigin"]="https://sandbox.ankt.example",["MiniAppSandbox:Issuer"]="https://identity.ankt.example/"});
             if(certificates!=null){b.Configuration.AddInMemoryCollection(certificates.Config());b.Services.AddAnktSso(b.Configuration);}
-            b.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(connection)); b.Services.AddDeveloperAccounts(b.Configuration); b.Services.AddDeveloperMiniApps(b.Configuration);
+            b.Services.AddDbContext<AppDbContext>(o =>
+            {
+                if(!sandbox){o.UseSqlite(connection);return;}
+                // Keep the isolated memory DB alive, but HTTP/worker scopes own separate transactions.
+                var scoped=new SqliteConnection(connection.ConnectionString);scoped.CreateFunction<string?,int>("char_length",s=>s?.Length??0);
+                o.UseSqlite(scoped,contextOwnsConnection:true);
+            });
+            b.Services.AddDeveloperAccounts(b.Configuration); b.Services.AddDeveloperMiniApps(b.Configuration);
             var fetcher=new MiniAppIntegrationTests.Fetcher(); b.Services.AddSingleton<IPublicWebFetcher>(fetcher);
             var mail = new Mail(); b.Services.AddSingleton<IDeveloperEmailSender>(mail); var app = b.Build();
             using (var scope = app.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
+            MiniAppSandboxRuntimeApi.UseBoundary(app);
             app.UseDeveloperAccountBoundary(); app.UseAuthentication(); app.UseRateLimiter(); app.UseAuthorization(); app.MapDeveloperAccountEndpoints(); app.MapDeveloperMiniApps();
-            await app.StartAsync(); return new(app, connection, app.GetTestClient(), mail, fetcher);
+            await app.StartAsync(); return new(app, connection, app.GetTestClient(), mail, fetcher,adminKey);
         }
         public async ValueTask DisposeAsync() { client.Dispose(); await app.DisposeAsync(); await db.DisposeAsync(); }
     }
