@@ -672,6 +672,108 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.ToTable("MiniAppAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppCatalogPublication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApprovedReviewRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .HasColumnType("character varying(253)");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MiniAppVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ProductionClientKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProductionClientType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ProductionScopes")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("PublicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("SsoEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("VersionName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("WebsiteUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicationId")
+                        .IsUnique();
+
+                    b.HasIndex("PublishedAt", "PublicationId");
+
+                    b.HasIndex("PublicationId", "MiniAppId", "MiniAppVersionId", "ApprovedReviewRequestId");
+
+                    b.ToTable("MiniAppCatalogPublications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppCatalogPublications_Client", "(\"SsoEnabled\" AND \"ProductionClientKey\" IS NOT NULL AND length(\"ProductionClientKey\") BETWEEN 1 AND 100 AND \"ProductionClientType\" IS NOT NULL AND \"ProductionClientType\" IN ('Public','Confidential') AND \"ProductionScopes\" IS NOT NULL AND length(\"ProductionScopes\") BETWEEN 1 AND 64) OR (NOT \"SsoEnabled\" AND \"ProductionClientKey\" IS NULL AND \"ProductionClientType\" IS NULL AND \"ProductionScopes\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_MiniAppCatalogPublications_Description", "\"Description\" IS NULL OR length(\"Description\") <= 300");
+
+                            t.HasCheckConstraint("CK_MiniAppCatalogPublications_Domain", "length(\"Domain\") BETWEEN 1 AND 253 AND length(\"WebsiteUrl\") BETWEEN 1 AND 2048");
+
+                            t.HasCheckConstraint("CK_MiniAppCatalogPublications_Hash", "length(\"SnapshotHash\") = 64 AND \"SnapshotHash\" = lower(\"SnapshotHash\")");
+
+                            t.HasCheckConstraint("CK_MiniAppCatalogPublications_Name", "length(trim(\"Name\")) BETWEEN 1 AND 120");
+
+                            t.HasCheckConstraint("CK_MiniAppCatalogPublications_Version", "length(trim(\"VersionName\")) BETWEEN 1 AND 80");
+                        });
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppClientSecret", b =>
                 {
                     b.Property<Guid>("Id")
@@ -781,14 +883,14 @@ namespace Viora.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Hostname");
 
-                    b.HasIndex("MiniAppId")
-                        .IsUnique()
-                        .HasFilter("\"RevokedAt\" IS NULL");
-
                     b.HasIndex("Status");
 
                     b.HasIndex("VerificationFileName")
                         .IsUnique();
+
+                    b.HasIndex("MiniAppId", "Hostname")
+                        .IsUnique()
+                        .HasFilter("\"RevokedAt\" IS NULL");
 
                     b.ToTable("MiniAppDomainVerifications", (string)null);
                 });
@@ -885,6 +987,53 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.ToTable("MiniAppOAuthClients", (string)null);
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppOperationalState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ChangedByAdminAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime?>("SuspendedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByAdminAccountId");
+
+                    b.HasIndex("MiniAppId")
+                        .IsUnique();
+
+                    b.ToTable("MiniAppOperationalStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppOperationalStates_Status", "\"Status\" IN (0,1)");
+
+                            t.HasCheckConstraint("CK_MiniAppOperationalStates_Suspension", "\"Status\" = 0 OR (\"ChangedByAdminAccountId\" IS NOT NULL AND \"SuspendedAt\" IS NOT NULL AND \"Reason\" IS NOT NULL AND length(trim(\"Reason\")) BETWEEN 10 AND 2000)");
+                        });
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppPairwiseSubject", b =>
                 {
                     b.Property<Guid>("Id")
@@ -919,6 +1068,317 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.ToTable("MiniAppPairwiseSubjects", (string)null);
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppProductionHostSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApprovedReviewRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BindingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BrowserBindingHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("BrowserNonceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastActivityAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MiniAppVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OperationalRevision")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<string>("PolicyFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("PublicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PublicationRevision")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RuntimeCredentialHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("SourceSocialSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("RuntimeCredentialHash")
+                        .IsUnique()
+                        .HasFilter("\"RuntimeCredentialHash\" IS NOT NULL");
+
+                    b.HasIndex("BindingId", "RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("MiniAppId", "ExpiresAt");
+
+                    b.HasIndex("BindingId", "ClosedAt", "ExpiresAt");
+
+                    b.HasIndex("PublicationId", "MiniAppId", "MiniAppVersionId", "ApprovedReviewRequestId");
+
+                    b.ToTable("MiniAppProductionHostSessions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProductionHost_Actor", "(\"AccountId\" IS NULL AND \"SourceSocialSessionId\" IS NULL) OR (\"AccountId\" IS NOT NULL AND \"SourceSocialSessionId\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_ProductionHost_Expiry", "\"ExpiresAt\" > \"CreatedAt\" AND (\"ClosedAt\" IS NULL OR \"ClosedAt\" >= \"CreatedAt\")");
+
+                            t.HasCheckConstraint("CK_ProductionHost_Hashes", "length(\"SnapshotHash\") = 64 AND \"SnapshotHash\" = lower(\"SnapshotHash\") AND length(\"PolicyFingerprint\") = 64 AND \"PolicyFingerprint\" = lower(\"PolicyFingerprint\") AND length(\"BrowserBindingHash\") = 64 AND \"BrowserBindingHash\" = lower(\"BrowserBindingHash\") AND length(\"BrowserNonceHash\") = 64 AND \"BrowserNonceHash\" = lower(\"BrowserNonceHash\") AND length(\"RequestHash\") = 64 AND \"RequestHash\" = lower(\"RequestHash\")");
+
+                            t.HasCheckConstraint("CK_ProductionHost_Platform", "\"Platform\" IN ('Web','Android','iOS')");
+
+                            t.HasCheckConstraint("CK_ProductionHost_RuntimeHash", "\"RuntimeCredentialHash\" IS NULL OR (length(\"RuntimeCredentialHash\") = 64 AND \"RuntimeCredentialHash\" = lower(\"RuntimeCredentialHash\"))");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppProductionLaunchGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("BindingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BrowserNonceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GrantHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("HostSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReceiptProtected")
+                        .HasMaxLength(16384)
+                        .HasColumnType("character varying(16384)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("GrantHash")
+                        .IsUnique();
+
+                    b.HasIndex("HostSessionId")
+                        .IsUnique();
+
+                    b.HasIndex("HostSessionId", "BindingId");
+
+                    b.ToTable("MiniAppProductionLaunchGrants", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProductionGrant_Audience", "length(\"Audience\") BETWEEN 1 AND 512");
+
+                            t.HasCheckConstraint("CK_ProductionGrant_Expiry", "\"ExpiresAt\" > \"CreatedAt\" AND (\"ConsumedAt\" IS NULL OR \"ConsumedAt\" >= \"CreatedAt\")");
+
+                            t.HasCheckConstraint("CK_ProductionGrant_Hashes", "length(\"GrantHash\") = 64 AND \"GrantHash\" = lower(\"GrantHash\") AND length(\"BrowserNonceHash\") = 64 AND \"BrowserNonceHash\" = lower(\"BrowserNonceHash\")");
+
+                            t.HasCheckConstraint("CK_ProductionGrant_Receipt", "(\"ConsumedAt\" IS NOT NULL OR \"ReceiptProtected\" IS NOT NULL) AND (\"ReceiptProtected\" IS NULL OR length(\"ReceiptProtected\") BETWEEN 1 AND 16384)");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppProductionRuntimeEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("Code")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("HostSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("HostSessionId", "Code")
+                        .IsUnique()
+                        .HasFilter("\"HostSessionId\" IS NOT NULL AND \"Code\" IN (0,1,3,4)");
+
+                    b.HasIndex("HostSessionId", "CreatedAt");
+
+                    b.HasIndex("HostSessionId", "MiniAppId");
+
+                    b.HasIndex("MiniAppId", "CreatedAt");
+
+                    b.ToTable("MiniAppProductionRuntimeEvents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProductionEvent_Code", "\"Code\" BETWEEN 0 AND 7");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppPublication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApprovedReviewRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MiniAppVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ProductionOAuthClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PublishedByDeveloperId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime?>("SuspendedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SuspensionReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("UnpublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MiniAppId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 0");
+
+                    b.HasIndex("PublishedByDeveloperId");
+
+                    b.HasIndex("MiniAppId", "PublishedAt");
+
+                    b.HasIndex("MiniAppVersionId", "MiniAppId");
+
+                    b.HasIndex("ProductionOAuthClientId", "MiniAppId");
+
+                    b.HasIndex("ApprovedReviewRequestId", "MiniAppId", "MiniAppVersionId");
+
+                    b.ToTable("MiniAppPublications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppPublications_Closure", "(\"Status\" = 0 AND \"UnpublishedAt\" IS NULL) OR (\"Status\" <> 0 AND \"UnpublishedAt\" IS NOT NULL AND \"UnpublishedAt\" >= \"PublishedAt\")");
+
+                            t.HasCheckConstraint("CK_MiniAppPublications_Environment", "\"Environment\" = 1");
+
+                            t.HasCheckConstraint("CK_MiniAppPublications_Status", "\"Status\" IN (0,1,2,3)");
+
+                            t.HasCheckConstraint("CK_MiniAppPublications_Suspension", "\"Status\" <> 3 OR (\"SuspendedAt\" IS NOT NULL AND \"SuspensionReason\" IS NOT NULL AND length(trim(\"SuspensionReason\")) BETWEEN 10 AND 2000)");
+                        });
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppRedirectUri", b =>
                 {
                     b.Property<Guid>("Id")
@@ -948,6 +1408,316 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("MiniAppRedirectUris", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppReviewAction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("Action")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid?>("ActorAdminAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorDeveloperId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("ActorType")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("AfterState")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("BeforeState")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MetadataJson")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("MiniAppVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<Guid?>("ReviewRequestId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorAdminAccountId");
+
+                    b.HasIndex("ActorDeveloperId");
+
+                    b.HasIndex("MiniAppId", "CreatedAt");
+
+                    b.HasIndex("MiniAppVersionId", "MiniAppId");
+
+                    b.HasIndex("ReviewRequestId", "MiniAppId");
+
+                    b.HasIndex("ActorType", "ActorId", "RequestId")
+                        .IsUnique();
+
+                    b.ToTable("MiniAppReviewActions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppReviewActions_Action", "\"Action\" BETWEEN 0 AND 13");
+
+                            t.HasCheckConstraint("CK_MiniAppReviewActions_Actor", "(\"ActorType\" = 0 AND \"ActorDeveloperId\" IS NOT NULL AND \"ActorAdminAccountId\" IS NULL AND \"ActorId\" = \"ActorDeveloperId\") OR (\"ActorType\" = 1 AND \"ActorAdminAccountId\" IS NOT NULL AND \"ActorDeveloperId\" IS NULL AND \"ActorId\" = \"ActorAdminAccountId\")");
+
+                            t.HasCheckConstraint("CK_MiniAppReviewActions_Hash", "length(\"PayloadHash\") = 64");
+
+                            t.HasCheckConstraint("CK_MiniAppReviewActions_Payload", "length(\"MetadataJson\") BETWEEN 2 AND 2048 AND length(\"ResultJson\") BETWEEN 2 AND 4096");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppReviewNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("EventType")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("MiniAppVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PublicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecipientDeveloperId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReviewRequestId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "MiniAppId");
+
+                    b.HasIndex("EventId", "RecipientDeveloperId")
+                        .IsUnique();
+
+                    b.HasIndex("MiniAppId", "RecipientDeveloperId");
+
+                    b.HasIndex("MiniAppVersionId", "MiniAppId");
+
+                    b.HasIndex("PublicationId", "MiniAppId");
+
+                    b.HasIndex("RecipientDeveloperId", "ReadAt");
+
+                    b.HasIndex("ReviewRequestId", "MiniAppId");
+
+                    b.HasIndex("RecipientDeveloperId", "CreatedAt", "Id");
+
+                    b.ToTable("MiniAppReviewNotifications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppReviewNotifications_Event", "\"EventType\" BETWEEN 0 AND 8");
+
+                            t.HasCheckConstraint("CK_MiniAppReviewNotifications_Read", "\"ReadAt\" IS NULL OR \"ReadAt\" >= \"CreatedAt\"");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppReviewNotificationDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<short>("Channel")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("LastErrorCode")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid?>("LeaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RecipientDeveloperId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "LeaseUntil");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("EventId", "RecipientDeveloperId", "Channel")
+                        .IsUnique();
+
+                    b.HasIndex("NotificationId", "EventId", "RecipientDeveloperId");
+
+                    b.ToTable("MiniAppReviewNotificationDeliveries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppReviewDeliveries_Attempts", "\"AttemptCount\" BETWEEN 0 AND 5");
+
+                            t.HasCheckConstraint("CK_MiniAppReviewDeliveries_Channel", "\"Channel\" = 0");
+
+                            t.HasCheckConstraint("CK_MiniAppReviewDeliveries_Error", "\"LastErrorCode\" BETWEEN 0 AND 5");
+
+                            t.HasCheckConstraint("CK_MiniAppReviewDeliveries_Lease", "(\"Status\" = 1 AND \"LeaseId\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\" <> 1 AND \"LeaseId\" IS NULL AND \"LeaseUntil\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_MiniAppReviewDeliveries_Sent", "(\"Status\" = 2 AND \"SentAt\" IS NOT NULL) OR (\"Status\" <> 2 AND \"SentAt\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_MiniAppReviewDeliveries_Status", "\"Status\" BETWEEN 0 AND 3");
+                        });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppReviewRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AssignedAdminAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ChangeRequestsJson")
+                        .IsRequired()
+                        .HasMaxLength(16384)
+                        .HasColumnType("character varying(16384)");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DecisionReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("DeveloperAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EvidenceAttestationJson")
+                        .IsRequired()
+                        .HasMaxLength(32768)
+                        .HasColumnType("character varying(32768)");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MiniAppVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ReviewStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeveloperAccountId");
+
+                    b.HasIndex("MiniAppId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN (0,1)");
+
+                    b.HasIndex("MiniAppVersionId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN (0,1)");
+
+                    b.HasIndex("MiniAppVersionId", "MiniAppId");
+
+                    b.HasIndex("Status", "SubmittedAt");
+
+                    b.HasIndex("AssignedAdminAccountId", "Status", "SubmittedAt");
+
+                    b.ToTable("MiniAppReviewRequests", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppReviews_Assignment", "(\"Status\" = 0 AND \"AssignedAdminAccountId\" IS NULL AND \"ReviewStartedAt\" IS NULL) OR (\"Status\" <> 0 AND \"AssignedAdminAccountId\" IS NOT NULL AND \"ReviewStartedAt\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_MiniAppReviews_Changes", "length(\"ChangeRequestsJson\") BETWEEN 2 AND 16384");
+
+                            t.HasCheckConstraint("CK_MiniAppReviews_Decision", "(\"Status\" IN (0,1) AND \"DecidedAt\" IS NULL) OR (\"Status\" IN (2,3,4) AND \"DecidedAt\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_MiniAppReviews_Evidence", "length(\"EvidenceAttestationJson\") BETWEEN 2 AND 32768");
+
+                            t.HasCheckConstraint("CK_MiniAppReviews_Reason", "\"Status\" NOT IN (2,3) OR length(trim(\"DecisionReason\")) BETWEEN 10 AND 2000 AND \"DecisionReason\" IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_MiniAppReviews_Status", "\"Status\" IN (0,1,2,3,4)");
+                        });
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxDiagnostic", b =>
@@ -1024,6 +1794,12 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("ExecutorRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ExecutorRunVersion")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1048,9 +1824,13 @@ namespace Viora.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("SandboxSessionId");
 
+                    b.HasIndex("ExecutorRunId", "SandboxSessionId");
+
                     b.ToTable("MiniAppSandboxLaunchGrants", null, t =>
                         {
                             t.HasCheckConstraint("CK_MiniAppSandboxLaunchGrants_Expiry", "\"ExpiresAt\" > \"CreatedAt\"");
+
+                            t.HasCheckConstraint("CK_SandboxGrants_ExecutorBinding", "(\"ExecutorRunId\" IS NULL AND \"ExecutorRunVersion\" IS NULL) OR (\"ExecutorRunId\" IS NOT NULL AND \"ExecutorRunVersion\" IS NOT NULL)");
                         });
                 });
 
@@ -1401,6 +2181,89 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasFilter("\"RevokedAt\" IS NULL");
 
                     b.ToTable("MiniAppUserConsents", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByDeveloperId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LogoUploadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
+                    b.Property<int>("SnapshotSchemaVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<short>("State")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("VersionCode")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("VersionName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByDeveloperId");
+
+                    b.HasIndex("LogoUploadId");
+
+                    b.HasIndex("MiniAppId")
+                        .IsUnique()
+                        .HasFilter("\"State\" = 0");
+
+                    b.HasIndex("MiniAppId", "CreatedAt");
+
+                    b.HasIndex("MiniAppId", "VersionCode")
+                        .IsUnique();
+
+                    b.ToTable("MiniAppVersions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MiniAppVersions_Code", "\"VersionCode\" > 0");
+
+                            t.HasCheckConstraint("CK_MiniAppVersions_Hash", "length(\"SnapshotHash\") = 64");
+
+                            t.HasCheckConstraint("CK_MiniAppVersions_Schema", "\"SnapshotSchemaVersion\" = 1");
+
+                            t.HasCheckConstraint("CK_MiniAppVersions_Snapshot", "length(\"SnapshotJson\") BETWEEN 2 AND 65536");
+
+                            t.HasCheckConstraint("CK_MiniAppVersions_State", "\"State\" IN (0,1,2)");
+
+                            t.HasCheckConstraint("CK_MiniAppVersions_Submitted", "(\"State\" = 0 AND \"SubmittedAt\" IS NULL) OR (\"State\" IN (1,2) AND \"SubmittedAt\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.SsoAccountLinkAudit", b =>
@@ -4520,6 +5383,16 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("MiniApp");
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppCatalogPublication", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniAppPublication", null)
+                        .WithMany()
+                        .HasForeignKey("PublicationId", "MiniAppId", "MiniAppVersionId", "ApprovedReviewRequestId")
+                        .HasPrincipalKey("Id", "MiniAppId", "MiniAppVersionId", "ApprovedReviewRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppClientSecret", b =>
                 {
                     b.HasOne("Viora.Domain.Developers.MiniAppOAuthClient", "OAuthClient")
@@ -4571,6 +5444,20 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.Navigation("MiniApp");
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppOperationalState", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedByAdminAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppPairwiseSubject", b =>
                 {
                     b.HasOne("Viora.Domain.Entities.Account", null)
@@ -4586,6 +5473,80 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppProductionHostSession", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppPublication", null)
+                        .WithMany()
+                        .HasForeignKey("PublicationId", "MiniAppId", "MiniAppVersionId", "ApprovedReviewRequestId")
+                        .HasPrincipalKey("Id", "MiniAppId", "MiniAppVersionId", "ApprovedReviewRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppProductionLaunchGrant", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniAppProductionHostSession", null)
+                        .WithMany()
+                        .HasForeignKey("HostSessionId", "BindingId")
+                        .HasPrincipalKey("Id", "BindingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppProductionRuntimeEvent", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppProductionHostSession", null)
+                        .WithMany()
+                        .HasForeignKey("HostSessionId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppPublication", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.DeveloperAccount", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedByDeveloperId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppVersion", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppVersionId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppOAuthClient", null)
+                        .WithMany()
+                        .HasForeignKey("ProductionOAuthClientId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppReviewRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovedReviewRequestId", "MiniAppId", "MiniAppVersionId")
+                        .HasPrincipalKey("Id", "MiniAppId", "MiniAppVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppRedirectUri", b =>
                 {
                     b.HasOne("Viora.Domain.Developers.MiniApp", "MiniApp")
@@ -4595,6 +5556,109 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("MiniApp");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppReviewAction", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ActorAdminAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.DeveloperAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ActorDeveloperId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppVersion", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppVersionId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppReviewRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewRequestId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppReviewNotification", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.DeveloperAccount", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientDeveloperId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppReviewAction", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId", "RecipientDeveloperId")
+                        .HasPrincipalKey("Id", "DeveloperAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppVersion", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppVersionId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppPublication", null)
+                        .WithMany()
+                        .HasForeignKey("PublicationId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppReviewRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewRequestId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppReviewNotificationDelivery", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniAppReviewNotification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId", "EventId", "RecipientDeveloperId")
+                        .HasPrincipalKey("Id", "EventId", "RecipientDeveloperId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppReviewRequest", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedAdminAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.DeveloperAccount", null)
+                        .WithMany()
+                        .HasForeignKey("DeveloperAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppVersion", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppVersionId", "MiniAppId")
+                        .HasPrincipalKey("Id", "MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxDiagnostic", b =>
@@ -4619,6 +5683,12 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasForeignKey("SandboxSessionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppSandboxTestRun", null)
+                        .WithMany()
+                        .HasForeignKey("ExecutorRunId", "SandboxSessionId")
+                        .HasPrincipalKey("Id", "SandboxSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppSandboxProtocolEvidence", b =>
@@ -4708,6 +5778,26 @@ namespace Viora.Infrastructure.Persistence.Migrations
                     b.HasOne("Viora.Domain.Developers.MiniAppOAuthClient", null)
                         .WithMany()
                         .HasForeignKey("OAuthClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppVersion", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.DeveloperAccount", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByDeveloperId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppLogoUpload", null)
+                        .WithMany()
+                        .HasForeignKey("LogoUploadId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", null)
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

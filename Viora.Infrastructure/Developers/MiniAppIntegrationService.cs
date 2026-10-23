@@ -9,7 +9,7 @@ using Viora.Infrastructure.Persistence;
 namespace Viora.Infrastructure.Developers;
 
 public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProtector protector, IPublicWebFetcher fetcher, IHostEnvironment environment, TimeProvider clock,
-    Viora.Infrastructure.Sso.MiniAppOidcRegistry? oidcRegistry = null)
+    Viora.Infrastructure.Sso.MiniAppOidcRegistry? oidcRegistry = null, MiniAppVersionService? versions = null)
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
     private async Task<MiniApp> Own(Guid owner, string appId, CancellationToken ct) => await db.MiniApps
@@ -18,7 +18,11 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
     private void Audit(MiniApp app, string action) => db.MiniAppAuditLogs.Add(new() { MiniAppId = app.Id, ActorDeveloperId = app.DeveloperAccountId, Action = action });
     private static void Touch(MiniApp app) => app.Version = Guid.NewGuid();
     private Task<string[]> Redirects(Guid id, CancellationToken ct) => db.MiniAppRedirectUris.Where(x => x.MiniAppId == id && x.Environment == MiniAppOAuthEnvironment.Sandbox).OrderBy(x => x.RedirectUri).Select(x => x.RedirectUri).ToArrayAsync(ct);
-    private Task<MiniAppDomainVerification?> Current(Guid id, CancellationToken ct) => db.MiniAppDomainVerifications.SingleOrDefaultAsync(x => x.MiniAppId == id && x.RevokedAt == null, ct);
+    private Task<MiniAppDomainVerification?> Current(MiniApp app, CancellationToken ct)
+    {
+        var hostname = MiniAppDomainLifecycle.Host(app.WebsiteUrl);
+        return db.MiniAppDomainVerifications.SingleOrDefaultAsync(x => x.MiniAppId == app.Id && x.Hostname == hostname && x.RevokedAt == null, ct);
+    }
     private static MiniAppIntegrationDto Map(MiniApp a, string[] redirects) => new(a.WebsiteUrl ?? "", a.SupportEmail ?? "", a.ShortDescription ?? "", a.Description ?? "", a.PrivacyPolicyUrl ?? "", a.TermsOfServiceUrl ?? "", a.SsoEnabled, redirects);
     private static string RequireHost(MiniApp app) => MiniAppDomainLifecycle.Host(app.WebsiteUrl) ?? throw MiniAppInput.Invalid("Lưu Website URL HTTPS công khai trước khi xác minh domain.");
 
@@ -46,6 +50,7 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
         if (app.Status is MiniAppStatus.Draft or MiniAppStatus.ConfigurationIncomplete)
             app.Status = !string.IsNullOrWhiteSpace(app.LogoUrl) && website != "" && privacy != "" && terms != "" && email != "" && shortDescription != "" ? MiniAppStatus.Draft : MiniAppStatus.ConfigurationIncomplete;
         Touch(app); Audit(app, "integration.updated"); await db.SaveChangesAsync(ct);
+        if (versions != null) await versions.SyncWorkingAsync(app, ct);
         if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
         await tx.CommitAsync(ct);
         return Map(app, redirects);
@@ -63,13 +68,13 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
     }
     public async Task<MiniAppDomainDto> Domain(Guid owner, string appId, CancellationToken ct)
     {
-        var app = await Own(owner, appId, ct); return DomainDto(app, await Current(app.Id, ct));
+        var app = await Own(owner, appId, ct); return DomainDto(app, await Current(app, ct));
     }
     private async Task<MiniAppDomainVerification> EnsureChallenge(MiniApp app, bool regenerate, CancellationToken ct)
     {
-        var host = RequireHost(app); var row = await Current(app.Id, ct);
+        var host = RequireHost(app); var row = await Current(app, ct);
         if (!regenerate && row is not null && row.Hostname == host && row.ExpiresAt > Now) return row;
-        await MiniAppDomainLifecycle.Revoke(db, app.Id, ct);
+        await MiniAppDomainLifecycle.Revoke(db, app.Id, ct, host);
         if (row is not null) db.Entry(row).State = EntityState.Detached;
         Touch(app); return MiniAppDomainLifecycle.Create(db, app, host, protector);
     }
@@ -93,7 +98,7 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
     }
     public async Task<MiniAppDomainDto> Verify(Guid owner, string appId, CancellationToken ct)
     {
-        var app = await Own(owner, appId, ct); var host = RequireHost(app); var row = await Current(app.Id, ct);
+        var app = await Own(owner, appId, ct); var host = RequireHost(app); var row = await Current(app, ct);
         if (row is null || row.Hostname != host || row.ExpiresAt <= Now)
             throw new DeveloperAuthException(409, "CHALLENGE_EXPIRED", "Chưa có file xác minh hợp lệ hoặc file đã hết hạn. Hãy tải hoặc tạo lại file.");
         string? error = null;
@@ -127,7 +132,7 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
 
     public async Task<MiniAppReadinessDto> Readiness(Guid owner, string appId, CancellationToken ct)
     {
-        var app = await Own(owner, appId, ct); var row = await Current(app.Id, ct); var redirects = await Redirects(app.Id, ct);
+        var app = await Own(owner, appId, ct); var row = await Current(app, ct); var redirects = await Redirects(app.Id, ct);
         var version = app.Version; var domainVersion = row?.Version;
         var checks = new List<MiniAppReadinessCheck>();
         void Check(string key, bool pass, string message, string requirement = "required") => checks.Add(new(key, requirement, pass ? "passed" : "failed", pass ? "Đã cấu hình." : message));
@@ -143,7 +148,8 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
         checks.AddRange(policies);
         // Do not publish readiness for a configuration/proof snapshot changed while policy URLs were fetched.
         var current = await db.MiniApps.AsNoTracking().Where(x => x.Id == app.Id && x.DeveloperAccountId == owner && x.DeletedAt == null).Select(x => (Guid?)x.Version).SingleOrDefaultAsync(ct);
-        var currentDomain = await db.MiniAppDomainVerifications.AsNoTracking().Where(x => x.MiniAppId == app.Id && x.RevokedAt == null).Select(x => new { x.Version, x.ExpiresAt }).SingleOrDefaultAsync(ct);
+        var hostname = MiniAppDomainLifecycle.Host(app.WebsiteUrl);
+        var currentDomain = await db.MiniAppDomainVerifications.AsNoTracking().Where(x => x.MiniAppId == app.Id && x.Hostname == hostname && x.RevokedAt == null).Select(x => new { x.Version, x.ExpiresAt }).SingleOrDefaultAsync(ct);
         if (current != version || currentDomain?.Version != domainVersion) throw new DeveloperAuthException(409, "CONFIGURATION_CHANGED", "Cấu hình vừa thay đổi. Hãy kiểm tra lại.");
         if (currentDomain is not null && currentDomain.ExpiresAt <= Now)
             checks[checks.FindIndex(x => x.Key == "domain")] = new("domain", "required", "failed", "Proof domain đã hết hạn. Hãy xác minh lại.");

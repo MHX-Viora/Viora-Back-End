@@ -13,6 +13,7 @@ public sealed class MiniAppSandboxOptions
     public int GrantSeconds { get; set; } = 30;
     public int ActiveSessionsPerActor { get; set; } = 3;
     public Guid[] AdminTesterIds { get; set; } = [];
+    public string ExecutorKey { get; set; } = "";
 }
 
 public sealed class MiniAppSandboxOptionsValidator : IValidateOptions<MiniAppSandboxOptions>
@@ -20,6 +21,11 @@ public sealed class MiniAppSandboxOptionsValidator : IValidateOptions<MiniAppSan
     public ValidateOptionsResult Validate(string? name, MiniAppSandboxOptions options)
     {
         if (!options.Enabled) return ValidateOptionsResult.Success;
+        if(options.ExecutorKey.Length!=0){
+            Span<byte> key=stackalloc byte[64];
+            if(!Convert.TryFromBase64String(options.ExecutorKey,key,out var length)||length<32)
+                return ValidateOptionsResult.Fail("Sandbox executor key must be 32–64 random bytes in Base64, or blank to disable.");
+        }
         static bool Origin(string value, out Uri? uri) => Uri.TryCreate(value, UriKind.Absolute, out uri) &&
             uri.Scheme == "https" && uri.UserInfo.Length == 0 && uri.AbsolutePath == "/" && uri.Query.Length == 0 && uri.Fragment.Length == 0;
         if (!Origin(options.PortalOrigin, out var portal) || !Origin(options.HostOrigin, out var host) ||

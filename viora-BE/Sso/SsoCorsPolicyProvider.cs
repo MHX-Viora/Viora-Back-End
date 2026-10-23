@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Viora.Application.Developers;
+using Viora.Domain.Developers;
 using Viora.Infrastructure.Persistence;
 using Viora.Infrastructure.Sso;
 
@@ -24,13 +25,17 @@ public sealed class SsoCorsPolicyProvider(IOptions<CorsOptions> options) : ICors
         var db = context.RequestServices.GetRequiredService<AppDbContext>();
         var callbacks = await (from redirect in db.MiniAppRedirectUris.AsNoTracking()
             join client in db.MiniAppOAuthClients.AsNoTracking() on new { redirect.MiniAppId, redirect.Environment } equals new { client.MiniAppId, client.Environment }
-            where client.ClientType == "Public" && client.RevokedAt == null
+            where client.Environment == MiniAppOAuthEnvironment.Sandbox && client.ClientType == "Public" && client.RevokedAt == null
             select new { client.ClientKey, redirect.RedirectUri }).ToListAsync(context.RequestAborted);
         // Callback spelling is preserved for exact protocol binding; compare parsed origins here.
+        var production = await (from publication in db.MiniAppPublications.AsNoTracking()
+            join client in db.MiniAppOAuthClients.AsNoTracking() on publication.ProductionOAuthClientId equals (Guid?)client.Id
+            where publication.Status == MiniAppPublicationStatus.Published && client.RevokedAt == null
+            select client.ClientKey).ToListAsync(context.RequestAborted);
         var candidates = callbacks.Where(x => Uri.TryCreate(x.RedirectUri, UriKind.Absolute, out var callback) &&
             callback.GetLeftPart(UriPartial.Authority) == origin).Select(x => x.ClientKey).Distinct(StringComparer.Ordinal);
         var clients = context.RequestServices.GetRequiredService<SsoClientReader>();
-        foreach (var key in candidates)
+        foreach (var key in candidates.Concat(production).Distinct(StringComparer.Ordinal))
         {
             try
             {

@@ -18,6 +18,7 @@ public static class SsoRegistration
 
         services.AddSingleton<SsoCredentials>();
         services.AddScoped<Viora.Infrastructure.Sso.MiniAppOidcRegistry>();
+        services.AddScoped<Viora.Infrastructure.Sso.MiniAppPublicationRevocation>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<Viora.Infrastructure.Sso.SsoSessionService>();
         services.AddScoped<Viora.Infrastructure.Sso.SsoBootstrapService>();
@@ -27,6 +28,7 @@ public static class SsoRegistration
         services.AddScoped<Viora.Infrastructure.Sso.SsoAuthorizationOwnerService>();
         services.AddScoped<Viora.Infrastructure.Sso.SsoAccountLinkService>();
         services.AddScoped<SsoConsentInteraction>();
+        services.AddScoped<SandboxProtocolObserver>();
         services.AddControllersWithViews();
         services.AddAntiforgery(options =>
         {
@@ -48,6 +50,9 @@ public static class SsoRegistration
         });
         openiddict.AddServer(server =>
         {
+            server.AddEventHandler<OpenIddictServerEvents.ProcessSignInContext>(handler=>handler
+                .UseScopedHandler<SandboxProtocolObserver>()
+                .SetOrder(OpenIddictServerHandlers.GenerateIdentityToken.Descriptor.Order+1_000));
             server.AddEventHandler<OpenIddictServerEvents.ValidateIntrospectionRequestContext>(handler => handler
                 .UseScopedHandler<SsoIntrospectionPolicy>()
                 .SetOrder(OpenIddictServerHandlers.Introspection.ValidateAuthorizedParty.Descriptor.Order + 1_000));

@@ -21,6 +21,9 @@ public static class MiniAppSandboxApi
         services.AddSingleton(provider=>provider.GetRequiredService<IOptions<MiniAppSandboxOptions>>().Value);
         services.AddScoped<MiniAppSandboxAccess>(); services.AddScoped<MiniAppSandboxSessionService>();
         services.AddScoped<MiniAppSandboxDiagnosticService>();
+        services.AddScoped<MiniAppSandboxProtocolService>();
+        services.AddScoped<MiniAppSandboxExecutorService>();
+        services.AddScoped<MiniAppSandboxEvidenceReader>();
         services.AddScoped<MiniAppSandboxConfigurationService>();
         services.AddSingleton<MiniAppSandboxRunCancellation>();services.AddScoped<MiniAppSandboxRunCoordinator>();
         services.AddScoped<IMiniAppSandboxCheckExecutor,MiniAppSandboxCheckExecutor>();services.AddHostedService<MiniAppSandboxRunWorker>();
@@ -84,8 +87,10 @@ public static class MiniAppSandboxApi
             var request=await ReadRequest<SandboxRunRequest>(http,ct,4096);var run=await service.CreateAsync(Actor(http,admin),appId,request,ct);
             return Results.Accepted((admin?"/api/admin/mini-apps/":"/api/developer/mini-apps/")+appId+"/sandbox/test-runs/"+run.Id,run);
         });
-        group.MapGet("/test-runs",async(string appId,Guid sessionId,string? cursor,int? limit,HttpContext http,MiniAppSandboxRunCoordinator service,CancellationToken ct)=>
-            Results.Ok(await service.ListAsync(Actor(http,admin),appId,sessionId,cursor,limit??20,ct)));
+        group.MapGet("/test-runs",async(string appId,Guid sessionId,string? cursor,int? limit,string? order,HttpContext http,MiniAppSandboxRunCoordinator service,CancellationToken ct)=>{
+            if(order is not (null or "newest"))throw MiniAppInput.Invalid("Thứ tự lượt kiểm tra không hợp lệ.");
+            return Results.Ok(await service.ListAsync(Actor(http,admin),appId,sessionId,cursor,limit??20,ct,order=="newest"));
+        });
         group.MapGet("/test-runs/{runId:guid}",async(string appId,Guid runId,HttpContext http,MiniAppSandboxRunCoordinator service,CancellationToken ct)=>
             Results.Ok(await service.GetAsync(Actor(http,admin),appId,runId,ct)));
         group.MapDelete("/test-runs/{runId:guid}",async(string appId,Guid runId,HttpContext http,MiniAppSandboxRunCoordinator service,CancellationToken ct)=>

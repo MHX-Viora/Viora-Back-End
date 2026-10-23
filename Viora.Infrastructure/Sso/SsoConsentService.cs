@@ -96,7 +96,7 @@ public sealed class SsoConsentService(AppDbContext db, SsoClientReader clients, 
         principal.SetAuthorizationId(grant.AuthorizationId);
         principal.SetDestinations(claim => claim.Type is OpenIddictConstants.Claims.Subject or OpenIddictConstants.Claims.Name or
             OpenIddictConstants.Claims.Picture or OpenIddictConstants.Claims.Email or OpenIddictConstants.Claims.EmailVerified
-            ? [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken] : Array.Empty<string>());
+            ? new[] { OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken } : Array.Empty<string>());
         return principal;
     }
 

@@ -17,6 +17,7 @@ public static class MiniAppApi
         services.Configure<Viora.Infrastructure.Media.CloudinaryOptions>(config.GetSection("Cloudinary"));
         services.AddScoped<MiniAppSecretProtector>(); services.AddScoped<MiniAppService>(); services.AddScoped<MiniAppLogoStorage>();
         services.AddScoped<MiniAppSsoService>();
+        services.AddMiniAppReviewServices(config);
         MiniAppSandboxApi.AddServices(services,config);
         services.AddHostedService<MiniAppLogoCleanup>();
         MiniAppIntegrationApi.AddServices(services);
@@ -27,13 +28,18 @@ public static class MiniAppApi
     }
     public static IEndpointRouteBuilder MapDeveloperMiniApps(this IEndpointRouteBuilder endpoints)
     {
+        viora_BE.Admin.MiniAppReviewAdminApi.MapEndpoints(endpoints);
+        MiniAppReviewNotificationApi.MapEndpoints(endpoints);
         MiniAppSandboxApi.MapAdminEndpoints(endpoints);
         MiniAppSandboxRuntimeApi.MapEndpoints(endpoints);
         MiniAppSandboxHostApi.MapEndpoints(endpoints);
+        MiniAppSandboxExecutorApi.MapEndpoints(endpoints);
         var g = endpoints.MapGroup("/api/developer/mini-apps").WithTags("Developer Mini Apps")
             .RequireAuthorization(DeveloperSessionHandler.Policy).RequireRateLimiting("developer-auth")
             .AddEndpointFilter<DeveloperApiFilter>().AddEndpointFilter<MiniAppConflictFilter>();
         MiniAppIntegrationApi.MapEndpoints(g);
+        MiniAppVersionApi.MapEndpoints(g);
+        MiniAppReviewApi.MapEndpoints(g);
         MiniAppSsoApi.MapEndpoints(g);
         MiniAppSandboxApi.MapEndpoints(g);
         g.MapGet("", async (MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.List(Owner(h), int.TryParse(h.Request.Query["page"], out var page) ? page : 1, ct)));
@@ -74,9 +80,11 @@ public sealed class MiniAppConflictFilter : IEndpointFilter
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         try { return await next(context); }
-        catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" or "40001" } || ex.InnerException?.GetType().Name == "SqliteException")
+        catch (DbUpdateConcurrencyException) { return Conflict(); }
+        catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" or "40001" or "40P01" } || ex.InnerException?.GetType().Name == "SqliteException")
         { return Conflict(); }
         catch (Npgsql.PostgresException ex) when (ex.SqlState == "40001" || ex.SqlState == "40P01") { return Conflict(); }
+        catch (InvalidOperationException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "40001" or "40P01" }) { return Conflict(); }
     }
     private static IResult Conflict() => Results.Json(new { error = new { code = "RETRY_REQUIRED", message = "Dữ liệu vừa thay đổi. Vui lòng thử lại với cùng yêu cầu." } }, statusCode: 409);
 }

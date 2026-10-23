@@ -40,10 +40,15 @@ internal sealed class MiniAppSandboxLaunchGrantConfiguration : IEntityTypeConfig
 {
     public void Configure(EntityTypeBuilder<MiniAppSandboxLaunchGrant> b)
     {
-        b.ToTable("MiniAppSandboxLaunchGrants",table=>table.HasCheckConstraint("CK_MiniAppSandboxLaunchGrants_Expiry","\"ExpiresAt\" > \"CreatedAt\""));
+        b.ToTable("MiniAppSandboxLaunchGrants",table=>{
+            table.HasCheckConstraint("CK_MiniAppSandboxLaunchGrants_Expiry","\"ExpiresAt\" > \"CreatedAt\"");
+            table.HasCheckConstraint("CK_SandboxGrants_ExecutorBinding","(\"ExecutorRunId\" IS NULL AND \"ExecutorRunVersion\" IS NULL) OR (\"ExecutorRunId\" IS NOT NULL AND \"ExecutorRunVersion\" IS NOT NULL)");
+        });
         b.HasKey(x=>x.Id); b.Property(x=>x.GrantHash).HasMaxLength(64).IsRequired();
         b.Property(x=>x.BrowserNonceHash).HasMaxLength(64).IsRequired(); b.Property(x=>x.Audience).HasMaxLength(512).IsRequired();
         b.Property(x=>x.Version).IsConcurrencyToken(); b.HasIndex(x=>x.GrantHash).IsUnique(); b.HasIndex(x=>x.ExpiresAt);
         b.HasOne<MiniAppSandboxSession>().WithMany().HasForeignKey(x=>x.SandboxSessionId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<MiniAppSandboxTestRun>().WithMany().HasForeignKey(x=>new{x.ExecutorRunId,x.SandboxSessionId})
+            .HasPrincipalKey(x=>new{x.Id,x.SandboxSessionId}).OnDelete(DeleteBehavior.Restrict);
     }
 }

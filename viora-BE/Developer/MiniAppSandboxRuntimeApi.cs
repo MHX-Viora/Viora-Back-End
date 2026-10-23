@@ -64,6 +64,18 @@ public static class MiniAppSandboxRuntimeApi
             return Results.Ok(new{sessionId=session.Id,appId=app.AppId,name=app.Name,logoUrl=app.LogoUrl,environment="Sandbox",websiteUrl=session.WebsiteUrl,
                 partnerOrigin=session.PartnerOrigin,ssoEnabled=app.SsoEnabled,expiresAt=DateTime.SpecifyKind(session.ExpiresAt,DateTimeKind.Utc),configurationFingerprint=session.ConfigurationFingerprint});
         });
+        group.MapPost("/external-links",async(HttpContext http,MiniAppSandboxGrantService grants,MiniAppSandboxNetwork network,AppDbContext db,CancellationToken ct)=>
+        {
+            if(http.Request.QueryString.HasValue)throw MiniAppInput.Invalid("Liên kết ngoài không nhận tham số truy vấn.");
+            var credential=UniqueCookie(http,RuntimeCookie);
+            var session=await grants.RequireRuntimeAsync(credential,ct);
+            var body=await MiniAppSandboxApi.ReadRequest<SandboxExternalLinkRequest>(http,ct,4096);
+            var callbacks=await db.MiniAppRedirectUris.AsNoTracking().Where(x=>x.MiniAppId==session.MiniAppId&&x.Environment==session.Environment).Select(x=>x.RedirectUri).ToArrayAsync(ct);
+            var url=await network.ValidateExternalAsync(body.Url,session.PartnerOrigin,ct,callbacks);
+            // DNS I/O cannot extend a revoked, expired or configuration-stale session.
+            await grants.RequireRuntimeAsync(credential,ct);
+            return Results.Ok(new{url,expiresAt=DateTime.SpecifyKind(session.ExpiresAt,DateTimeKind.Utc)});
+        });
         group.MapPost("/heartbeat",async(HttpContext http,MiniAppSandboxGrantService service,AppDbContext db,TimeProvider clock,CancellationToken ct)=>
         {
             var session=await service.RequireRuntimeAsync(UniqueCookie(http,RuntimeCookie),ct); var now=clock.GetUtcNow().UtcDateTime;
@@ -79,13 +91,11 @@ public static class MiniAppSandboxRuntimeApi
                 var request=await MiniAppSandboxApi.ReadRequest<SandboxDiagnosticBatch>(http,ct,32768);
                 return Results.Ok(await diagnostics.IngestAsync(session.Id,source,request,ct));
             });
-        group.MapPost("/close",async(HttpContext http,MiniAppSandboxGrantService grants,MiniAppSandboxSessionService sessions,AppDbContext db,CancellationToken ct)=>
+        group.MapPost("/close",async(HttpContext http,MiniAppSandboxGrantService grants,MiniAppSandboxRunCoordinator runs,CancellationToken ct)=>
         {
             try
             {
-                var session=await grants.RequireRuntimeAsync(UniqueCookie(http,RuntimeCookie),ct);
-                var appId=await db.MiniApps.Where(x=>x.Id==session.MiniAppId).Select(x=>x.AppId).SingleAsync(ct);
-                await sessions.RevokeAsync(MiniAppSandboxSessionService.Actor(session),appId,session.Id,ct);
+                await grants.CloseRuntimeAsync(UniqueCookie(http,RuntimeCookie),runs,ct);
             }
             catch(DeveloperAuthException error) when(error.Status is 403 or 404 or 410){ }
             http.Response.Cookies.Delete(RuntimeCookie,Cookie(DateTime.UtcNow));

@@ -104,7 +104,8 @@ public sealed class MiniAppSandboxSessionService(AppDbContext db, MiniAppSandbox
     private async Task<(MiniAppOAuthClient Client,string Website,string Origin,string Fingerprint)> Binding(MiniApp app,CancellationToken ct)
     {
         var client=await db.MiniAppOAuthClients.AsNoTracking().SingleOrDefaultAsync(x=>x.MiniAppId==app.Id && x.Environment==MiniAppOAuthEnvironment.Sandbox && x.RevokedAt==null,ct);
-        var proof=await db.MiniAppDomainVerifications.AsNoTracking().SingleOrDefaultAsync(x=>x.MiniAppId==app.Id && x.RevokedAt==null,ct);
+        var hostname=MiniAppDomainLifecycle.Host(app.WebsiteUrl);
+        var proof=await db.MiniAppDomainVerifications.AsNoTracking().SingleOrDefaultAsync(x=>x.MiniAppId==app.Id && x.Hostname==hostname && x.RevokedAt==null,ct);
         var website=PublicWebAddress.Normalize(app.WebsiteUrl); var uri=new Uri(website); var origin=uri.GetLeftPart(UriPartial.Authority);
         if(client is not {SandboxEnabled:true} || client.ClientType is not ("Public" or "Confidential") ||
             proof is not {Status:MiniAppDomainStatus.Verified} || proof.ExpiresAt<=Now || proof.Hostname!=uri.IdnHost.ToLowerInvariant() ||

@@ -12,7 +12,7 @@ using Viora.Infrastructure.Sso;
 namespace viora_BE.Sso;
 
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class SsoAuthorizationController(SsoClientReader clients, SsoConsentService consents, SsoConsentInteraction interaction, IAntiforgery antiforgery) : Controller
+public sealed class SsoAuthorizationController(SsoClientReader clients, SsoConsentService consents, SsoConsentInteraction interaction, IAntiforgery antiforgery, SandboxProtocolObserver sandbox) : Controller
 {
     [HttpGet("~/connect/authorize")]
     public async Task<IActionResult> Authorize(CancellationToken ct)
@@ -32,11 +32,12 @@ public sealed class SsoAuthorizationController(SsoClientReader clients, SsoConse
         var accountId = Guid.Parse(user.Principal!.FindFirst("sub")!.Value);
         var grant = await consents.FindAsync(accountId, request.ClientId!, request.GetScopes(), ct);
         if (grant != null && !request.GetPromptValues().Contains(OpenIddictConstants.PromptValues.Consent))
-            return SignIn(await consents.PrincipalAsync(accountId, request.ClientId!, request.GetScopes(), ct), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            return SignIn(await SandboxPrincipal(accountId,request,ct), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         if (request.GetPromptValues().Contains(OpenIddictConstants.PromptValues.None)) return Error(OpenIddictConstants.Errors.ConsentRequired);
         Response.Headers["Referrer-Policy"] = "no-referrer";
         var csrf = antiforgery.GetAndStoreTokens(HttpContext);
         var prompt = new { miniApp = client.MiniApp.Name, developer = client.MiniApp.Developer.FullName, logoUrl = client.MiniApp.LogoUrl,
+            environment=client.Environment.ToString(),
             scopes = request.GetScopes(), parameters = request.GetParameters()
                 .Where(x => x.Key is not ("decision" or "consent_ticket" or "__RequestVerificationToken"))
                 .ToDictionary(x => x.Key, x => x.Value.ToString()),
@@ -51,7 +52,7 @@ public sealed class SsoAuthorizationController(SsoClientReader clients, SsoConse
         Response.Headers["X-Frame-Options"] = "DENY";
         var logo = Uri.TryCreate(prompt.logoUrl, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.UserInfo.Length == 0 ? uri.AbsoluteUri : null;
         return View("~/Views/Sso/Consent.cshtml", new SsoConsentPage(prompt.miniApp, prompt.developer, logo,
-            prompt.scopes.ToArray(), prompt.parameters, prompt.csrfToken!, prompt.consentTicket, nonce));
+            prompt.scopes.ToArray(), prompt.parameters, prompt.csrfToken!, prompt.consentTicket, nonce,prompt.environment));
     }
 
     [HttpPost("~/connect/authorize")]
@@ -68,12 +69,16 @@ public sealed class SsoAuthorizationController(SsoClientReader clients, SsoConse
         try
         {
             await consents.GrantAsync(accountId, request.ClientId!, request.GetScopes(), ct);
-            return SignIn(await consents.PrincipalAsync(accountId, request.ClientId!, request.GetScopes(), ct), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            return SignIn(await SandboxPrincipal(accountId,request,ct), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
         catch (DeveloperAuthException) { return Error(OpenIddictConstants.Errors.AccessDenied); }
         catch (DbUpdateException) { return ConsentConflict(); }
         catch (Npgsql.PostgresException e) when (e.SqlState is "40001" or "40P01") { return ConsentConflict(); }
     }
+
+    private async Task<System.Security.Claims.ClaimsPrincipal> SandboxPrincipal(Guid accountId,OpenIddictRequest request,CancellationToken ct)=>
+        await sandbox.BindAsync(await consents.PrincipalAsync(accountId,request.ClientId!,request.GetScopes(),ct),
+            (string?)request.GetParameter("sandbox_run"),request.ClientId!,ct);
 
     private ConflictObjectResult ConsentConflict() => Conflict(new { error = new { code = "SSO_CONSENT_CONFLICT", message = "Quyền vừa thay đổi. Vui lòng tải lại và thử lại." } });
 

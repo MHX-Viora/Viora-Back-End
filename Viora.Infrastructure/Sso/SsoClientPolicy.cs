@@ -10,12 +10,13 @@ public static class SsoClientPolicy
     public static string Resource(MiniAppOAuthEnvironment environment) => "ankt-miniapp-sso:" + environment;
 
     public static void EnsureEligible(MiniAppOAuthClient client, MiniApp app, MiniAppDomainVerification? proof,
-        IEnumerable<string> scopes, string environment, DateTime now)
+        IEnumerable<string> scopes, string environment, DateTime now, MiniAppVersionSnapshot? published = null)
     {
         if (client.Environment.ToString() != environment || client.RevokedAt != null || app.DeletedAt != null ||
             !app.SsoEnabled || app.Developer.Status != DeveloperStatus.Active ||
-            app.Status is MiniAppStatus.Suspended or MiniAppStatus.Rejected ||
-            (client.Environment == MiniAppOAuthEnvironment.Production ? app.Status != MiniAppStatus.Published : !client.SandboxEnabled))
+            (client.Environment == MiniAppOAuthEnvironment.Production
+                ? published is not { SsoEnabled: true, Production: { } intent } || intent.ClientIdentity != client.Id || intent.ClientId != client.ClientKey
+                : !client.SandboxEnabled || app.Status is MiniAppStatus.Suspended or MiniAppStatus.Rejected))
             throw new DeveloperAuthException(403, "SSO_CLIENT_UNAVAILABLE", "Ứng dụng chưa được phép đăng nhập ANKT trong môi trường này.");
         if (proof is not { Status: MiniAppDomainStatus.Verified, RevokedAt: null } || proof.MiniAppId != app.Id ||
             proof.ExpiresAt <= now || proof.Hostname != MiniAppDomainLifecycle.Host(app.WebsiteUrl))

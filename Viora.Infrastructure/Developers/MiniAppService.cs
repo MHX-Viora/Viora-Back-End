@@ -13,7 +13,7 @@ using Viora.Infrastructure.Persistence;
 namespace Viora.Infrastructure.Developers;
 
 public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector protector, IOptions<MiniAppOptions> options, IHostEnvironment environment,
-    Viora.Infrastructure.Sso.MiniAppOidcRegistry? oidcRegistry = null)
+    Viora.Infrastructure.Sso.MiniAppOidcRegistry? oidcRegistry = null, MiniAppVersionService? versions = null)
 {
     private static string RandomId(string prefix) => prefix + WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
     private static DeveloperAuthException Missing() => new(404, "MINI_APP_NOT_FOUND", "Không tìm thấy Mini App.");
@@ -72,7 +72,9 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         var upload = await db.MiniAppLogoUploads.SingleOrDefaultAsync(x => x.Id == uploadId && x.DeveloperAccountId == owner && x.MiniAppId == null && x.ExpiresAt > DateTime.UtcNow && x.Url != null, ct);
         if (upload is null) throw MiniAppInput.Invalid("Logo đã hết hạn hoặc không thuộc tài khoản của bạn. Hãy tải lại.");
         // Conditional claim prevents two apps from attaching the same temporary upload.
-        var claimed = await db.MiniAppLogoUploads.Where(x => x.Id == upload.Id && x.MiniAppId == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiresAt, DateTime.UtcNow.AddMinutes(30)), ct);
+        var claimedAt = DateTime.UtcNow;
+        var claimed = await db.MiniAppLogoUploads.Where(x => x.Id == upload.Id && x.MiniAppId == null && x.ExpiresAt > claimedAt)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiresAt, claimedAt.AddMinutes(30)), ct);
         if (claimed != 1) throw new DeveloperAuthException(409, "LOGO_CONFLICT", "Logo vừa được sử dụng. Hãy tải lại.");
         upload.MiniAppId = app.Id; app.LogoUrl = upload.Url;
         // Previously attached logos become eligible for cleanup after replacement.
@@ -100,6 +102,7 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
                 ? MiniAppStatus.Draft : MiniAppStatus.ConfigurationIncomplete;
         Touch(app); Audit(app, owner, "mini_app.updated");
         await db.SaveChangesAsync(ct);
+        if (versions != null) await versions.SyncWorkingAsync(app, ct);
         if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
         await tx.CommitAsync(ct); return Map(app);
     }
@@ -158,6 +161,7 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox).ExecuteDeleteAsync(ct);
         db.MiniAppRedirectUris.AddRange(urls.Select(url => new MiniAppRedirectUri { MiniAppId = app.Id, RedirectUri = url }));
         Audit(app, owner, "callbacks.updated"); await db.SaveChangesAsync(ct);
+        if (versions != null) await versions.SyncWorkingAsync(app, ct);
         if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
         await tx.CommitAsync(ct); return urls;
     }

@@ -27,6 +27,8 @@ public sealed class MiniAppSandboxSession : CreatedEntity
 public sealed class MiniAppSandboxLaunchGrant : CreatedEntity
 {
     public Guid SandboxSessionId { get; set; }
+    public Guid? ExecutorRunId { get; set; }
+    public Guid? ExecutorRunVersion { get; set; }
     public string GrantHash { get; set; } = "";
     public string BrowserNonceHash { get; set; } = "";
     public string Audience { get; set; } = "";

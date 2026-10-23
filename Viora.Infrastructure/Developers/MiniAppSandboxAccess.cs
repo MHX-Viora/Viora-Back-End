@@ -24,7 +24,8 @@ public sealed class MiniAppSandboxAccess(AppDbContext db, TimeProvider clock, Mi
             _ => false
         };
         if (!active) throw new DeveloperAuthException(403,"SANDBOX_ACTOR_UNAVAILABLE","Phiên kiểm thử không còn quyền truy cập.");
-        if (!allowUnavailableApp && (app.Developer.Status!=DeveloperStatus.Active || app.Status is MiniAppStatus.Suspended or MiniAppStatus.Rejected))
+        if (!allowUnavailableApp && (app.Developer.Status!=DeveloperStatus.Active || app.Developer.LockedUntil > now || app.Status is MiniAppStatus.Suspended or MiniAppStatus.Rejected ||
+            await db.MiniAppOperationalStates.AsNoTracking().AnyAsync(x => x.MiniAppId == app.Id && x.Status == MiniAppOperationalStatus.Suspended, ct)))
             throw new DeveloperAuthException(403,"SANDBOX_APP_UNAVAILABLE","Mini App chưa được phép chạy Sandbox.");
         return app;
     }

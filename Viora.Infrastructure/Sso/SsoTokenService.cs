@@ -32,7 +32,7 @@ public sealed class SsoTokenService(AppDbContext db, SsoClientReader clients, Ss
         principal.SetClaim(OpenIddictConstants.Claims.EmailVerified, fresh.HasClaim(OpenIddictConstants.Claims.EmailVerified, "true") ? true : (bool?)null);
         principal.SetDestinations(claim => claim.Type is OpenIddictConstants.Claims.Subject or OpenIddictConstants.Claims.Name or
             OpenIddictConstants.Claims.Picture or OpenIddictConstants.Claims.Email or OpenIddictConstants.Claims.EmailVerified
-            ? [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken] : Array.Empty<string>());
+            ? new[] { OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken } : Array.Empty<string>());
         return principal;
     }
     private static DeveloperAuthException Denied() => new(403, "SSO_GRANT_UNAVAILABLE", "Quyền truy cập không còn hiệu lực.");

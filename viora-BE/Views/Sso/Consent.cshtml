@@ -25,6 +25,8 @@
 <body>
 <main aria-labelledby="consent-title">
     <p class="brand">ANKT</p>
+    <p class="muted" data-environment="@Model.Environment">Môi trường: <strong>@Model.Environment</strong></p>
+    @if (Model.Environment == "Sandbox") { <p role="note">Ứng dụng đang trong môi trường thử nghiệm Sandbox.</p> }
     @if (Model.LogoUrl != null) { <img class="logo" src="@Model.LogoUrl" alt="" referrerpolicy="no-referrer" /> }
     <h1 id="consent-title">Đăng nhập vào @Model.MiniApp</h1>
     <p class="muted">Nhà phát triển: @Model.Developer</p>

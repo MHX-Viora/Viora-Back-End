@@ -7,10 +7,10 @@ const diagnostic=value=>record(value)&&['category','code'].every(key=>Object.has
   Object.keys(value).every(key=>['category','code','count'].includes(key))&&typeof value.category==='string'&&Object.hasOwn(observations,value.category)&&
   observations[value.category].includes(value.code)&&(!Object.hasOwn(value,'count')||Number.isInteger(value.count)&&value.count>=0&&value.count<=1000000);
 
-export function createSandboxBridge({origin,source,appId,validate,send,close,report,onConnected=()=>{},onClosed=()=>{}}) {
-  let disposed=false,closing=false,generation=0,inFlight=0;const ready=new Set(),seen=new Set();let timestamps=[];
+export function createSandboxBridge({origin,source,appId,validate,send,close,report,openExternal,onConnected=()=>{},onClosed=()=>{}}) {
+  let disposed=false,closing=false,generation=0,inFlight=0;const ready=new Set(),seen=new Set();let timestamps=[],actions=new AbortController();
   const reply=(data,ok,value)=>send({channel,version:data.version,type:'response',id:data.id,ok,...(ok?{result:value}:{error:{code:value}})});
-  function reset(){generation++;ready.clear();}
+  function reset(){generation++;ready.clear();actions.abort();actions=new AbortController();}
   function dispose(){disposed=true;reset();seen.clear();timestamps=[];}
   async function handle(event){
     const data=event.data;
@@ -23,9 +23,11 @@ export function createSandboxBridge({origin,source,appId,validate,send,close,rep
     const now=Date.now();timestamps=timestamps.filter(time=>time>now-60000);
     if(inFlight>=8||seen.size>=1024||timestamps.length>=64){reply(data,false,'BRIDGE_BUSY');return;}
     seen.add(data.id);timestamps.push(now);
-    const permissions=data.version===1?methods.slice(0,2):report?[...methods,'diagnostics.report']:methods;
+    const permissions=data.version===1?methods.slice(0,2):[...methods,...(report?['diagnostics.report']:[]),...(openExternal?['platform.openExternalUrl']:[])];
     if(data.method!=='bridge.handshake'&&!permissions.includes(data.method)){reply(data,false,'UNSUPPORTED_METHOD');return;}
-    if(data.method==='diagnostics.report'?!diagnostic(data.params):Object.hasOwn(data,'params')){reply(data,false,'BRIDGE_PROTOCOL');return;}
+    const validParams=data.method==='diagnostics.report'?diagnostic(data.params):data.method==='platform.openExternalUrl'?
+      record(data.params)&&Object.keys(data.params).join(',')==='url'&&typeof data.params.url==='string'&&data.params.url.length<=2048:!Object.hasOwn(data,'params');
+    if(!validParams){reply(data,false,'BRIDGE_PROTOCOL');return;}
     if(data.method!=='bridge.handshake'&&!ready.has(data.version)){reply(data,false,'BRIDGE_FORBIDDEN');return;}
     const current=generation;inFlight++;
     try{
@@ -38,12 +40,14 @@ export function createSandboxBridge({origin,source,appId,validate,send,close,rep
         case 'platform.getEnvironment':reply(data,true,'Sandbox');break;
         case 'platform.isInsideAnkt':reply(data,true,true);break;
         case 'diagnostics.report':await report(data.params);if(disposed||generation!==current)return;reply(data,true,null);break;
-        case 'platform.close':closing=true;await close();if(disposed||generation!==current)return;reply(data,true,null);dispose();onClosed();break;
+        case 'platform.openExternalUrl':await openExternal(data.params.url,actions.signal);if(disposed||generation!==current||closing)return;reply(data,true,null);break;
+        case 'platform.close':closing=true;actions.abort();await close();if(disposed||generation!==current)return;reply(data,true,null);dispose();onClosed();break;
       }
     }catch(error){
       if(!disposed&&generation===current){
-        if(data.method==='platform.close')closing=false;
-        if(data.method==='diagnostics.report'&&error?.code==='BRIDGE_BUSY')reply(data,false,'BRIDGE_BUSY');
+        if(data.method==='platform.close'){closing=false;actions=new AbortController();}
+        if(data.method==='platform.openExternalUrl')reply(data,false,error?.code==='BRIDGE_BUSY'?'BRIDGE_BUSY':'BRIDGE_FORBIDDEN');
+        else if(data.method==='diagnostics.report'&&error?.code==='BRIDGE_BUSY')reply(data,false,'BRIDGE_BUSY');
         else{ready.delete(data.version);reply(data,false,'BRIDGE_FORBIDDEN');}
       }
     }finally{inFlight--;}

@@ -55,7 +55,7 @@ public sealed class MiniAppSandboxRunCoordinator(AppDbContext db,MiniAppSandboxS
         return new(Dto(run),results.Select(x=>new SandboxCheckResultDto(Key(x.TestKey),x.Status.ToString(),MiniAppSandboxDiagnosticCatalog.Code(x.MessageCode),MiniAppSandboxDiagnosticCatalog.Source(x.EvidenceSource),
             x.EvidenceAt is {} time?DateTime.SpecifyKind(time,DateTimeKind.Utc):null,x.DurationMs)).ToArray());
     }
-    public async Task<SandboxRunPage> ListAsync(SandboxActor actor,string appId,Guid sessionId,string? cursor,int limit,CancellationToken ct)
+    public async Task<SandboxRunPage> ListAsync(SandboxActor actor,string appId,Guid sessionId,string? cursor,int limit,CancellationToken ct,bool newestFirst=false)
     {
         await sessions.GetAsync(actor,appId,sessionId,ct);if(limit is <1 or >100)throw MiniAppInput.Invalid("Giới hạn trang từ 1 đến 100.");
         var query=db.MiniAppSandboxTestRuns.AsNoTracking().Where(x=>x.SandboxSessionId==sessionId);
@@ -63,9 +63,11 @@ public sealed class MiniAppSandboxRunCoordinator(AppDbContext db,MiniAppSandboxS
         {
             if(!Guid.TryParseExact(cursor,"N",out var id))throw MiniAppInput.Invalid("Cursor lượt kiểm tra không hợp lệ.");
             var anchor=await query.SingleOrDefaultAsync(x=>x.Id==id,ct)??throw MiniAppInput.Invalid("Cursor lượt kiểm tra không còn hợp lệ.");var anchorId=anchor.Id.ToString();
-            query=query.Where(x=>x.CreatedAt>anchor.CreatedAt||x.CreatedAt==anchor.CreatedAt&&string.Compare(x.Id.ToString().ToLower(),anchorId)>0);
+            query=newestFirst?query.Where(x=>x.CreatedAt<anchor.CreatedAt||x.CreatedAt==anchor.CreatedAt&&string.Compare(x.Id.ToString().ToLower(),anchorId)<0):
+                query.Where(x=>x.CreatedAt>anchor.CreatedAt||x.CreatedAt==anchor.CreatedAt&&string.Compare(x.Id.ToString().ToLower(),anchorId)>0);
         }
-        var rows=await query.OrderBy(x=>x.CreatedAt).ThenBy(x=>x.Id.ToString().ToLower()).Take(limit+1).ToArrayAsync(ct);
+        var ordered=newestFirst?query.OrderByDescending(x=>x.CreatedAt).ThenByDescending(x=>x.Id.ToString().ToLower()):query.OrderBy(x=>x.CreatedAt).ThenBy(x=>x.Id.ToString().ToLower());
+        var rows=await ordered.Take(limit+1).ToArrayAsync(ct);
         return new(rows.Take(limit).Select(Dto).ToArray(),rows.Length>limit?rows[limit-1].Id.ToString("N"):null);
     }
     public async Task CancelAsync(SandboxActor actor,string appId,Guid id,CancellationToken ct)

@@ -30,7 +30,13 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Developer/SandboxHost/bridge.mjs" LogicalName="Ankt.SandboxHost.Bridge" />
+    <EmbeddedResource Include="Developer/SandboxHost/external-link.mjs" LogicalName="Ankt.SandboxHost.ExternalLink" />
     <EmbeddedResource Include="Developer/SandboxHost/host.mjs" LogicalName="Ankt.SandboxHost.Script" />
+    <EmbeddedResource Include="Production/Host/host.mjs" LogicalName="Ankt.ProductionHost.Script" />
+    <EmbeddedResource Include="Production/Host/host.css" LogicalName="Ankt.ProductionHost.Style" />
+    <EmbeddedResource Include="Production/Host/bridge.mjs" LogicalName="Ankt.ProductionHost.Bridge" />
+    <EmbeddedResource Include="Production/Host/navigation.mjs" LogicalName="Ankt.ProductionHost.Navigation" />
+    <EmbeddedResource Include="Production/Host/native.mjs" LogicalName="Ankt.ProductionHost.Native" />
   </ItemGroup>
 
 </Project>

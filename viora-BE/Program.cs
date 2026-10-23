@@ -158,6 +158,8 @@ builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration);
 viora_BE.Developer.DeveloperApi.AddDeveloperAccounts(builder.Services, builder.Configuration);
 viora_BE.Developer.MiniAppApi.AddDeveloperMiniApps(builder.Services, builder.Configuration);
+viora_BE.Production.MiniAppProductionRegistration.AddMiniAppProductionServices(builder.Services, builder.Configuration);
+viora_BE.Production.MiniAppProductionRegistration.AddMiniAppProductionWorker(builder.Services, builder.Configuration);
 viora_BE.Sso.SsoRegistration.AddAnktSso(builder.Services, builder.Configuration);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -216,6 +218,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 viora_BE.Developer.MiniAppSandboxRuntimeApi.UseBoundary(app);
+viora_BE.Production.MiniAppProductionHostBoundary.UseMiniAppProductionHostBoundary(app);
 app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
 
 app.UseExceptionHandler(errorApp =>
@@ -280,6 +283,7 @@ viora_BE.Developer.DeveloperApi.UseDeveloperAccountBoundary(app);
 app.UseRateLimiter();
 app.UseAuthorization();
 
+viora_BE.Operations.PlatformReadiness.MapPlatformReadiness(app);
 app.MapGet("/health", () => Results.Ok(new
 {
 	status = "healthy",
@@ -304,6 +308,11 @@ app.MapGet("/group/{inviteCode}", (string inviteCode) =>
 });
 
 app.MapControllers();
+viora_BE.Production.MiniAppPublicApi.MapMiniAppPublicApi(app);
+viora_BE.Production.MiniAppLaunchApi.MapMiniAppLaunchApi(app);
+viora_BE.Production.MiniAppProductionHostApi.MapMiniAppProductionHostApi(app);
+viora_BE.Production.MiniAppProductionRuntimeApi.MapMiniAppProductionRuntimeApi(app);
+viora_BE.Production.MiniAppProductionHostDocuments.MapMiniAppProductionHostDocuments(app);
 viora_BE.Developer.DeveloperEndpoints.MapDeveloperEndpoints(app);
 viora_BE.Developer.DeveloperApi.MapDeveloperAccountEndpoints(app);
 viora_BE.Developer.MiniAppApi.MapDeveloperMiniApps(app);

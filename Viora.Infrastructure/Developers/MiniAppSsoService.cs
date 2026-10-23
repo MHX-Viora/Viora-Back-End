@@ -10,7 +10,7 @@ using Viora.Infrastructure.Sso;
 namespace Viora.Infrastructure.Developers;
 
 public sealed class MiniAppSsoService(AppDbContext db, MiniAppSecretProtector protector, TimeProvider clock,
-    MiniAppOidcRegistry? registry = null, IOpenIddictApplicationManager? applications = null)
+    MiniAppOidcRegistry? registry = null, IOpenIddictApplicationManager? applications = null, MiniAppVersionService? versions = null)
 {
     private async Task<MiniApp> Own(Guid owner,string appId,CancellationToken ct) => await db.MiniApps
         .SingleOrDefaultAsync(x=>x.AppId==appId && x.DeveloperAccountId==owner && x.DeletedAt==null,ct)
@@ -66,6 +66,8 @@ public sealed class MiniAppSsoService(AppDbContext db, MiniAppSecretProtector pr
         var redirects=request.RedirectUris.Select(x=>new Uri(MiniAppInput.Url(x,false,true),UriKind.Absolute).AbsoluteUri).Distinct(StringComparer.Ordinal).ToArray();
         await using var transaction=await db.Database.BeginTransactionAsync(ct);
         var app=await Own(owner,appId,ct);
+        if (env == MiniAppOAuthEnvironment.Production)
+            throw new DeveloperAuthException(409, "PRODUCTION_DRAFT_REQUIRED", "Chỉnh sửa cấu hình Production qua phiên bản nháp trước khi xét duyệt.");
         var client=await db.MiniAppOAuthClients.SingleOrDefaultAsync(x=>x.MiniAppId==app.Id && x.Environment==env,ct);
         if(app.Version!=request.AppVersion || client?.Version!=request.ClientVersion) throw Conflict();
         if(client?.RevokedAt!=null) throw new DeveloperAuthException(409,"SSO_CLIENT_REVOKED","Client đã bị thu hồi.");
@@ -90,6 +92,7 @@ public sealed class MiniAppSsoService(AppDbContext db, MiniAppSecretProtector pr
         db.MiniAppRedirectUris.AddRange(redirects.Select(uri=>new MiniAppRedirectUri{MiniAppId=app.Id,Environment=env,RedirectUri=uri}));
         db.MiniAppAuditLogs.Add(new(){MiniAppId=app.Id,ActorDeveloperId=owner,Action="sso.configuration.updated"});
         await db.SaveChangesAsync(ct);
+        if (versions != null) await versions.SyncWorkingAsync(app, ct);
         if(registry!=null) await registry.SynchronizeAsync(app.Id,ct);
         await transaction.CommitAsync(ct);
         return await Get(owner,appId,ct);

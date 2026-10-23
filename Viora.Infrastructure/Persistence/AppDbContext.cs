@@ -5,6 +5,13 @@ namespace Viora.Infrastructure.Persistence;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<Viora.Domain.Developers.MiniAppVersion> MiniAppVersions => Set<Viora.Domain.Developers.MiniAppVersion>();
+    public DbSet<Viora.Domain.Developers.MiniAppReviewRequest> MiniAppReviewRequests => Set<Viora.Domain.Developers.MiniAppReviewRequest>();
+    public DbSet<Viora.Domain.Developers.MiniAppReviewAction> MiniAppReviewActions => Set<Viora.Domain.Developers.MiniAppReviewAction>();
+    public DbSet<Viora.Domain.Developers.MiniAppPublication> MiniAppPublications => Set<Viora.Domain.Developers.MiniAppPublication>();
+    public DbSet<Viora.Domain.Developers.MiniAppOperationalState> MiniAppOperationalStates => Set<Viora.Domain.Developers.MiniAppOperationalState>();
+    public DbSet<Viora.Domain.Developers.MiniAppReviewNotification> MiniAppReviewNotifications => Set<Viora.Domain.Developers.MiniAppReviewNotification>();
+    public DbSet<Viora.Domain.Developers.MiniAppReviewNotificationDelivery> MiniAppReviewNotificationDeliveries => Set<Viora.Domain.Developers.MiniAppReviewNotificationDelivery>();
     public DbSet<Viora.Domain.Developers.MiniAppSandboxSession> MiniAppSandboxSessions => Set<Viora.Domain.Developers.MiniAppSandboxSession>();
     public DbSet<Viora.Domain.Developers.MiniAppSandboxTestRun> MiniAppSandboxTestRuns => Set<Viora.Domain.Developers.MiniAppSandboxTestRun>();
     public DbSet<Viora.Domain.Developers.MiniAppSandboxTestResult> MiniAppSandboxTestResults => Set<Viora.Domain.Developers.MiniAppSandboxTestResult>();

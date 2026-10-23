@@ -11,7 +11,7 @@ namespace viora_BE.Sso;
 
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [EnableCors(SsoCorsPolicyProvider.PolicyName)]
-public sealed class SsoTokenController(SsoTokenService tokens) : ControllerBase
+public sealed class SsoTokenController(SsoTokenService tokens, SandboxProtocolObserver sandbox) : ControllerBase
 {
     [HttpPost("~/connect/token")]
     public async Task<IActionResult> Exchange(CancellationToken ct)
@@ -45,6 +45,7 @@ public sealed class SsoTokenController(SsoTokenService tokens) : ControllerBase
             foreach (var claim in new[] { OpenIddictConstants.Claims.Name, OpenIddictConstants.Claims.Picture, OpenIddictConstants.Claims.Email })
                 if (principal.GetClaim(claim) is { } value) result[claim] = value;
             if (principal.HasClaim(OpenIddictConstants.Claims.EmailVerified, "true")) result[OpenIddictConstants.Claims.EmailVerified] = true;
+            await sandbox.UserInfoAsync(principal,ct);
             return Ok(result);
         }
         catch (DeveloperAuthException) { return Error(OpenIddictConstants.Errors.InvalidToken); }

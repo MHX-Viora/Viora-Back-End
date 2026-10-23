@@ -10,7 +10,7 @@ namespace Viora.Infrastructure.Developers;
 
 public sealed class MiniAppSandboxConfigurationService(AppDbContext db,MiniAppSandboxAccess access,
     IPublicWebFetcher fetcher,IPublicJsonFetcher jsonFetcher,MiniAppSandboxOptions options,TimeProvider clock,
-    MiniAppSsoService? sso=null)
+    MiniAppSsoService? sso=null,MiniAppSandboxEvidenceReader? evidence=null)
 {
     private DateTime Now=>clock.GetUtcNow().UtcDateTime;
     private sealed record Snapshot(MiniApp App,MiniAppOAuthClient? Client,MiniAppDomainVerification? Proof,string[] Redirects,string Fingerprint);
@@ -23,7 +23,8 @@ public sealed class MiniAppSandboxConfigurationService(AppDbContext db,MiniAppSa
         var app=await db.MiniApps.AsNoTracking().Include(x=>x.Developer).SingleOrDefaultAsync(x=>x.Id==appId&&x.DeletedAt==null,ct)
             ?? throw MiniAppSandboxAccess.NotFound();
         var client=await db.MiniAppOAuthClients.AsNoTracking().SingleOrDefaultAsync(x=>x.MiniAppId==appId&&x.Environment==MiniAppOAuthEnvironment.Sandbox&&x.RevokedAt==null,ct);
-        var proof=await db.MiniAppDomainVerifications.AsNoTracking().SingleOrDefaultAsync(x=>x.MiniAppId==appId&&x.RevokedAt==null,ct);
+        var hostname=MiniAppDomainLifecycle.Host(app.WebsiteUrl);
+        var proof=await db.MiniAppDomainVerifications.AsNoTracking().SingleOrDefaultAsync(x=>x.MiniAppId==appId&&x.Hostname==hostname&&x.RevokedAt==null,ct);
         var redirects=await db.MiniAppRedirectUris.AsNoTracking().Where(x=>x.MiniAppId==appId&&x.Environment==MiniAppOAuthEnvironment.Sandbox)
             .OrderBy(x=>x.RedirectUri).Select(x=>x.RedirectUri).ToArrayAsync(ct);
         var website=app.WebsiteUrl??"";try{website=PublicWebAddress.Normalize(website);}catch(DeveloperAuthException){}
@@ -59,11 +60,25 @@ public sealed class MiniAppSandboxConfigurationService(AppDbContext db,MiniAppSa
             checks[checks.FindIndex(x=>x.Key=="ssoClient")]=new("ssoClient",true,result.Status.ToString(),
                 MiniAppSandboxDiagnosticCatalog.Code(result.MessageCode),MiniAppSandboxDiagnosticCatalog.Source(result.EvidenceSource),result.EvidenceAt);
         }
+        Guid? pinnedRun=null;
+        if(evidence!=null){
+            pinnedRun=await evidence.LatestRunIdAsync(app.Id,snapshot.Fingerprint,ct);
+            foreach(var key in Enum.GetValues<SandboxCheckKey>().Where(MiniAppSandboxEvidenceReader.Handles)){
+                if(!Applicable(snapshot,key))continue;
+                var observed=await evidence.LatestAsync(app.Id,snapshot.Fingerprint,key,ct,pinnedRun);
+                checks[checks.FindIndex(x=>x.Key==Wire(key))]=new(Wire(key),true,observed.Status.ToString(),MiniAppSandboxDiagnosticCatalog.Code(observed.MessageCode),MiniAppSandboxDiagnosticCatalog.Source(observed.EvidenceSource),observed.EvidenceAt);
+            }
+            if(await evidence.LatestRunIdAsync(app.Id,snapshot.Fingerprint,ct)!=pinnedRun)throw new DeveloperAuthException(409,"SANDBOX_EVIDENCE_CHANGED","Lượt kiểm tra vừa thay đổi. Hãy kiểm tra readiness lại.");
+        }
         bool Passed(SandboxReadinessCheck check)=>!check.Applicable||check.Status==nameof(SandboxCheckStatus.Passed);
         var configuration=checks.Where(x=>Enum.TryParse<SandboxCheckKey>(x.Key,true,out var key)&&key<=SandboxCheckKey.Discovery).All(Passed);
         var launch=checks.Where(x=>LaunchChecks.Any(key=>Wire(key)==x.Key)).All(Passed);
-        // Task 28 will aggregate independently verified, fresh runtime/protocol evidence.
-        return new("Sandbox",snapshot.Fingerprint,configuration,launch,false,Now,checks.ToArray(),
+        var review=checks.All(Passed);
+        if(review&&evidence!=null&&(pinnedRun==null||!await evidence.IsFreshAsync(pinnedRun.Value,snapshot.Fingerprint,ct)||
+            checks.Where(x=>x.Applicable&&Enum.TryParse<SandboxCheckKey>(x.Key,true,out var key)&&MiniAppSandboxEvidenceReader.Handles(key))
+                .Any(x=>x.EvidenceAt==null||x.EvidenceAt<Now.AddMinutes(-5))))
+            throw new DeveloperAuthException(409,"SANDBOX_EVIDENCE_CHANGED","Bằng chứng kiểm tra không còn hiệu lực.");
+        return new("Sandbox",snapshot.Fingerprint,configuration,launch,review,Now,checks.ToArray(),
             checks.Where(x=>!Passed(x)).Select(x=>x.Key).ToArray(),checks.Where(x=>x.Status=="Warning").Select(x=>x.Key).ToArray());
     }
     private static string Wire(SandboxCheckKey key)=>char.ToLowerInvariant(key.ToString()[0])+key.ToString()[1..];

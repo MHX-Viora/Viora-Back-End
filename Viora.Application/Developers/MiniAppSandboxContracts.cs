@@ -7,3 +7,4 @@ public sealed record SandboxSessionDto(Guid Id, string AppId, string Environment
     DateTime? RevokedAt, DateTime LastActivityAt, string ConfigurationFingerprint);
 public sealed record SandboxLaunchRequest(string BrowserNonce);
 public sealed record SandboxRedeemRequest(Guid SessionId,string Grant,string BrowserNonce);
+public sealed record SandboxExternalLinkRequest(string Url);

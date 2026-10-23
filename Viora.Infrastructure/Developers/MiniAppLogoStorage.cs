@@ -59,6 +59,42 @@ public sealed class MiniAppLogoStorage(IOptions<CloudinaryOptions> options)
 
 public sealed class MiniAppLogoCleanup(IServiceScopeFactory scopes, ILogger<MiniAppLogoCleanup> logger) : BackgroundService
 {
+    public static async Task<int> SweepAsync(AppDbContext db, Func<string, CancellationToken, Task> delete,
+        DateTime now, CancellationToken ct, Action? retry = null)
+    {
+        var candidates = await db.MiniAppLogoUploads.AsNoTracking()
+            .Where(x => x.MiniAppId == null && x.ExpiresAt < now && !db.MiniAppVersions.Any(v => v.LogoUploadId == x.Id))
+            .OrderBy(x => x.ExpiresAt).ThenBy(x => x.Id).Select(x => x.Id).Take(100).ToListAsync(ct);
+        var removed = 0;
+        foreach (var id in candidates)
+        {
+            MiniAppLogoUpload? tracked = null;
+            try
+            {
+                await using var tx = await db.Database.BeginTransactionAsync(ct);
+                // Serialize claims and version FK inserts before crossing the remote deletion boundary.
+                if (db.Database.IsNpgsql())
+                    await db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"MiniAppLogoUploads\" WHERE \"Id\" = {id} FOR UPDATE", ct);
+                var upload = await db.MiniAppLogoUploads.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id
+                    && x.MiniAppId == null && x.ExpiresAt < now && !db.MiniAppVersions.Any(v => v.LogoUploadId == x.Id), ct);
+                if (upload == null) continue;
+                await delete(upload.PublicId, ct);
+                tracked = db.MiniAppLogoUploads.Local.FirstOrDefault(x => x.Id == id) ?? upload;
+                db.MiniAppLogoUploads.Remove(tracked);
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                removed++;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch
+            {
+                if (tracked != null) db.Entry(tracked).State = EntityState.Detached;
+                retry?.Invoke();
+            }
+        }
+        return removed;
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(15));
@@ -69,19 +105,8 @@ public sealed class MiniAppLogoCleanup(IServiceScopeFactory scopes, ILogger<Mini
                 using var scope = scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 var storage = scope.ServiceProvider.GetRequiredService<MiniAppLogoStorage>();
-                var stale = await db.MiniAppLogoUploads.Where(x => x.MiniAppId == null && x.ExpiresAt < DateTime.UtcNow)
-                    .OrderBy(x => x.ExpiresAt).Take(100).ToListAsync(stoppingToken);
-                foreach (var upload in stale)
-                {
-                    try
-                    {
-                        // An expired ticket cannot be claimed by the API.
-                        await storage.Delete(upload.PublicId, stoppingToken);
-                        db.MiniAppLogoUploads.Remove(upload); await db.SaveChangesAsync(stoppingToken);
-                    }
-                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
-                    catch { logger.LogWarning("Mini App logo cleanup will retry an expired upload."); }
-                }
+                await SweepAsync(db, storage.Delete, DateTime.UtcNow, stoppingToken,
+                    () => logger.LogWarning("Mini App logo cleanup will retry an expired upload."));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch { logger.LogWarning("Mini App logo cleanup is temporarily unavailable."); }

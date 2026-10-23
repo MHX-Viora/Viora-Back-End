@@ -1,4 +1,5 @@
 import {createSandboxBridge} from './bridge.mjs';
+import {createExternalLinkOpener} from './external-link.mjs';
 
 const status=document.querySelector('#status'),preview=document.querySelector('#preview');
 const match=location.pathname.match(/^\/sandbox-host\/([0-9a-f-]{36})(\/run)?$/i);
@@ -9,6 +10,7 @@ const request=async(path,body)=>{
     signal:AbortSignal.any([controller.signal,AbortSignal.timeout(10000)])});
   if(!response.ok)throw Object.assign(new Error('Sandbox request unavailable'),{status:response.status});return response.status===204?null:response.json();
 };
+const openExternal=createExternalLinkOpener({request,isStopped:()=>stopped,document});
 function cleanup(){stopped=true;clearTimeout(timer);clearInterval(heartbeat);bridge?.dispose();frame?.remove();if(receive)window.removeEventListener('message',receive);}
 function fail(){if(stopped)return;cleanup();status.textContent='Không xác nhận được kết nối hoặc phiên đã kết thúc. Kiểm tra cấu hình/CSP và mở lại từ Developer Portal.';}
 window.addEventListener('pagehide',()=>{cleanup();controller.abort();},{once:true});
@@ -61,7 +63,7 @@ async function initialize(){
     validate:()=>request('/sandbox-runtime/context'),send:message=>frame?.contentWindow?.postMessage(message,context.partnerOrigin),
     report:async value=>{try{await request('/sandbox-runtime/sdk-observations',{events:[value]});}
       catch(error){if(error.status===429||error.status===409)throw Object.assign(new Error(),{code:'BRIDGE_BUSY'});throw error;}},
-    close:()=>request('/sandbox-runtime/close',{}),onClosed:()=>{setTimeout(()=>{cleanup();status.textContent='Đã đóng phiên Sandbox.';notify('host.closed');},50);},
+    openExternal,close:()=>request('/sandbox-runtime/close',{}),onClosed:()=>{setTimeout(()=>{cleanup();status.textContent='Đã đóng phiên Sandbox.';notify('host.closed');},50);},
     onConnected:()=>{clearTimeout(timer);status.textContent='Đã kết nối bridge · quan sát từ trình duyệt';notify('bridge.connected');
       if(!reportedConnection){reportedConnection=true;void request('/sandbox-runtime/host-observations',{events:[{category:'Bridge',code:'BRIDGE_READY'}]}).catch(()=>{});}}});
   receive=event=>{

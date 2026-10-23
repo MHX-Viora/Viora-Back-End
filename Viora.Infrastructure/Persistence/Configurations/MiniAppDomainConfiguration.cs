@@ -14,7 +14,7 @@ internal sealed class MiniAppDomainConfiguration : IEntityTypeConfiguration<Mini
         b.Property(x => x.VerificationMaterialEncrypted).HasMaxLength(512).IsRequired(); b.Property(x => x.SecretKeyVersion).HasMaxLength(40).IsRequired();
         b.Property(x => x.LastErrorCode).HasMaxLength(64); b.Property(x => x.Version).IsConcurrencyToken();
         b.HasIndex(x => x.Hostname); b.HasIndex(x => x.Status);
-        b.HasIndex(x => x.MiniAppId).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
+        b.HasIndex(x => new { x.MiniAppId, x.Hostname }).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
         b.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
     }
 }

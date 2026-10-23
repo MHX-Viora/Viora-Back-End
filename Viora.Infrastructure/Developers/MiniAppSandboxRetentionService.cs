@@ -43,7 +43,11 @@ public sealed class MiniAppSandboxRetentionService(AppDbContext db,TimeProvider 
         var resultIds=await db.MiniAppSandboxTestResults.Where(x=>oldRunIds.Contains(x.TestRunId)&&!db.MiniAppSandboxProtocolEvidence.Any(e=>e.TestRunId==x.TestRunId&&e.TestKey==x.TestKey))
             .OrderBy(x=>x.CreatedAt).ThenBy(x=>x.Id).Take(batchSize).Select(x=>x.Id).ToArrayAsync(ct);
         await db.MiniAppSandboxTestResults.Where(x=>resultIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
-        var purgedRuns=await oldRuns.Where(x=>oldRunIds.Contains(x.Id)&&!db.MiniAppSandboxTestResults.Any(r=>r.TestRunId==x.Id)&&!db.MiniAppSandboxDiagnostics.Any(d=>d.TestRunId==x.Id))
+        var executorGrantIds=await db.MiniAppSandboxLaunchGrants.Where(x=>x.ExecutorRunId!=null&&oldRunIds.Contains(x.ExecutorRunId.Value)&&x.ExpiresAt<=summariesBefore)
+            .OrderBy(x=>x.ExpiresAt).ThenBy(x=>x.Id).Take(batchSize).Select(x=>x.Id).ToArrayAsync(ct);
+        var purgedExecutorGrants=await db.MiniAppSandboxLaunchGrants.Where(x=>executorGrantIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
+        var purgedRuns=await oldRuns.Where(x=>oldRunIds.Contains(x.Id)&&!db.MiniAppSandboxTestResults.Any(r=>r.TestRunId==x.Id)&&!db.MiniAppSandboxDiagnostics.Any(d=>d.TestRunId==x.Id)&&
+                !db.MiniAppSandboxLaunchGrants.Any(g=>g.ExecutorRunId==x.Id))
             .ExecuteDeleteAsync(ct);
         var grantIds=await db.MiniAppSandboxLaunchGrants.Where(x=>x.ExpiresAt<=summariesBefore&&endedSessions.Any(session=>session.Id==x.SandboxSessionId))
             .OrderBy(x=>x.ExpiresAt).ThenBy(x=>x.Id).Take(batchSize).Select(x=>x.Id).ToArrayAsync(ct);
@@ -52,6 +56,6 @@ public sealed class MiniAppSandboxRetentionService(AppDbContext db,TimeProvider 
             !db.MiniAppSandboxTestRuns.Any(r=>r.SandboxSessionId==x.Id)&&!db.MiniAppSandboxDiagnostics.Any(d=>d.SandboxSessionId==x.Id)&&!db.MiniAppSandboxLaunchGrants.Any(g=>g.SandboxSessionId==x.Id))
             .OrderBy(x=>x.ExpiresAt).ThenBy(x=>x.Id).Take(batchSize).Select(x=>x.Id).ToArrayAsync(ct);
         var purgedSessions=await db.MiniAppSandboxSessions.Where(x=>sessionIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
-        await tx.CommitAsync(ct);return new(revoked,endedRuns,purgedDiagnostics,purgedRuns,purgedGrants,purgedSessions);
+        await tx.CommitAsync(ct);return new(revoked,endedRuns,purgedDiagnostics,purgedRuns,purgedGrants+purgedExecutorGrants,purgedSessions);
     }
 }
