@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 using Viora.Application.Posts;
 using Viora.Infrastructure.Realtime;
+using viora_BE.Hosting;
 
 // One-time offline provisioning must not load .env, connect to a database or start HTTP.
 if (args.Length > 0 && args[0] == "--provision-sso-certificates")
@@ -20,6 +21,7 @@ LoadDotEnv();
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddTrustedProxyHeaders(builder.Configuration);
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))
 {
@@ -224,6 +226,7 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+app.UseTrustedProxyHeaders();
 viora_BE.Developer.MiniAppSandboxRuntimeApi.UseBoundary(app);
 viora_BE.Production.MiniAppProductionHostBoundary.UseMiniAppProductionHostBoundary(app);
 app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
