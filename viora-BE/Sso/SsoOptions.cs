@@ -17,6 +17,9 @@ public sealed class SsoOptions
     public string? SigningCertificatePassword { get; set; }
     public string EncryptionCertificatePath { get; set; } = "";
     public string? EncryptionCertificatePassword { get; set; }
+    public SsoCertificateFormat CertificateFormat { get; set; } = SsoCertificateFormat.Pfx;
+    // Used only in Development, when neither explicit certificate path is set.
+    public string DevelopmentCertificateDirectory { get; set; } = "";
     public SsoCertificateReference[] PreviousSigningCertificates { get; set; } = [];
     public SsoCertificateReference[] PreviousEncryptionCertificates { get; set; } = [];
 }
@@ -25,7 +28,10 @@ public sealed class SsoCertificateReference
 {
     public string Path { get; set; } = "";
     public string? Password { get; set; }
+    public SsoCertificateFormat Format { get; set; } = SsoCertificateFormat.Pfx;
 }
+
+public enum SsoCertificateFormat { Pfx, Base64Pfx }
 
 internal sealed class SsoOptionsValidator : IValidateOptions<SsoOptions>
 {
@@ -46,7 +52,8 @@ internal sealed class SsoOptionsValidator : IValidateOptions<SsoOptions>
             errors.Add("Sso:AccessTokenSeconds must be between 1 and 300.");
         if (string.IsNullOrWhiteSpace(options.SigningCertificatePath) ||
             string.IsNullOrWhiteSpace(options.EncryptionCertificatePath))
-            errors.Add("SSO requires externally provisioned signing and encryption certificates.");
+            errors.Add(SsoCertificateFile.ConfigurationHelp);
+        if (!Enum.IsDefined(options.CertificateFormat)) errors.Add("SSO certificate format must be Pfx or Base64Pfx.");
         if (options.PreviousSigningCertificates.Length > 3 || options.PreviousEncryptionCertificates.Length > 3)
             errors.Add("SSO permits at most three previous certificates per purpose.");
         return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
@@ -66,16 +73,16 @@ internal sealed class SsoCredentials : IDisposable
     public SsoCredentials(IOptions<SsoOptions> configured)
     {
         var options = configured.Value;
-        Signing = Load(options.SigningCertificatePath, options.SigningCertificatePassword, X509KeyUsageFlags.DigitalSignature);
+        Signing = SsoCertificateFile.Load(options.SigningCertificatePath, options.SigningCertificatePassword, options.CertificateFormat, X509KeyUsageFlags.DigitalSignature);
         signingCertificates.Add(Signing);
         try
         {
-            Encryption = Load(options.EncryptionCertificatePath, options.EncryptionCertificatePassword, X509KeyUsageFlags.KeyEncipherment);
+            Encryption = SsoCertificateFile.Load(options.EncryptionCertificatePath, options.EncryptionCertificatePassword, options.CertificateFormat, X509KeyUsageFlags.KeyEncipherment);
             encryptionCertificates.Add(Encryption);
             foreach (var reference in options.PreviousSigningCertificates)
-                signingCertificates.Add(Load(reference.Path, reference.Password, X509KeyUsageFlags.DigitalSignature));
+                signingCertificates.Add(SsoCertificateFile.Load(reference.Path, reference.Password, reference.Format, X509KeyUsageFlags.DigitalSignature));
             foreach (var reference in options.PreviousEncryptionCertificates)
-                encryptionCertificates.Add(Load(reference.Path, reference.Password, X509KeyUsageFlags.KeyEncipherment));
+                encryptionCertificates.Add(SsoCertificateFile.Load(reference.Path, reference.Password, reference.Format, X509KeyUsageFlags.KeyEncipherment));
             var publicKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var certificate in signingCertificates.Concat(encryptionCertificates))
             {
@@ -86,12 +93,34 @@ internal sealed class SsoCredentials : IDisposable
         catch { Dispose(); throw; }
     }
 
-    private static X509Certificate2 Load(string path, string? password, X509KeyUsageFlags usage)
+    private static OptionsValidationException InvalidCredentials() => SsoCertificateFile.InvalidCredentials();
+
+    public void Dispose()
+    {
+        foreach (var certificate in signingCertificates.Concat(encryptionCertificates)) certificate.Dispose();
+    }
+}
+
+internal static class SsoCertificateFile
+{
+    internal const string ConfigurationHelp = "SSO certificates are unavailable or invalid. Run --provision-sso-certificates once outside the production container, install the protected files and passwords as secrets, and retain them across deploys. See docs/operations/sso-certificates-render.md. Production never generates replacement keys.";
+
+    internal static X509Certificate2 Load(string path, string? password, SsoCertificateFormat format, X509KeyUsageFlags usage)
     {
         X509Certificate2? certificate = null;
+        byte[]? bytes = null;
         try
         {
-            certificate = new X509Certificate2(path, password, X509KeyStorageFlags.EphemeralKeySet);
+            if (format == SsoCertificateFormat.Pfx)
+                certificate = new X509Certificate2(path, password, X509KeyStorageFlags.EphemeralKeySet);
+            else if (format == SsoCertificateFormat.Base64Pfx)
+            {
+                // Render Secret Files contain text. Decode only in memory; never write to /etc/secrets.
+                if (new FileInfo(path).Length > 128 * 1024) throw InvalidCredentials();
+                bytes = Convert.FromBase64String(File.ReadAllText(path));
+                certificate = new X509Certificate2(bytes, password, X509KeyStorageFlags.EphemeralKeySet);
+            }
+            else throw InvalidCredentials();
             using var key = certificate.GetRSAPrivateKey();
             var now = DateTime.UtcNow;
             if (!certificate.HasPrivateKey || key is null || key.KeySize < 2048 ||
@@ -100,19 +129,15 @@ internal sealed class SsoCredentials : IDisposable
                 throw InvalidCredentials();
             return certificate;
         }
-        catch (Exception error) when (error is CryptographicException or IOException or UnauthorizedAccessException or ArgumentException or OptionsValidationException)
+        catch (Exception error) when (error is CryptographicException or IOException or UnauthorizedAccessException or ArgumentException or FormatException or OptionsValidationException)
         {
             certificate?.Dispose();
             // Do not retain inner exceptions containing file paths or credential details.
             throw InvalidCredentials();
         }
+        finally { if (bytes is not null) CryptographicOperations.ZeroMemory(bytes); }
     }
 
-    private static OptionsValidationException InvalidCredentials() => new(Options.DefaultName, typeof(SsoOptions),
-        ["SSO requires valid, distinct RSA signing/encryption certificates with private keys of at least 2048 bits and appropriate key usage."]);
-
-    public void Dispose()
-    {
-        foreach (var certificate in signingCertificates.Concat(encryptionCertificates)) certificate.Dispose();
-    }
+    internal static OptionsValidationException InvalidCredentials() => new(Options.DefaultName, typeof(SsoOptions),
+        [ConfigurationHelp, "Use valid, distinct RSA certificates with private keys of at least 2048 bits and appropriate key usage; check passwords and certificate expiry."]);
 }

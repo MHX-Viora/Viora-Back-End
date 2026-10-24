@@ -9,6 +9,13 @@ using System.Threading.RateLimiting;
 using Viora.Application.Posts;
 using Viora.Infrastructure.Realtime;
 
+// One-time offline provisioning must not load .env, connect to a database or start HTTP.
+if (args.Length > 0 && args[0] == "--provision-sso-certificates")
+{
+    Environment.ExitCode = viora_BE.Sso.SsoCertificateProvisioningCommand.Run(args);
+    return;
+}
+
 LoadDotEnv();
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
 

@@ -37,6 +37,9 @@ viora-BE/appsettings.json
 **/*.p12
 **/*.pem
 **/*.key
+**/.sso-certificates/
+**/*.pfx.b64
+**/*.password
 
 # Test results
 TestResults/

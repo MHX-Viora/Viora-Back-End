@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>viora_BE</RootNamespace>
     <UserSecretsId>viora-be-local-development</UserSecretsId>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/.sso-certificates/**;**/*.pfx;**/*.p12;**/*.pfx.b64;**/*.password</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

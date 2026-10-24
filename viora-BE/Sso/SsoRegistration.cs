@@ -13,7 +13,10 @@ public static class SsoRegistration
     {
         var section = configuration.GetSection(SsoOptions.SectionName);
         services.AddSingleton<IValidateOptions<SsoOptions>, SsoOptionsValidator>();
-        services.AddOptions<SsoOptions>().Bind(section).ValidateOnStart();
+        services.AddSingleton<SsoCertificateProvisioningService>();
+        services.AddOptions<SsoOptions>().Bind(section)
+            .PostConfigure<SsoCertificateProvisioningService>((options, provisioning) => provisioning.Prepare(options))
+            .ValidateOnStart();
         if (!section.GetValue<bool>(nameof(SsoOptions.Enabled))) return services;
 
         services.AddSingleton<SsoCredentials>();
