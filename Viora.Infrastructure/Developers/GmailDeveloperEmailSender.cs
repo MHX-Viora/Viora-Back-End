@@ -16,14 +16,13 @@ public sealed class GmailDeveloperEmailSender(HttpClient client, IOptions<Develo
         !string.IsNullOrWhiteSpace(Config.GmailClientSecret) &&
         !string.IsNullOrWhiteSpace(Config.GmailRefreshToken);
 
-    public async Task SendAsync(string recipient, string subject, string text, CancellationToken ct)
+    public Task SendAsync(string recipient, string subject, string text, CancellationToken ct) =>
+        SendAsync(recipient, subject, new DeveloperEmailContent(text), ct);
+
+    public async Task SendAsync(string recipient, string subject, DeveloperEmailContent content, CancellationToken ct)
     {
         if (!IsConfigured) throw new InvalidOperationException("Developer Gmail API is not configured.");
-        using var message = new MimeMessage();
-        message.From.Add(MailboxAddress.Parse(Config.GmailFrom));
-        message.To.Add(MailboxAddress.Parse(recipient));
-        message.Subject = subject;
-        message.Body = new TextPart("plain") { Text = text };
+        using var message = DeveloperEmailMessage.Create(Config.GmailFrom, recipient, subject, content);
         using var stream = new MemoryStream();
         await message.WriteToAsync(stream, ct);
 

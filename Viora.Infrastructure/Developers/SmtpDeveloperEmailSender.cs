@@ -13,15 +13,15 @@ public sealed class SmtpDeveloperEmailSender(IOptions<DeveloperAuthOptions> opti
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Config.SmtpHost) &&
         MailboxAddress.TryParse(Config.SmtpFrom, out _) && Config.SmtpPort is > 0 and <= 65535;
 
-    public async Task SendAsync(string recipient, string subject, string text, CancellationToken ct)
+    public Task SendAsync(string recipient, string subject, string text, CancellationToken ct) =>
+        SendAsync(recipient, subject, new DeveloperEmailContent(text), ct);
+
+    public async Task SendAsync(string recipient, string subject, DeveloperEmailContent content, CancellationToken ct)
     {
         if (!IsConfigured) throw new InvalidOperationException("Developer SMTP is not configured.");
         var insecure = environment.IsDevelopment() && Config.AllowInsecureLocalSmtp &&
             Config.SmtpHost is "localhost" or "127.0.0.1" or "::1";
-        using var message = new MimeMessage();
-        message.From.Add(MailboxAddress.Parse(Config.SmtpFrom));
-        message.To.Add(MailboxAddress.Parse(recipient)); message.Subject = subject;
-        message.Body = new TextPart("plain") { Text = text };
+        using var message = DeveloperEmailMessage.Create(Config.SmtpFrom, recipient, subject, content);
         using var client = new SmtpClient { Timeout = 10000 };
         await client.ConnectAsync(Config.SmtpHost, Config.SmtpPort,
             insecure ? SecureSocketOptions.None : Config.SmtpImplicitTls ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls, ct);

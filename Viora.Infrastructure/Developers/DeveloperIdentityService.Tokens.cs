@@ -33,8 +33,11 @@ public sealed partial class DeveloperIdentityService
         var link = $"{options.Value.PortalUrl.TrimEnd('/')}/{path}#token={raw}";
         try
         {
+            var content = purpose == DeveloperTokenPurpose.VerifyEmail
+                ? DeveloperEmailTemplates.Verification(account.FullName, link, now.Year)
+                : DeveloperEmailTemplates.PasswordReset(account.FullName, link, now.Year);
             await email.SendAsync(account.EmailNormalized.ToLowerInvariant(), purpose == DeveloperTokenPurpose.VerifyEmail ? "Xác minh email ANKT Developer" : "Đặt lại mật khẩu ANKT Developer",
-                $"Mở liên kết sau để tiếp tục:\n{link}\n\nLiên kết chỉ dùng một lần. Nếu không yêu cầu, hãy bỏ qua email này.", ct);
+                content, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

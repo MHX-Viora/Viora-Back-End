@@ -30,5 +30,6 @@
   </ItemGroup>
 
   <ItemGroup><EmbeddedResource Include="Wallets\banks.json" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Developers\EmailTemplates\*.html" /></ItemGroup>
 
 </Project>

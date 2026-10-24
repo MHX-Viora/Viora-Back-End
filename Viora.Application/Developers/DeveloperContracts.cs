@@ -49,6 +49,9 @@ public interface IDeveloperEmailSender
 {
     bool IsConfigured { get; }
     Task SendAsync(string recipient, string subject, string text, CancellationToken cancellationToken);
+    // Existing integrations can keep their plain-text implementation.
+    Task SendAsync(string recipient, string subject, DeveloperEmailContent content, CancellationToken cancellationToken) =>
+        SendAsync(recipient, subject, content.Text, cancellationToken);
 }
 
 public interface IDeveloperIdentityService
