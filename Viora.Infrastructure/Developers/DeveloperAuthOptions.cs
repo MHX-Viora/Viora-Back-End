@@ -2,6 +2,11 @@ namespace Viora.Infrastructure.Developers;
 
 public sealed class DeveloperAuthOptions
 {
+    public string EmailProvider { get; set; } = "Smtp";
+    public string GmailFrom { get; set; } = "";
+    public string GmailClientId { get; set; } = "";
+    public string GmailClientSecret { get; set; } = "";
+    public string GmailRefreshToken { get; set; } = "";
     public string PortalUrl { get; set; } = "";
     public string BffSharedSecret { get; set; } = "";
     public string SmtpHost { get; set; } = "";

@@ -16,7 +16,16 @@ public static class DeveloperApi
         services.Configure<DeveloperAuthOptions>(config.GetSection("DeveloperAuth"));
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IDeveloperIdentityService, DeveloperIdentityService>();
-        services.AddScoped<IDeveloperEmailSender, SmtpDeveloperEmailSender>();
+        services.AddScoped<SmtpDeveloperEmailSender>();
+        services.AddHttpClient<GmailDeveloperEmailSender>(client => client.Timeout = TimeSpan.FromSeconds(15))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<IDeveloperEmailSender>(provider =>
+            provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeveloperAuthOptions>>().Value.EmailProvider switch
+            {
+                "GmailApi" => provider.GetRequiredService<GmailDeveloperEmailSender>(),
+                "Smtp" => provider.GetRequiredService<SmtpDeveloperEmailSender>(),
+                _ => throw new InvalidOperationException("Unsupported Developer email provider. Use Smtp or GmailApi.")
+            });
         services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, DeveloperSessionHandler>(DeveloperSessionHandler.SchemeName, _ => { });
         services.AddAuthorization(o => o.AddPolicy(DeveloperSessionHandler.Policy, p => p
             .AddAuthenticationSchemes(DeveloperSessionHandler.SchemeName).RequireAuthenticatedUser().RequireClaim("developer_status", "Active")));
