@@ -11,6 +11,7 @@ public static class SsoRegistration
 {
     public static IServiceCollection AddAnktSso(this IServiceCollection services, IConfiguration configuration)
     {
+        Viora.Infrastructure.Developers.SandboxTestRegistration.AddSandboxTestIdentity(services, configuration);
         var section = configuration.GetSection(SsoOptions.SectionName);
         services.AddSingleton<IValidateOptions<SsoOptions>, SsoOptionsValidator>();
         services.AddSingleton<SsoCertificateProvisioningService>();

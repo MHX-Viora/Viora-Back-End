@@ -19,6 +19,7 @@ using Viora.Infrastructure.Developers;
 using Viora.Infrastructure.Persistence;
 using Viora.Infrastructure.Sso;
 using viora_BE.Sso;
+using viora_BE.Hosting;
 
 internal sealed class SsoProtocolTestHost : IAsyncDisposable
 {
@@ -44,12 +45,15 @@ internal sealed class SsoProtocolTestHost : IAsyncDisposable
     }
 
     public static async Task<SsoProtocolTestHost> Create(IsolatedPostgres? postgres = null, Action<DbContextOptionsBuilder>? configureDatabase = null,
-        bool allowIntrospection = false, Action<Dictionary<string, string?>>? configureSso = null, TimeProvider? timeProvider = null)
+        bool allowIntrospection = false, Action<Dictionary<string, string?>>? configureSso = null, TimeProvider? timeProvider = null, bool sandbox=false,
+        System.Net.IPAddress? proxyPeer = null, bool testIdentity = false, bool reuseSeed = false, string environment = "Testing")
     {
         var host = new SsoProtocolTestHost(); await host.connection.OpenAsync();
         host.connection.CreateFunction<string?,int>("char_length", x => x?.Length ?? 0);
-        var builder = WebApplication.CreateBuilder(); builder.WebHost.UseTestServer(); builder.Logging.ClearProviders();
-        var ssoConfiguration = host.certificates.Config(); configureSso?.Invoke(ssoConfiguration);
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environment }); builder.WebHost.UseTestServer(); builder.Logging.ClearProviders();
+        var ssoConfiguration = host.certificates.Config();
+        ssoConfiguration["SandboxTest:Enabled"] = testIdentity ? "true" : "false";
+        configureSso?.Invoke(ssoConfiguration);
         builder.Configuration.AddInMemoryCollection(ssoConfiguration);
         if (allowIntrospection) builder.Configuration.AddInMemoryCollection(new Dictionary<string,string?> { ["Sso:IntrospectionClientIds:0"] = ClientId });
         builder.Services.AddDbContext<AppDbContext>(x =>
@@ -73,12 +77,45 @@ internal sealed class SsoProtocolTestHost : IAsyncDisposable
         builder.Services.AddControllers().AddApplicationPart(typeof(SsoAuthorizationController).Assembly);
         if (timeProvider != null) builder.Services.AddSingleton(timeProvider);
         builder.Services.AddAnktSso(builder.Configuration);
+        if (!testIdentity)
+        {
+            // These pre-existing tests exercise generic real-user OIDC consent/code
+            // behavior in isolation. The new Sandbox identity boundary is exercised
+            // with the full application registrations when testIdentity is true.
+            // No deployment flag permits real-user fallback in production.
+            builder.Services.AddScoped<SsoConsentService>(s => new(s.GetRequiredService<AppDbContext>(),
+                s.GetRequiredService<SsoClientReader>(), s.GetRequiredService<OpenIddict.Abstractions.IOpenIddictApplicationManager>(),
+                s.GetRequiredService<OpenIddict.Abstractions.IOpenIddictAuthorizationManager>(), s.GetRequiredService<OpenIddict.Abstractions.IOpenIddictTokenManager>(),
+                s.GetRequiredService<TimeProvider>()));
+            builder.Services.AddControllers().AddControllersAsServices();
+            builder.Services.AddScoped<SsoAuthorizationController>(s => new(s.GetRequiredService<SsoClientReader>(),
+                s.GetRequiredService<SsoConsentService>(), s.GetRequiredService<SsoConsentInteraction>(),
+                s.GetRequiredService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>(), s.GetRequiredService<SandboxProtocolObserver>()));
+        }
+        builder.Services.AddTrustedProxyHeaders(builder.Configuration);
+        if(sandbox){
+            builder.Services.AddSingleton(new MiniAppSandboxOptions{Enabled=true,HostOrigin="https://sandbox.ankt.example",PortalOrigin="https://portal.ankt.example",Issuer="https://issuer.example/"});
+            builder.Services.AddScoped<MiniAppSandboxAccess>();builder.Services.AddScoped<MiniAppSandboxSessionService>();
+            builder.Services.AddScoped<MiniAppSandboxProtocolService>();
+        }
         builder.Services.AddCors(options => options.AddPolicy("Web", policy => policy.WithOrigins("https://firstparty.example")
             .AllowAnyMethod().AllowAnyHeader().AllowCredentials()));
-        host.app = builder.Build(); host.app.UseRouting(); host.app.UseCors("Web"); host.app.UseAuthentication(); host.app.UseRateLimiter(); host.app.UseAuthorization(); host.app.MapControllers();
+        host.app = builder.Build();
+        if (proxyPeer is not null) host.app.Use((context, next) => { context.Connection.RemoteIpAddress = proxyPeer; return next(context); });
+        host.app.UseTrustedProxyHeaders();
+        host.app.UseRouting(); host.app.UseCors("Web"); host.app.UseAuthentication(); host.app.UseRateLimiter(); host.app.UseAuthorization(); host.app.MapControllers();
+        host.app.MapGet("/fixture/production-account", () => Microsoft.AspNetCore.Http.Results.Ok())
+            .RequireAuthorization(policy => policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme).RequireAuthenticatedUser());
         await host.app.StartAsync(); host.Client = host.app.GetTestClient(); host.Client.BaseAddress = new("https://issuer.example");
         await using var scope = host.app.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>(); await db.Database.EnsureCreatedAsync();
+        if (reuseSeed)
+        {
+            host.accountId = await db.Accounts.Where(x => x.Email == "protocol-user@example.test").Select(x => x.Id).SingleAsync();
+            host.socialId = (await db.RefreshTokens.Where(x => x.AccountId == host.accountId).Select(x => x.SessionId).FirstAsync())!.Value;
+            host.miniAppId = await db.MiniApps.Where(x => x.AppId == "app_protocol").Select(x => x.Id).SingleAsync();
+            return host;
+        }
         var owner = new DeveloperAccount { FullName = "Protocol test", EmailNormalized = "protocol@example.test", Status = DeveloperStatus.Active, TermsAcceptedAt = DateTime.UtcNow };
         var account = new Account { Email = "protocol-user@example.test" }; host.accountId = account.Id; host.socialId = Guid.NewGuid();
         var mini = new MiniApp { Developer = owner, AppId = "app_protocol", Name = "Protocol app", Category = "utilities", SsoEnabled = true, WebsiteUrl = "https://partner.example.com", Status = MiniAppStatus.Draft };

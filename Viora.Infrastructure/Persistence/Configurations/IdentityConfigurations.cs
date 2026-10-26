@@ -12,6 +12,8 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
             "CK_Accounts_EmailOrPhone",
             "\"Email\" IS NOT NULL OR \"Phone\" IS NOT NULL"));
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.IsSandbox).HasDefaultValue(false);
+        builder.HasQueryFilter(x => !x.IsSandbox);
         builder.Property(x => x.Email).HasMaxLength(255);
         builder.Property(x => x.Phone).HasMaxLength(20);
         builder.Property(x => x.PasswordHash);
@@ -43,6 +45,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
     public void Configure(EntityTypeBuilder<User> builder)
     {
         builder.ToTable("Users");
+        builder.HasQueryFilter(x => !x.Account.IsSandbox);
         builder.HasKey(x => x.Id);
         builder.Property(x => x.DisplayName).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Gender).HasDefaultValue(Gender.Unknown);

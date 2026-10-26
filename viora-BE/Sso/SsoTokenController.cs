@@ -42,9 +42,10 @@ public sealed class SsoTokenController(SsoTokenService tokens, SandboxProtocolOb
             var principal = await tokens.RefreshClaimsAsync(authentication.Principal!, null, ct,
                 Request.Headers.ContainsKey("Origin") ? Request.Headers.Origin.ToString() : null);
             var result = new Dictionary<string, object> { ["sub"] = principal.GetClaim(OpenIddictConstants.Claims.Subject)! };
-            foreach (var claim in new[] { OpenIddictConstants.Claims.Name, OpenIddictConstants.Claims.Picture, OpenIddictConstants.Claims.Email })
+            foreach (var claim in SsoProfileClaims.Public.Where(x => x is not ("sub" or "email_verified" or "isSandbox")))
                 if (principal.GetClaim(claim) is { } value) result[claim] = value;
-            if (principal.HasClaim(OpenIddictConstants.Claims.EmailVerified, "true")) result[OpenIddictConstants.Claims.EmailVerified] = true;
+            if (principal.GetClaim("isSandbox") is { } isSandbox) result["isSandbox"] = bool.TryParse(isSandbox, out var test) && test;
+            if (principal.GetClaim("email_verified") is { } verified) result["email_verified"] = bool.TryParse(verified, out var emailVerified) && emailVerified;
             await sandbox.UserInfoAsync(principal,ct);
             return Ok(result);
         }

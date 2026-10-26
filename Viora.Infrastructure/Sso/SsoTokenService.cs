@@ -3,11 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
 using Viora.Application.Developers;
 using Viora.Infrastructure.Persistence;
+using Viora.Infrastructure.Developers;
 
 namespace Viora.Infrastructure.Sso;
 
 // Protocol authentication is performed by OpenIddict before this fresh registry/grant check.
-public sealed class SsoTokenService(AppDbContext db, SsoClientReader clients, SsoConsentService consents)
+public sealed class SsoTokenService(AppDbContext db, SsoClientReader clients, SsoConsentService consents, SandboxTestService? sandboxTest = null)
 {
     public async Task<ClaimsPrincipal> RefreshClaimsAsync(ClaimsPrincipal principal, string? expectedClient, CancellationToken ct, string? browserOrigin = null)
     {
@@ -24,15 +25,18 @@ public sealed class SsoTokenService(AppDbContext db, SsoClientReader clients, Ss
         var consent = await db.MiniAppUserConsents.AsNoTracking().SingleOrDefaultAsync(x => x.AuthorizationId == authorizationId &&
             x.OAuthClientId == client.Id && x.MiniAppId == client.MiniAppId && x.Environment == client.Environment && x.RevokedAt == null, ct) ?? throw Denied();
         var grant = await consents.FindAsync(consent.AccountId, clientId, scopes, ct);
+        if (await db.Accounts.IgnoreQueryFilters().AnyAsync(x => x.Id == consent.AccountId && x.IsSandbox, ct))
+        {
+            if (sandboxTest == null || !Guid.TryParse(principal.GetClaim(SandboxTestService.SessionClaim), out var sessionId)) throw Denied();
+            var session = await sandboxTest.RequireAsync(sessionId, clientId, ct);
+            if (session.Identity.AccountId != consent.AccountId) throw Denied();
+        }
         if (grant == null || grant.AuthorizationId != authorizationId || grant.Subject != principal.GetClaim(OpenIddictConstants.Claims.Subject)) throw Denied();
         var fresh = await consents.PrincipalAsync(consent.AccountId, clientId, scopes, ct);
-        principal.SetClaim(OpenIddictConstants.Claims.Name, fresh.GetClaim(OpenIddictConstants.Claims.Name));
-        principal.SetClaim(OpenIddictConstants.Claims.Picture, fresh.GetClaim(OpenIddictConstants.Claims.Picture));
-        principal.SetClaim(OpenIddictConstants.Claims.Email, fresh.GetClaim(OpenIddictConstants.Claims.Email));
-        principal.SetClaim(OpenIddictConstants.Claims.EmailVerified, fresh.HasClaim(OpenIddictConstants.Claims.EmailVerified, "true") ? true : (bool?)null);
-        principal.SetDestinations(claim => claim.Type is OpenIddictConstants.Claims.Subject or OpenIddictConstants.Claims.Name or
-            OpenIddictConstants.Claims.Picture or OpenIddictConstants.Claims.Email or OpenIddictConstants.Claims.EmailVerified
-            ? new[] { OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken } : Array.Empty<string>());
+        foreach (var type in SsoProfileClaims.Public.Where(x => x is not ("sub" or "email_verified" or "isSandbox"))) principal.SetClaim(type, fresh.GetClaim(type));
+        principal.SetClaim("isSandbox", fresh.GetClaim("isSandbox") is { } test ? bool.Parse(test) : (bool?)null);
+        principal.SetClaim("email_verified", fresh.GetClaim("email_verified") is { } verified ? bool.Parse(verified) : (bool?)null);
+        SsoProfileClaims.Destinations(principal);
         return principal;
     }
     private static DeveloperAuthException Denied() => new(403, "SSO_GRANT_UNAVAILABLE", "Quyền truy cập không còn hiệu lực.");

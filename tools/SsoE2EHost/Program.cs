@@ -19,6 +19,12 @@ using Viora.Infrastructure.Sso;
 using viora_BE.Sso;
 using viora_BE.Developer;
 
+if (args.Contains("--sandbox-test-identity", StringComparer.Ordinal))
+{
+    await SandboxIdentityBrowserFixture.Run();
+    return;
+}
+
 // This executable cannot load application settings/connection strings. All identities,
 // domain proofs, keys and storage belong to this one loopback-only fixture instance.
 const string issuer="https://127.0.0.1:5490/";
@@ -54,6 +60,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 builder.Services.AddAuthorization();builder.Services.AddControllers().AddApplicationPart(typeof(SsoAuthorizationController).Assembly);
 builder.Services.AddAnktSso(builder.Configuration);builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
+// The legacy protocol fixture deliberately isolates real-user OIDC mechanics.
+// The --sandbox-test-identity branch above uses full application registrations.
+builder.Services.AddScoped<SsoConsentService>(s=>new(s.GetRequiredService<AppDbContext>(),s.GetRequiredService<SsoClientReader>(),
+    s.GetRequiredService<OpenIddict.Abstractions.IOpenIddictApplicationManager>(),s.GetRequiredService<OpenIddict.Abstractions.IOpenIddictAuthorizationManager>(),
+    s.GetRequiredService<OpenIddict.Abstractions.IOpenIddictTokenManager>(),s.GetRequiredService<TimeProvider>()));
+builder.Services.AddControllers().AddControllersAsServices();
+builder.Services.AddScoped<SsoAuthorizationController>(s=>new(s.GetRequiredService<SsoClientReader>(),s.GetRequiredService<SsoConsentService>(),
+    s.GetRequiredService<SsoConsentInteraction>(),s.GetRequiredService<IAntiforgery>(),s.GetRequiredService<SandboxProtocolObserver>()));
 builder.Services.AddCors(o=>o.AddPolicy("Web",p=>p.WithOrigins(issuer.TrimEnd('/')).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 app=builder.Build();
 if(sandboxFeasibility)MiniAppSandboxRuntimeApi.UseBoundary(app);

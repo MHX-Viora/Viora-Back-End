@@ -5,6 +5,9 @@ namespace Viora.Infrastructure.Persistence;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<Viora.Domain.Developers.SandboxIdentityTemplate> SandboxIdentityTemplates => Set<Viora.Domain.Developers.SandboxIdentityTemplate>();
+    public DbSet<Viora.Domain.Developers.SandboxTestIdentity> SandboxTestIdentities => Set<Viora.Domain.Developers.SandboxTestIdentity>();
+    public DbSet<Viora.Domain.Developers.SandboxIdentitySession> SandboxIdentitySessions => Set<Viora.Domain.Developers.SandboxIdentitySession>();
     public DbSet<Viora.Domain.Developers.MiniAppVersion> MiniAppVersions => Set<Viora.Domain.Developers.MiniAppVersion>();
     public DbSet<Viora.Domain.Developers.MiniAppReviewRequest> MiniAppReviewRequests => Set<Viora.Domain.Developers.MiniAppReviewRequest>();
     public DbSet<Viora.Domain.Developers.MiniAppReviewAction> MiniAppReviewActions => Set<Viora.Domain.Developers.MiniAppReviewAction>();

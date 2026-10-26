@@ -44,6 +44,7 @@ public sealed class JwtTokenService : ITokenService
 
     public IssuedAccountTokens CreateTokens(Account account, Guid? sessionId = null)
     {
+        if (account.IsSandbox) throw new InvalidOperationException("Sandbox identities cannot receive Production account tokens.");
         var now = DateTimeOffset.UtcNow;
         var accessExpiresAt = now.AddMinutes(options.AccessTokenMinutes);
         var refreshToken = Base64Url(RandomNumberGenerator.GetBytes(64));

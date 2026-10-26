@@ -19,6 +19,7 @@ public static class MiniAppApi
         services.AddScoped<MiniAppSsoService>();
         services.AddMiniAppReviewServices(config);
         MiniAppSandboxApi.AddServices(services,config);
+        SandboxTestRegistration.AddSandboxTestIdentity(services,config);
         services.AddHostedService<MiniAppLogoCleanup>();
         MiniAppIntegrationApi.AddServices(services);
         services.AddRateLimiter(o => o.AddPolicy("mini-app-sensitive", h => RateLimitPartition.GetFixedWindowLimiter(
@@ -42,6 +43,7 @@ public static class MiniAppApi
         MiniAppReviewApi.MapEndpoints(g);
         MiniAppSsoApi.MapEndpoints(g);
         MiniAppSandboxApi.MapEndpoints(g);
+        SandboxTestApi.MapEndpoints(g);
         g.MapGet("", async (MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.List(Owner(h), int.TryParse(h.Request.Query["page"], out var page) ? page : 1, ct)));
         g.MapPost("", async (MiniAppCreateRequest r, MiniAppService s, HttpContext h, CancellationToken ct) =>
             Results.Ok(await s.Create(Owner(h), r, ct))).RequireRateLimiting("mini-app-sensitive");

@@ -107,6 +107,11 @@ internal sealed class SandboxFixture : IAsyncDisposable
         }
         else options.UseNpgsql(postgres);
         configure?.Invoke(options); f.Db=new(options.Options); await f.Db.Database.EnsureCreatedAsync();
+        // Historical migration tests intentionally stop before the Sandbox identity
+        // migration, but seed/read Accounts through today's CLR model. Add only its
+        // unrelated account marker to that disposable fixture; target migration
+        // tables, triggers and up/down assertions remain under the test's control.
+        if (postgres != null) await f.Db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Accounts\" ADD COLUMN IF NOT EXISTS \"IsSandbox\" boolean NOT NULL DEFAULT false");
         var owner=new DeveloperAccount {EmailNormalized="sandbox-fixture@example.test",Status=DeveloperStatus.Active};
         f.App=new() {Developer=owner,AppId="app_sandbox_fixture",Name="Fixture",Category="utilities",WebsiteUrl="https://partner.example.com/app",Status=MiniAppStatus.Draft};
         f.Source=new() {Account=owner,TokenHash="sandbox-fixture-source",ExpiresAt=f.Clock.Now.UtcDateTime.AddHours(1),AbsoluteExpiresAt=f.Clock.Now.UtcDateTime.AddHours(2)};

@@ -2266,6 +2266,140 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.SandboxIdentitySession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AuthorizedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BrowserHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("ClientVersion")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeveloperSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("IdentityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("LaunchConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LaunchExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LaunchHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("OAuthClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("TokenIssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UserInfoAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BrowserHash")
+                        .IsUnique();
+
+                    b.HasIndex("IdentityId");
+
+                    b.HasIndex("LaunchHash")
+                        .IsUnique();
+
+                    b.HasIndex("OAuthClientId");
+
+                    b.HasIndex("DeveloperSessionId", "ExpiresAt");
+
+                    b.ToTable("SandboxIdentitySessions", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SandboxIdentityTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Birthdate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Nickname")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique();
+
+                    b.ToTable("SandboxIdentityTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SandboxTestIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeveloperAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("MiniAppId");
+
+                    b.HasIndex("DeveloperAccountId", "MiniAppId")
+                        .IsUnique();
+
+                    b.ToTable("SandboxTestIdentities", (string)null);
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.SsoAccountLinkAudit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2425,6 +2559,11 @@ namespace Viora.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("EmailVerifiedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsSandbox")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("timestamp with time zone");
@@ -5800,6 +5939,71 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasForeignKey("MiniAppId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SandboxIdentitySession", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.DeveloperSession", "DeveloperSession")
+                        .WithMany()
+                        .HasForeignKey("DeveloperSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.SandboxTestIdentity", "Identity")
+                        .WithMany()
+                        .HasForeignKey("IdentityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniAppOAuthClient", "OAuthClient")
+                        .WithMany()
+                        .HasForeignKey("OAuthClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DeveloperSession");
+
+                    b.Navigation("Identity");
+
+                    b.Navigation("OAuthClient");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SandboxIdentityTemplate", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.SandboxTestIdentity", b =>
+                {
+                    b.HasOne("Viora.Domain.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.DeveloperAccount", "Developer")
+                        .WithMany()
+                        .HasForeignKey("DeveloperAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Viora.Domain.Developers.MiniApp", "MiniApp")
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Developer");
+
+                    b.Navigation("MiniApp");
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.SsoAccountLinkAudit", b =>

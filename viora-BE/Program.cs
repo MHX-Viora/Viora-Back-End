@@ -21,6 +21,12 @@ LoadDotEnv();
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
 
 var builder = WebApplication.CreateBuilder(args);
+if (args.Length > 0 && args[0] == "--provision-sandbox-profile")
+{
+    Environment.ExitCode = await viora_BE.Developer.SandboxProfileProvisioningCommand.RunAsync(builder.Configuration,
+        args.Length > 1 ? args[1] : Path.Combine(".codex-tmp", "sandbox-profile-assets.json"));
+    return;
+}
 builder.Services.AddTrustedProxyHeaders(builder.Configuration);
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))
