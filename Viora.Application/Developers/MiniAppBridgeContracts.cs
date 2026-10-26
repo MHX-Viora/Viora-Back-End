@@ -17,3 +17,12 @@ public sealed record MiniAppBridgeToken(
     [property: JsonPropertyName("session_id")] Guid SessionId, string Environment);
 public sealed record MiniAppBridgeUser(Guid Id, string Username, string DisplayName, string? AvatarUrl,
     string? CoverUrl, string Gender, bool IsSandbox, string? FullName);
+
+public sealed record MiniAppLoginCode(string Code, int ExpiresIn);
+public sealed record MiniAppPartnerExchange(string Code);
+public sealed record MiniAppPartnerSessionRequest(Guid SessionId);
+public sealed record MiniAppPartnerIdentity(MiniAppPartnerUser User, string MiniAppId, string Environment, Guid SessionId, DateTime ExpiresAt);
+public sealed record MiniAppPartnerUser(Guid Id, string DisplayName,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AvatarUrl,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CoverUrl,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Gender);

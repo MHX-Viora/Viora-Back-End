@@ -14,6 +14,19 @@ public sealed class MiniAppBridgeOptions
 {
     public bool Enabled { get; set; }
     public string AllowedHostOrigin { get; set; } = "https://mxh.ankt.vn";
+    public Dictionary<string, MiniAppPartnerCredentials> Partners { get; set; } = new();
+    public MiniAppPartnerCredentials? Partner(string client)
+    {
+        var matches = Partners.Where(x => x.Key == client || x.Value.ClientId == client).Select(x => x.Value).ToArray();
+        return matches.Length == 1 ? matches[0] : null;
+    }
+}
+
+public sealed class MiniAppPartnerCredentials
+{
+    public string ClientId { get; set; } = "";
+    public string SandboxSecretHash { get; set; } = "";
+    public string ProductionSecretHash { get; set; } = "";
 }
 
 public sealed class MiniAppBridgeService(AppDbContext db, SandboxTestService sandbox,
@@ -81,7 +94,7 @@ public sealed class MiniAppBridgeService(AppDbContext db, SandboxTestService san
             account = actor.Id;
         }
         if (await db.Set<MiniAppBridgeSession>().CountAsync(x => x.ActorId == actor.Id && x.SourceSessionId == actor.SourceSessionId &&
-            x.ExpiresAt > Now && x.RevokedAt == null, ct) >= 10) throw Error("SESSION_LIMIT", 429);
+            x.CodeChallenge.Length == 43 && x.ExpiresAt > Now && x.RevokedAt == null, ct) >= 10) throw Error("SESSION_LIMIT", 429);
         var code = Random(); var session = new MiniAppBridgeSession
         {
             MiniAppId = target.App.Id, AccountId = account, ActorId = actor.Id, SourceSessionId = actor.SourceSessionId,
@@ -145,6 +158,21 @@ public sealed class MiniAppBridgeService(AppDbContext db, SandboxTestService san
     public async Task<MiniAppBridgeUser> MeAsync(string? token, string origin, CancellationToken ct, string clientId)
     {
         var session = await AuthenticateAsync(token, origin, ct, clientId);
+        return await ProfileAsync(session, ct);
+    }
+
+    internal async Task<MiniAppBridgeSession> ValidatePartnerSourceAsync(Guid id, CancellationToken ct)
+    {
+        Enabled();
+        var session = await db.Set<MiniAppBridgeSession>().AsNoTracking().SingleOrDefaultAsync(x =>
+            x.Id == id && x.CodeChallenge.Length == 43 && x.ConsumedAt != null && x.AccessHash != null, ct)
+            ?? throw Error("SESSION_EXPIRED", 401);
+        await RequireAsync(session, ct);
+        return session;
+    }
+
+    internal async Task<MiniAppBridgeUser> ProfileAsync(MiniAppBridgeSession session, CancellationToken ct)
+    {
         var account = await db.Accounts.IgnoreQueryFilters().AsNoTracking().Include(x => x.User)
             .SingleOrDefaultAsync(x => x.Id == session.AccountId && x.IsSandbox == session.IsSandbox && x.Status == AccountStatus.Active && x.DeletedAt == null, ct);
         if (account?.User == null) throw Error("SESSION_EXPIRED", 401);
