@@ -56,7 +56,7 @@ async function initialize(){
   if(website.protocol!=='https:'||website.origin!==context.partnerOrigin||website.username||website.password)throw new Error('Invalid partner URL');
   document.querySelector('#app-name').textContent=context.name;
   frame=document.createElement('iframe');frame.title=context.name+' · Sandbox';frame.referrerPolicy='no-referrer';
-  frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms'+(context.ssoEnabled?' allow-popups allow-popups-to-escape-sandbox':''));
+  frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms');
   frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; payment 'none'");
   let reportedConnection=false;
   bridge=createSandboxBridge({origin:context.partnerOrigin,source:()=>frame?.contentWindow,appId:context.appId,

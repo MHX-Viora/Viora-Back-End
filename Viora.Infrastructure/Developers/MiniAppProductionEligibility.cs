@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Viora.Application.Developers;
 using Viora.Domain.Developers;
 using Viora.Infrastructure.Persistence;
-using Viora.Infrastructure.Sso;
 
 namespace Viora.Infrastructure.Developers;
 
@@ -52,18 +51,6 @@ public static class MiniAppProductionEligibility
                 !await db.MiniAppDomainVerifications.AsNoTracking().AnyAsync(x => x.MiniAppId == appId &&
                     x.Hostname == snapshot.Domain && x.Status == MiniAppDomainStatus.Verified && x.RevokedAt == null && x.ExpiresAt > now, ct))
                 throw Unavailable();
-            if (snapshot.SsoEnabled)
-            {
-                if (snapshot.Production is not { } intent || target.Publication.ProductionOAuthClientId != intent.ClientIdentity || intent.ClientIdentity == null)
-                    throw Unavailable();
-                var scopes = string.Join(' ', intent.Scopes);
-                if (!await db.MiniAppOAuthClients.AsNoTracking().AnyAsync(x => x.Id == intent.ClientIdentity && x.MiniAppId == appId &&
-                    x.Environment == MiniAppOAuthEnvironment.Production && x.RevokedAt == null && x.ClientKey == intent.ClientId &&
-                    x.ClientType == intent.ClientType && x.AllowedScopes == scopes, ct)) throw Unavailable();
-                var client = await new SsoClientReader(db, new EvaluationClock(now)).EligibleAsync(intent.ClientId, intent.Scopes, "Production", ct);
-                if (client.Id != target.Publication.ProductionOAuthClientId) throw Unavailable();
-            }
-            else if (target.Publication.ProductionOAuthClientId != null) throw Unavailable();
             var current = await PublicationAsync(db, appId, now, ct);
             if (current.Publication.Id != target.Publication.Id || current.Publication.ConcurrencyToken != target.Publication.ConcurrencyToken ||
                 current.Version.SnapshotHash != target.Version.SnapshotHash) throw Unavailable();

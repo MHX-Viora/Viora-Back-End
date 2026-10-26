@@ -20,21 +20,21 @@ public static class MiniAppProductionRegistration
         services.AddOptions<MiniAppProductionOptions>().Configure(o =>
         {
             configuration.GetSection(MiniAppProductionOptions.SectionName).Bind(o);
-            o.ReserveConfiguredHost(configuration["Sso:Issuer"]);
+            o.ReserveConfiguredHost(configuration["MiniAppAuth:AllowedHostOrigin"]);
             o.ReserveConfiguredHost(configuration["MiniAppSandbox:HostOrigin"]);
         }).ValidateOnStart();
         services.AddSingleton<IValidateOptions<MiniAppProductionOptions>>(sp => new MiniAppProductionOptionsValidator(
             sp.GetRequiredService<IOptions<MiniAppReviewOptions>>().Value));
         services.TryAddSingleton(sp => sp.GetRequiredService<IOptions<MiniAppProductionOptions>>().Value);
         services.TryAddScoped(sp => new MiniAppPublicCatalogService(sp.GetRequiredService<Viora.Infrastructure.Persistence.AppDbContext>(),
-            sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<MiniAppProductionOptions>(), configuration.GetValue<bool>("Sso:Enabled")));
+            sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<MiniAppProductionOptions>(), configuration.GetValue<bool>("MiniAppAuth:Enabled")));
         services.TryAddScoped<MiniAppCatalogProjection>();
         services.AddDataProtection();
         services.TryAddScoped<MiniAppProductionBindingService>();
         services.TryAddScoped<MiniAppProductionAccess>();
         services.TryAddScoped<MiniAppProductionAudit>();
         services.TryAddScoped(sp => new MiniAppProductionPolicy(sp.GetRequiredService<Viora.Infrastructure.Persistence.AppDbContext>(),
-            sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<MiniAppProductionOptions>(), configuration.GetValue<bool>("Sso:Enabled")));
+            sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<MiniAppProductionOptions>(), configuration.GetValue<bool>("MiniAppAuth:Enabled")));
         services.TryAddScoped<MiniAppProductionLaunchService>();
         services.TryAddScoped<MiniAppProductionGrantService>();
         services.TryAddScoped<MiniAppProductionRuntimeService>();

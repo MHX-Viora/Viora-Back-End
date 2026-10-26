@@ -35,7 +35,7 @@ public static class MiniAppProductionHostDocuments
                 MiniAppProductionHostApi.UniqueCookie(http, MiniAppProductionHostApi.BindingCookie), ct);
             Csp(http, options, data.PartnerOrigin);
             return Results.Content(Document(new { mode = "run", parentOrigin = options.FirstPartyOrigin, hostOrigin = options.HostOrigin,
-                data.SessionId, data.AppId, data.Name, data.WebsiteUrl, data.PartnerOrigin, data.SsoEnabled, data.ExpiresAt }), "text/html; charset=utf-8");
+                data.SessionId, data.AppId, data.Name, data.WebsiteUrl, data.PartnerOrigin, data.ExpiresAt }), "text/html; charset=utf-8");
         });
     }
     private static void Csp(HttpContext http, MiniAppProductionOptions options, string frameSource) =>

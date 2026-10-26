@@ -9,7 +9,8 @@ public static class MiniAppPublicApi
 {
     public static void MapMiniAppPublicApi(this IEndpointRouteBuilder endpoints)
     {
-        if (!endpoints.ServiceProvider.GetRequiredService<IOptions<MiniAppProductionOptions>>().Value.Enabled) return;
+        if (!endpoints.ServiceProvider.GetRequiredService<IOptions<MiniAppProductionOptions>>().Value.Enabled &&
+            !endpoints.ServiceProvider.GetRequiredService<IOptions<MiniAppBridgeOptions>>().Value.Enabled) return;
         var group = endpoints.MapGroup("/api/mini-apps").AllowAnonymous()
             .RequireRateLimiting("mini-app-public-read").AddEndpointFilter<MiniAppProductionFilter>();
         group.MapGet("", async (HttpContext http, MiniAppPublicCatalogService service, CancellationToken ct) =>

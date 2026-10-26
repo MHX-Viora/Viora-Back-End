@@ -75,7 +75,7 @@ public sealed class MiniAppVersionService(AppDbContext db, MiniAppReviewAccess a
     {
         Validate(request.RequestId, request.ConcurrencyToken); var name = MiniAppInput.Text(request.VersionName, 80, true);
         await access.RequireOwnerAsync(owner, source, appId, ct);
-        var hash = MiniAppReviewAuditService.Hash(new { Command = "version.update", appId, versionId, request.ConcurrencyToken, VersionName = name, request.SsoEnabled, request.Production });
+        var hash = MiniAppReviewAuditService.Hash(new { Command = "version.update", appId, versionId, request.ConcurrencyToken, VersionName = name });
         try
         {
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
@@ -85,23 +85,8 @@ public sealed class MiniAppVersionService(AppDbContext db, MiniAppReviewAccess a
             if (await Replay(owner, app.Id, request.RequestId, hash, ct) is { } replay) return replay;
             if (version.State != MiniAppVersionState.Draft || version.ConcurrencyToken != request.ConcurrencyToken) throw Conflict();
             var previous = MiniAppVersionSnapshotPolicy.Read(version.SnapshotJson, version.SnapshotHash).Snapshot;
-            await LockApp(app, request.SsoEnabled, ct);
-            var production = previous.Production;
-            if (request.Production is { } desired)
-            {
-                var client = await db.MiniAppOAuthClients.AsNoTracking().SingleOrDefaultAsync(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Production, ct);
-                if (client?.RevokedAt != null) throw Conflict();
-                // Public candidates need only a stable identity. They receive no credential or runtime projection.
-                if (client == null && desired.ClientType == "Public")
-                {
-                    client = new() { MiniAppId = app.Id, Environment = MiniAppOAuthEnvironment.Production, ClientType = "Public",
-                        ClientKey = "mc_" + Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32)), AllowedScopes = "openid" };
-                    db.MiniAppOAuthClients.Add(client); await db.SaveChangesAsync(ct);
-                }
-                production = new(production?.ClientIdentity ?? client?.Id, production?.ClientId ?? client?.ClientKey,
-                    desired.ClientType, desired.Scopes, desired.RedirectUris, false);
-            }
-            var (snapshot, logo) = await Capture(app, production, ct);
+            await LockApp(app, null, ct);
+            var (snapshot, logo) = await Capture(app, null, ct);
             var revision = Guid.NewGuid(); var now = clock.GetUtcNow().UtcDateTime;
             var changed = await db.MiniAppVersions.Where(x => x.Id == version.Id && x.State == MiniAppVersionState.Draft && x.ConcurrencyToken == request.ConcurrencyToken)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.VersionName, name).SetProperty(x => x.SnapshotJson, snapshot.Json)
@@ -134,7 +119,7 @@ public sealed class MiniAppVersionService(AppDbContext db, MiniAppReviewAccess a
 
     private async Task LockApp(MiniApp app, bool? ssoEnabled, CancellationToken ct)
     {
-        var revision = Guid.NewGuid(); var now = clock.GetUtcNow().UtcDateTime; var enabled = ssoEnabled ?? app.SsoEnabled;
+        var revision = Guid.NewGuid(); var now = clock.GetUtcNow().UtcDateTime; var enabled = false;
         if (await db.MiniApps.Where(x => x.Id == app.Id && x.Version == app.Version && x.DeletedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.Version, revision).SetProperty(x => x.UpdatedAt, now).SetProperty(x => x.SsoEnabled, enabled), ct) != 1) throw Conflict();
         app.Version = revision; app.SsoEnabled = enabled;
@@ -142,18 +127,8 @@ public sealed class MiniAppVersionService(AppDbContext db, MiniAppReviewAccess a
 
     internal async Task<(CanonicalMiniAppVersionSnapshot Snapshot, Guid? Logo)> Capture(MiniApp app, MiniAppVersionSsoIntent? production, CancellationToken ct)
     {
-        var clients = await db.MiniAppOAuthClients.AsNoTracking().Where(x => x.MiniAppId == app.Id).ToListAsync(ct);
-        var redirects = await db.MiniAppRedirectUris.AsNoTracking().Where(x => x.MiniAppId == app.Id).ToListAsync(ct);
-        MiniAppVersionSsoIntent? Intent(MiniAppOAuthEnvironment environment)
-        {
-            var client = clients.SingleOrDefault(x => x.Environment == environment);
-            return client == null ? null : new(client.Id, client.ClientKey, client.ClientType,
-                client.AllowedScopes.Split(' ', StringSplitOptions.RemoveEmptyEntries),
-                redirects.Where(x => x.Environment == environment).Select(x => x.RedirectUri).ToArray(), environment == MiniAppOAuthEnvironment.Sandbox && client.SandboxEnabled);
-        }
         var snapshot = MiniAppVersionSnapshotPolicy.Create(new(1, app.Name, app.Category, app.LogoUrl, app.ShortDescription, app.Description,
-            app.WebsiteUrl, null, app.PrivacyPolicyUrl, app.TermsOfServiceUrl, app.SupportEmail, app.SsoEnabled,
-            Intent(MiniAppOAuthEnvironment.Sandbox), production ?? Intent(MiniAppOAuthEnvironment.Production)));
+            app.WebsiteUrl, null, app.PrivacyPolicyUrl, app.TermsOfServiceUrl, app.SupportEmail, false, null, null));
         var logo = app.LogoUrl == null ? null : await db.MiniAppLogoUploads.AsNoTracking()
             .Where(x => x.MiniAppId == app.Id && x.DeveloperAccountId == app.DeveloperAccountId && x.Url == app.LogoUrl)
             .OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id).Select(x => (Guid?)x.Id).FirstOrDefaultAsync(ct);

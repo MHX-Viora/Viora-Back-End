@@ -16,10 +16,10 @@ public static class MiniAppApi
         services.Configure<MiniAppOptions>(config.GetSection("MiniApps"));
         services.Configure<Viora.Infrastructure.Media.CloudinaryOptions>(config.GetSection("Cloudinary"));
         services.AddScoped<MiniAppSecretProtector>(); services.AddScoped<MiniAppService>(); services.AddScoped<MiniAppLogoStorage>();
-        services.AddScoped<MiniAppSsoService>();
         services.AddMiniAppReviewServices(config);
         MiniAppSandboxApi.AddServices(services,config);
         SandboxTestRegistration.AddSandboxTestIdentity(services,config);
+        services.AddMiniAppAuthBridge(config);
         services.AddHostedService<MiniAppLogoCleanup>();
         MiniAppIntegrationApi.AddServices(services);
         services.AddRateLimiter(o => o.AddPolicy("mini-app-sensitive", h => RateLimitPartition.GetFixedWindowLimiter(
@@ -41,19 +41,14 @@ public static class MiniAppApi
         MiniAppIntegrationApi.MapEndpoints(g);
         MiniAppVersionApi.MapEndpoints(g);
         MiniAppReviewApi.MapEndpoints(g);
-        MiniAppSsoApi.MapEndpoints(g);
         MiniAppSandboxApi.MapEndpoints(g);
-        SandboxTestApi.MapEndpoints(g);
+        MiniAppAuthBridgeApi.MapOwnerEndpoints(g);
         g.MapGet("", async (MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.List(Owner(h), int.TryParse(h.Request.Query["page"], out var page) ? page : 1, ct)));
         g.MapPost("", async (MiniAppCreateRequest r, MiniAppService s, HttpContext h, CancellationToken ct) =>
             Results.Ok(await s.Create(Owner(h), r, ct))).RequireRateLimiting("mini-app-sensitive");
         g.MapGet("/{appId}", async (string appId, MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.Get(Owner(h), appId, ct)));
         g.MapPatch("/{appId}", async (string appId, MiniAppUpdateRequest r, MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.Update(Owner(h), appId, r, ct)));
         g.MapDelete("/{appId}", async (string appId, MiniAppService s, HttpContext h, CancellationToken ct) => { await s.Delete(Owner(h), appId, ct); return Results.NoContent(); });
-        g.MapGet("/{appId}/credentials", async (string appId, MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.Credentials(Owner(h), appId, false, ct))).RequireRateLimiting("mini-app-sensitive");
-        g.MapPost("/{appId}/credentials/rotate", async (string appId, MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.Credentials(Owner(h), appId, true, ct))).RequireRateLimiting("mini-app-sensitive");
-        g.MapGet("/{appId}/redirect-uris", async (string appId, MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.Redirects(Owner(h), appId, ct)));
-        g.MapPut("/{appId}/redirect-uris", async (string appId, MiniAppRedirectRequest r, MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.SaveRedirects(Owner(h), appId, r, ct)));
         g.MapGet("/{appId}/activity", async (string appId, MiniAppService s, HttpContext h, CancellationToken ct) => Results.Ok(await s.Activity(Owner(h), appId, ct)));
         // Raw image upload avoids multipart form/cookie auth ambiguity. The same-origin BFF enforces CSRF.
         g.MapPost("/logo", async (HttpContext h, AppDbContext db, MiniAppLogoStorage storage, CancellationToken ct) =>

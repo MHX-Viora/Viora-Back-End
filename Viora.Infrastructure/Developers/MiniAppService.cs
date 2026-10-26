@@ -13,12 +13,12 @@ using Viora.Infrastructure.Persistence;
 namespace Viora.Infrastructure.Developers;
 
 public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector protector, IOptions<MiniAppOptions> options, IHostEnvironment environment,
-    Viora.Infrastructure.Sso.MiniAppOidcRegistry? oidcRegistry = null, MiniAppVersionService? versions = null)
+    MiniAppVersionService? versions = null)
 {
     private static string RandomId(string prefix) => prefix + WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
     private static DeveloperAuthException Missing() => new(404, "MINI_APP_NOT_FOUND", "Không tìm thấy Mini App.");
     private static MiniAppDto Map(MiniApp a) => new(a.AppId, a.Name, a.Category, a.LogoUrl, a.ShortDescription, a.Description,
-        a.WebsiteUrl, a.SupportEmail, a.PrivacyPolicyUrl, a.TermsOfServiceUrl, a.Status.ToString(), a.CreatedAt, a.UpdatedAt);
+        a.WebsiteUrl, a.SupportEmail, a.PrivacyPolicyUrl, a.TermsOfServiceUrl, a.Status.ToString(), a.CreatedAt, a.UpdatedAt, a.Version);
     private async Task<MiniApp> Own(Guid owner, string appId, CancellationToken ct) => await db.MiniApps
         .SingleOrDefaultAsync(a => a.AppId == appId && a.DeveloperAccountId == owner && a.DeletedAt == null, ct) ?? throw Missing();
     private void Audit(MiniApp app, Guid owner, string action) => db.MiniAppAuditLogs.Add(new() { MiniAppId = app.Id, ActorDeveloperId = owner, Action = action });
@@ -52,19 +52,12 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
             Status = MiniAppStatus.ConfigurationIncomplete, CreateRequestId = r.RequestId, CreateFingerprint = fingerprint };
         db.MiniApps.Add(app);
         await AttachLogo(app, owner, r.LogoUploadId, ct);
-        var client = new MiniAppOAuthClient { MiniAppId = app.Id, ClientKey = RandomId("ck_") };
-        db.MiniAppOAuthClients.Add(client); AddSecret(client);
+        var client = new MiniAppOAuthClient { MiniAppId = app.Id, ClientKey = RandomId("ck_"), ClientType = "Public", SandboxEnabled = true };
+        db.MiniAppOAuthClients.Add(client);
         Audit(app, owner, "mini_app.created");
         await db.SaveChangesAsync(ct);
-        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
         await tx.CommitAsync(ct);
         return Map(app);
-    }
-    private MiniAppClientSecret AddSecret(MiniAppOAuthClient client)
-    {
-        var encrypted = protector.Encrypt(RandomId("cs_"), client.Id);
-        var secret = new MiniAppClientSecret { OAuthClientId = client.Id, SecretEncrypted = encrypted.Ciphertext, SecretKeyVersion = encrypted.Version };
-        db.MiniAppClientSecrets.Add(secret); return secret;
     }
     private async Task AttachLogo(MiniApp app, Guid owner, Guid? uploadId, CancellationToken ct)
     {
@@ -103,7 +96,6 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         Touch(app); Audit(app, owner, "mini_app.updated");
         await db.SaveChangesAsync(ct);
         if (versions != null) await versions.SyncWorkingAsync(app, ct);
-        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
         await tx.CommitAsync(ct); return Map(app);
     }
     public async Task Delete(Guid owner, string appId, CancellationToken ct)
@@ -113,57 +105,9 @@ public sealed class MiniAppService(AppDbContext db, MiniAppSecretProtector prote
         await MiniAppDomainLifecycle.Revoke(db, app.Id, ct);
         var clients = db.MiniAppOAuthClients.Where(x => x.MiniAppId == app.Id);
         await clients.ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
-        await db.MiniAppClientSecrets.Where(x => clients.Select(c => c.Id).Contains(x.OAuthClientId) && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
         await db.MiniAppLogoUploads.Where(x => x.MiniAppId == app.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.MiniAppId, (Guid?)null).SetProperty(x => x.ExpiresAt, DateTime.UtcNow.AddHours(1)), ct);
         Audit(app, owner, "mini_app.deleted"); await db.SaveChangesAsync(ct);
-        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
         await tx.CommitAsync(ct);
-    }
-    public async Task<MiniAppCredentialsDto> Credentials(Guid owner, string appId, bool rotate, CancellationToken ct)
-    {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var app = await Own(owner, appId, ct);
-        var client = await db.MiniAppOAuthClients.SingleAsync(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox && x.RevokedAt == null, ct);
-        if (client.ClientType == "Public") throw new DeveloperAuthException(409, "PUBLIC_CLIENT_NO_SECRET", "Public Client chỉ sử dụng PKCE và không có Client Secret.");
-        MiniAppClientSecret secret;
-        if (rotate)
-        {
-            Touch(app);
-            client.Version = Guid.NewGuid();
-            // Persist revocation before inserting the new row to honor the active-secret unique index.
-            await db.MiniAppClientSecrets.Where(x => x.OAuthClientId == client.Id && x.RevokedAt == null)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
-            secret = AddSecret(client); Audit(app, owner, "credentials.rotated");
-        }
-        else
-        {
-            secret = await db.MiniAppClientSecrets.SingleAsync(x => x.OAuthClientId == client.Id && x.RevokedAt == null, ct);
-            if (secret.ExpiresAt <= DateTime.UtcNow) throw new DeveloperAuthException(409, "SECRET_EXPIRED", "Secret đã hết hạn. Hãy cấp lại.");
-            Audit(app, owner, "credentials.viewed");
-        }
-        var plaintext = protector.Decrypt(secret.SecretEncrypted, secret.SecretKeyVersion, client.Id);
-        await db.SaveChangesAsync(ct);
-        if (rotate && oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
-        await tx.CommitAsync(ct);
-        return new(app.AppId, client.ClientKey, plaintext, client.ClientType, secret.CreatedAt);
-    }
-    public async Task<string[]> Redirects(Guid owner, string appId, CancellationToken ct)
-    {
-        var app = await Own(owner, appId, ct);
-        return await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox).OrderBy(x => x.RedirectUri).Select(x => x.RedirectUri).ToArrayAsync(ct);
-    }
-    public async Task<string[]> SaveRedirects(Guid owner, string appId, MiniAppRedirectRequest r, CancellationToken ct)
-    {
-        if (r.RedirectUris is null || r.RedirectUris.Length > 20) throw MiniAppInput.Invalid("Tối đa 20 callback URI.");
-        var urls = r.RedirectUris.Select(x => MiniAppInput.Url(x, environment.IsDevelopment(), true)).Distinct(StringComparer.Ordinal).ToArray();
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var app = await Own(owner, appId, ct); Touch(app);
-        await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox).ExecuteDeleteAsync(ct);
-        db.MiniAppRedirectUris.AddRange(urls.Select(url => new MiniAppRedirectUri { MiniAppId = app.Id, RedirectUri = url }));
-        Audit(app, owner, "callbacks.updated"); await db.SaveChangesAsync(ct);
-        if (versions != null) await versions.SyncWorkingAsync(app, ct);
-        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
-        await tx.CommitAsync(ct); return urls;
     }
     public async Task<MiniAppActivityDto[]> Activity(Guid owner, string appId, CancellationToken ct)
     {

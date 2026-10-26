@@ -4,9 +4,9 @@ using System.Text.RegularExpressions;
 namespace Viora.Application.Developers;
 
 public sealed record MiniAppIntegrationRequest(string WebsiteUrl, string SupportEmail, string ShortDescription, string Description,
-    string PrivacyPolicyUrl, string TermsOfServiceUrl, bool SsoEnabled, string[] RedirectUris);
+    string PrivacyPolicyUrl, string TermsOfServiceUrl);
 public sealed record MiniAppIntegrationDto(string WebsiteUrl, string SupportEmail, string ShortDescription, string Description,
-    string PrivacyPolicyUrl, string TermsOfServiceUrl, bool SsoEnabled, string[] RedirectUris);
+    string PrivacyPolicyUrl, string TermsOfServiceUrl);
 public sealed record MiniAppDomainDto(string? Hostname, string Status, string? FileName, string? VerificationUrl,
     DateTime? VerifiedAt, DateTime? LastCheckedAt, DateTime? ExpiresAt, string? ErrorCode, string? Message);
 public sealed record MiniAppVerificationFile(string FileName, string Content);

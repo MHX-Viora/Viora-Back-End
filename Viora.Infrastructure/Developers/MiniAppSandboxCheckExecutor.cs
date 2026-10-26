@@ -15,8 +15,7 @@ public sealed class MiniAppSandboxCheckExecutor(AppDbContext db,MiniAppSandboxSe
         var actor=MiniAppSandboxSessionService.Actor(session);
         var appId=await db.MiniApps.Where(x=>x.Id==session.MiniAppId).Select(x=>x.AppId).SingleAsync(ct);
         await sessions.RequireSessionAsync(actor,appId,sessionId,ct);
-        var sso=await db.MiniApps.Where(x=>x.Id==session.MiniAppId).Select(x=>x.SsoEnabled).SingleAsync(ct);
-        var result=evidence!=null&&MiniAppSandboxEvidenceReader.Handles(key)&&(sso||key<SandboxCheckKey.Consent)?
+        var result=evidence!=null&&MiniAppSandboxEvidenceReader.Handles(key)&&key is SandboxCheckKey.Runtime or SandboxCheckKey.Bridge?
             await evidence.WaitAsync(sessionId,key,ct):await configuration.ExecuteAsync(session.MiniAppId,key,ct);
         await sessions.RequireSessionAsync(actor,appId,sessionId,ct);
         return result;

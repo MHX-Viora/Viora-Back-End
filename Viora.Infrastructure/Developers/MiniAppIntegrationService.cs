@@ -9,7 +9,7 @@ using Viora.Infrastructure.Persistence;
 namespace Viora.Infrastructure.Developers;
 
 public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProtector protector, IPublicWebFetcher fetcher, IHostEnvironment environment, TimeProvider clock,
-    Viora.Infrastructure.Sso.MiniAppOidcRegistry? oidcRegistry = null, MiniAppVersionService? versions = null)
+    MiniAppVersionService? versions = null)
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
     private async Task<MiniApp> Own(Guid owner, string appId, CancellationToken ct) => await db.MiniApps
@@ -17,18 +17,17 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
         ?? throw new DeveloperAuthException(404, "MINI_APP_NOT_FOUND", "Không tìm thấy Mini App.");
     private void Audit(MiniApp app, string action) => db.MiniAppAuditLogs.Add(new() { MiniAppId = app.Id, ActorDeveloperId = app.DeveloperAccountId, Action = action });
     private static void Touch(MiniApp app) => app.Version = Guid.NewGuid();
-    private Task<string[]> Redirects(Guid id, CancellationToken ct) => db.MiniAppRedirectUris.Where(x => x.MiniAppId == id && x.Environment == MiniAppOAuthEnvironment.Sandbox).OrderBy(x => x.RedirectUri).Select(x => x.RedirectUri).ToArrayAsync(ct);
     private Task<MiniAppDomainVerification?> Current(MiniApp app, CancellationToken ct)
     {
         var hostname = MiniAppDomainLifecycle.Host(app.WebsiteUrl);
         return db.MiniAppDomainVerifications.SingleOrDefaultAsync(x => x.MiniAppId == app.Id && x.Hostname == hostname && x.RevokedAt == null, ct);
     }
-    private static MiniAppIntegrationDto Map(MiniApp a, string[] redirects) => new(a.WebsiteUrl ?? "", a.SupportEmail ?? "", a.ShortDescription ?? "", a.Description ?? "", a.PrivacyPolicyUrl ?? "", a.TermsOfServiceUrl ?? "", a.SsoEnabled, redirects);
+    private static MiniAppIntegrationDto Map(MiniApp a) => new(a.WebsiteUrl ?? "", a.SupportEmail ?? "", a.ShortDescription ?? "", a.Description ?? "", a.PrivacyPolicyUrl ?? "", a.TermsOfServiceUrl ?? "");
     private static string RequireHost(MiniApp app) => MiniAppDomainLifecycle.Host(app.WebsiteUrl) ?? throw MiniAppInput.Invalid("Lưu Website URL HTTPS công khai trước khi xác minh domain.");
 
     public async Task<MiniAppIntegrationDto> Get(Guid owner, string appId, CancellationToken ct)
     {
-        var app = await Own(owner, appId, ct); return Map(app, await Redirects(app.Id, ct));
+        var app = await Own(owner, appId, ct); return Map(app);
     }
     public async Task<MiniAppIntegrationDto> Save(Guid owner, string appId, MiniAppIntegrationRequest r, CancellationToken ct)
     {
@@ -38,22 +37,17 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
         var terms = PublicWebAddress.Normalize(r.TermsOfServiceUrl, allowEmpty: true);
         var email = string.IsNullOrWhiteSpace(r.SupportEmail) ? "" : DeveloperInput.Email(r.SupportEmail).ToLowerInvariant();
         var shortDescription = MiniAppInput.Text(r.ShortDescription, 300); var description = MiniAppInput.Text(r.Description, 10000);
-        if (r.RedirectUris is null || r.RedirectUris.Length > 20) throw MiniAppInput.Invalid("Tối đa 20 callback URI.");
-        var redirects = r.RedirectUris.Select(x => MiniAppInput.Url(x, environment.IsDevelopment(), true)).Distinct(StringComparer.Ordinal).ToArray();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var app = await Own(owner, appId, ct); var previous = app.WebsiteUrl;
         app.WebsiteUrl = website; app.PrivacyPolicyUrl = privacy; app.TermsOfServiceUrl = terms;
-        app.SupportEmail = email; app.ShortDescription = shortDescription; app.Description = description; app.SsoEnabled = r.SsoEnabled;
+        app.SupportEmail = email; app.ShortDescription = shortDescription; app.Description = description;
         await MiniAppDomainLifecycle.ChangeWebsite(db, app, previous, protector, ct);
-        await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Sandbox).ExecuteDeleteAsync(ct);
-        db.MiniAppRedirectUris.AddRange(redirects.Select(uri => new MiniAppRedirectUri { MiniAppId = app.Id, RedirectUri = uri }));
         if (app.Status is MiniAppStatus.Draft or MiniAppStatus.ConfigurationIncomplete)
             app.Status = !string.IsNullOrWhiteSpace(app.LogoUrl) && website != "" && privacy != "" && terms != "" && email != "" && shortDescription != "" ? MiniAppStatus.Draft : MiniAppStatus.ConfigurationIncomplete;
         Touch(app); Audit(app, "integration.updated"); await db.SaveChangesAsync(ct);
         if (versions != null) await versions.SyncWorkingAsync(app, ct);
-        if (oidcRegistry != null) await oidcRegistry.SynchronizeAsync(app.Id, ct);
         await tx.CommitAsync(ct);
-        return Map(app, redirects);
+        return Map(app);
     }
 
     private MiniAppDomainDto DomainDto(MiniApp app, MiniAppDomainVerification? row)
@@ -132,7 +126,7 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
 
     public async Task<MiniAppReadinessDto> Readiness(Guid owner, string appId, CancellationToken ct)
     {
-        var app = await Own(owner, appId, ct); var row = await Current(app, ct); var redirects = await Redirects(app.Id, ct);
+        var app = await Own(owner, appId, ct); var row = await Current(app, ct);
         var version = app.Version; var domainVersion = row?.Version;
         var checks = new List<MiniAppReadinessCheck>();
         void Check(string key, bool pass, string message, string requirement = "required") => checks.Add(new(key, requirement, pass ? "passed" : "failed", pass ? "Đã cấu hình." : message));
@@ -142,8 +136,6 @@ public sealed class MiniAppIntegrationService(AppDbContext db, MiniAppSecretProt
         Check("website", ValidUrl(app.WebsiteUrl), "Chưa có Website URL HTTPS hợp lệ.");
         Check("domain", row is { Status: MiniAppDomainStatus.Verified, RevokedAt: null } && row.Hostname == MiniAppDomainLifecycle.Host(app.WebsiteUrl) && row.ExpiresAt > Now, "Domain chưa xác minh hoặc proof đã hết hạn.");
         Check("supportEmail", ValidEmail(app.SupportEmail), "Chưa có email hỗ trợ hợp lệ.");
-        if (app.SsoEnabled) Check("callbacks", redirects.Length > 0 && redirects.All(ValidRedirect), "SSO cần ít nhất một callback hợp lệ.");
-        else checks.Add(new("callbacks", "optional", "passed", "Chưa bật SSO; không bắt buộc callback."));
         var policies = await Task.WhenAll(Policy("privacyPolicy", app.PrivacyPolicyUrl, ct), Policy("termsOfService", app.TermsOfServiceUrl, ct));
         checks.AddRange(policies);
         // Do not publish readiness for a configuration/proof snapshot changed while policy URLs were fetched.

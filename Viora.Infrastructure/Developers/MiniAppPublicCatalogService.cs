@@ -5,7 +5,7 @@ using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.Developers;
 
-public sealed class MiniAppPublicCatalogService(AppDbContext db, TimeProvider clock, MiniAppProductionOptions options, bool ssoEnabled = false)
+public sealed class MiniAppPublicCatalogService(AppDbContext db, TimeProvider clock, MiniAppProductionOptions options, bool bridgeEnabled = false)
 {
     public async Task<MiniAppPublicPageDto> ListAsync(MiniAppPublicCatalogQuery request, CancellationToken ct)
     {
@@ -24,12 +24,14 @@ public sealed class MiniAppPublicCatalogService(AppDbContext db, TimeProvider cl
         RequireEnabled();
         var row = await Query(clock.GetUtcNow().UtcDateTime).SingleOrDefaultAsync(x => x.AppId == appId, ct);
         if (row == null) throw Unavailable();
-        var target = await MiniAppProductionEligibility.ReadAsync(db, row.Projection.MiniAppId, clock.GetUtcNow().UtcDateTime, ct);
+        var target = bridgeEnabled
+            ? await MiniAppProductionEligibility.PublicationAsync(db, row.Projection.MiniAppId, clock.GetUtcNow().UtcDateTime, ct)
+            : await MiniAppProductionEligibility.ReadAsync(db, row.Projection.MiniAppId, clock.GetUtcNow().UtcDateTime, ct);
         if (target.Publication.Id != row.Projection.PublicationId || target.Version.SnapshotHash != row.Projection.SnapshotHash)
             throw Unavailable();
         var item = row.Projection;
         return new(new(row.AppId, item.Name, item.LogoUrl, item.Description, item.Category, item.VersionName), true,
-            item.SsoEnabled, ["platform.getContext", "platform.close"]);
+            bridgeEnabled, ["platform.getContext", "platform.close"]);
     }
 
     private IQueryable<CatalogRow> Query(DateTime now) =>
@@ -40,16 +42,10 @@ public sealed class MiniAppPublicCatalogService(AppDbContext db, TimeProvider cl
         where item.SnapshotHash == version.SnapshotHash
             && db.MiniAppDomainVerifications.Any(proof => proof.MiniAppId == item.MiniAppId && proof.Hostname == item.Domain
                 && proof.Status == MiniAppDomainStatus.Verified && proof.RevokedAt == null && proof.ExpiresAt > now)
-            && (!item.SsoEnabled && publication.ProductionOAuthClientId == null || item.SsoEnabled && ssoEnabled &&
-                db.MiniAppOAuthClients.Any(client => client.Id == publication.ProductionOAuthClientId && client.MiniAppId == item.MiniAppId
-                    && client.Environment == MiniAppOAuthEnvironment.Production && client.RevokedAt == null
-                    && client.ClientKey == item.ProductionClientKey && client.ClientType == item.ProductionClientType
-                    && client.AllowedScopes == item.ProductionScopes && (item.ProductionClientType == "Public" ||
-                        db.MiniAppClientSecrets.Any(secret => secret.OAuthClientId == client.Id && secret.RevokedAt == null &&
-                            (secret.ExpiresAt == null || secret.ExpiresAt > now)))))
+            && bridgeEnabled
         select new CatalogRow { AppId = app.AppId, Projection = item };
 
-    private void RequireEnabled() { if (!options.Enabled) throw Unavailable(); }
+    private void RequireEnabled() { if (!options.Enabled && !bridgeEnabled) throw Unavailable(); }
     private static DeveloperAuthException Unavailable() => new(404, "APP_NOT_FOUND", "Mini App hiện không khả dụng.");
     private sealed class CatalogRow
     {

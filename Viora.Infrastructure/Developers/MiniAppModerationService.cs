@@ -1,16 +1,14 @@
 using System.Data;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using OpenIddict.EntityFrameworkCore.Models;
 using Viora.Application.Developers;
 using Viora.Domain.Developers;
 using Viora.Infrastructure.Persistence;
-using Viora.Infrastructure.Sso;
 
 namespace Viora.Infrastructure.Developers;
 
 public sealed class MiniAppModerationService(AppDbContext db, MiniAppReviewAccess access, TimeProvider clock, MiniAppReadinessService readiness,
-    MiniAppOidcRegistry? registry = null, MiniAppPublicationRevocation? revocation = null)
+    MiniAppBridgeRevocation? revocation = null)
 {
     public Task<MiniAppModerationResultDto> SuspendAsync(Guid admin, Guid source, string appId, MiniAppModerationRequest request, CancellationToken ct) =>
         ChangeAsync(admin, source, appId, request, false, ct);
@@ -36,10 +34,6 @@ public sealed class MiniAppModerationService(AppDbContext db, MiniAppReviewAcces
             if (await Replay(audit, actor, app.Id, request.RequestId, payload, ct) is { } replay) return replay;
             var (state, publication) = await Current(app, request, restore, ct);
             if (restore && await RestorationSafety(app.Id, false, ct) != restoreSafety) throw Conflict();
-            var keys = db.MiniAppOAuthClients.Where(x => x.MiniAppId == app.Id).Select(x => x.ClientKey);
-            var hasAuthority = await db.MiniAppOAuthClients.AnyAsync(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Production, ct) ||
-                await db.Set<OpenIddictEntityFrameworkCoreApplication>().AnyAsync(x => keys.Contains(x.ClientId!), ct);
-            if (hasAuthority && (registry == null || revocation == null)) throw new DeveloperAuthException(503, "MODERATION_RUNTIME_UNAVAILABLE", "Dịch vụ thu hồi quyền ứng dụng chưa sẵn sàng.");
             var now = clock.GetUtcNow().UtcDateTime; var revision = Guid.NewGuid(); var stateRevision = Guid.NewGuid();
             var status = restore ? MiniAppOperationalStatus.Active : MiniAppOperationalStatus.Suspended;
             if (await db.MiniApps.Where(x => x.Id == app.Id && x.DeletedAt == null && x.Version == request.ConcurrencyToken)
@@ -62,9 +56,8 @@ public sealed class MiniAppModerationService(AppDbContext db, MiniAppReviewAcces
                 publication.Status = MiniAppPublicationStatus.Suspended; publication.UnpublishedAt = publication.SuspendedAt = now;
                 publication.SuspensionReason = reason; publication.ConcurrencyToken = pubRevision;
             }
-            if (!restore) { if (revocation != null) await revocation.RevokeAllAsync(app.Id, ct); await CloseSandbox(app.Id, now, ct); }
+            if (!restore) { await new MiniAppBridgeRevocation(db, clock).RevokeAllAsync(app.Id, ct); await CloseSandbox(app.Id, now, ct); }
             await db.SaveChangesAsync(ct);
-            if (registry != null) await registry.SynchronizePublicationAsync(app.Id, null, ct);
             var afterSafety = restore ? await RestorationSafety(app.Id, false, ct) : null;
             var code = publication == null ? 0 : await db.MiniAppVersions.Where(x => x.Id == publication.MiniAppVersionId).Select(x => x.VersionCode).SingleAsync(ct);
             var result = new MiniAppModerationResultDto(new(status.ToString(), reason, restore ? null : now, stateRevision), revision,
@@ -79,7 +72,6 @@ public sealed class MiniAppModerationService(AppDbContext db, MiniAppReviewAcces
                 !await db.MiniAppOperationalStates.AnyAsync(x => x.MiniAppId == app.Id && x.Status == status && x.ConcurrencyToken == stateRevision, ct) ||
                 await db.MiniAppPublications.AnyAsync(x => x.MiniAppId == app.Id && x.Status == MiniAppPublicationStatus.Published, ct)) throw Conflict();
             if (restore && await RestorationSafety(app.Id, false, ct) != afterSafety) throw Conflict();
-            if (registry != null) await registry.VerifyPublicationAsync(app.Id, null, ct);
             await tx.CommitAsync(ct); return result;
         }
         catch (Exception error) when (MiniAppVersionService.IsWriteConflict(error)) { db.ChangeTracker.Clear(); throw Conflict(); }

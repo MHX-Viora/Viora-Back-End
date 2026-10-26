@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using Viora.Application.Developers;
 using Viora.Domain.Developers;
 using Viora.Infrastructure.Persistence;
-using Viora.Infrastructure.Sso;
 
 namespace Viora.Infrastructure.Developers;
 
@@ -107,25 +106,18 @@ public sealed class MiniAppSandboxSessionService(AppDbContext db, MiniAppSandbox
         var hostname=MiniAppDomainLifecycle.Host(app.WebsiteUrl);
         var proof=await db.MiniAppDomainVerifications.AsNoTracking().SingleOrDefaultAsync(x=>x.MiniAppId==app.Id && x.Hostname==hostname && x.RevokedAt==null,ct);
         var website=PublicWebAddress.Normalize(app.WebsiteUrl); var uri=new Uri(website); var origin=uri.GetLeftPart(UriPartial.Authority);
-        if(client is not {SandboxEnabled:true} || client.ClientType is not ("Public" or "Confidential") ||
+        if(client is not {SandboxEnabled:true} ||
             proof is not {Status:MiniAppDomainStatus.Verified} || proof.ExpiresAt<=Now || proof.Hostname!=uri.IdnHost.ToLowerInvariant() ||
             new[]{options.PortalOrigin,options.HostOrigin,options.Issuer}.Any(value=>new Uri(value).GetLeftPart(UriPartial.Authority)==origin))
             throw new DeveloperAuthException(403,"SANDBOX_CONFIGURATION_UNAVAILABLE","Cần Sandbox client hợp lệ và domain đã xác minh.");
-        var redirects=await db.MiniAppRedirectUris.AsNoTracking().Where(x=>x.MiniAppId==app.Id && x.Environment==MiniAppOAuthEnvironment.Sandbox)
-            .OrderBy(x=>x.RedirectUri).Select(x=>x.RedirectUri).ToArrayAsync(ct);
-        if(app.SsoEnabled)
-        {
-            SsoClientPolicy.EnsureEligible(client,app,proof,client.AllowedScopes.Split(' ',StringSplitOptions.RemoveEmptyEntries),"Sandbox",Now);
-            if(redirects.Length==0 || redirects.Any(value=>!Uri.TryCreate(value,UriKind.Absolute,out var callback)||callback.Scheme!="https"||callback.UserInfo.Length!=0||callback.Query.Length!=0||callback.Fragment.Length!=0))
-                throw new DeveloperAuthException(403,"SANDBOX_SSO_REDIRECT_REQUIRED","Cần callback HTTPS hợp lệ cho SSO Sandbox.");
-        }
+        string[] redirects=[];
         var fingerprint=Fingerprint(app,client,proof,website,redirects);
         return (client,website,origin,fingerprint);
     }
 
     internal static string Fingerprint(MiniApp app,MiniAppOAuthClient? client,MiniAppDomainVerification? proof,string website,string[] redirects)=>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new{
-            app.Version,ClientVersion=client?.Version,ProofVersion=proof?.Version,ProofExpiry=proof?.ExpiresAt.Ticks,website,app.SsoEnabled,client?.ClientKey,client?.AllowedScopes,redirects}))));
+            app.Version,ClientVersion=client?.Version,ProofVersion=proof?.Version,ProofExpiry=proof?.ExpiresAt.Ticks,website}))));
 
     private void Audit(SandboxActor actor,Guid app,string action,Guid session)
     {

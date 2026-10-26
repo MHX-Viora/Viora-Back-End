@@ -15,7 +15,6 @@ public static class MiniAppReviewRegistration
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.TryAddScoped<MiniAppReviewAccess>();
         services.TryAddScoped<MiniAppVersionService>();
-        services.TryAddScoped<MiniAppVersionCredentials>();
         services.TryAddScoped<MiniAppReviewAuditService>();
         services.TryAddScoped<MiniAppReadinessService>();
         services.TryAddScoped<MiniAppPublishingService>();

@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Viora.Application.Developers;
-using Viora.Infrastructure.Sso;
 
 namespace Viora.Infrastructure.Developers;
 
@@ -66,7 +65,7 @@ public static class MiniAppVersionSnapshotPolicy
         if (input.ClientType is not ("Public" or "Confidential") || input.ClientIdentity == Guid.Empty ||
             (input.ClientIdentity == null) != string.IsNullOrEmpty(input.ClientId) ||
             input.Scopes is not { Length: >= 1 and <= 3 } || !input.Scopes.Contains("openid", StringComparer.Ordinal) ||
-            input.Scopes.Any(s => !SsoClientPolicy.SupportedScopes.Contains(s, StringComparer.Ordinal)) ||
+            input.Scopes.Any(s => !new[] { "openid", "profile", "email" }.Contains(s, StringComparer.Ordinal)) ||
             input.RedirectUris is not { Length: <= 20 } || production && input.SandboxEnabled)
             throw MiniAppInput.Invalid("Cấu hình SSO snapshot không hợp lệ.");
         var clientId = input.ClientId;

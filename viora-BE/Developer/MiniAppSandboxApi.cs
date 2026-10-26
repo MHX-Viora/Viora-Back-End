@@ -15,13 +15,10 @@ public static class MiniAppSandboxApi
     {
         services.AddSingleton<IValidateOptions<MiniAppSandboxOptions>,MiniAppSandboxOptionsValidator>();
         services.AddOptions<MiniAppSandboxOptions>().Bind(configuration.GetSection(MiniAppSandboxOptions.SectionName))
-            .Validate(options=>!options.Enabled || !configuration.GetValue<bool>("Sso:Enabled") ||
-                Uri.TryCreate(options.Issuer,UriKind.Absolute,out var issuer) && Uri.TryCreate(configuration["Sso:Issuer"],UriKind.Absolute,out var actual) && issuer==actual,
-                "Sandbox issuer must match the existing enabled SSO server.").ValidateOnStart();
+            .ValidateOnStart();
         services.AddSingleton(provider=>provider.GetRequiredService<IOptions<MiniAppSandboxOptions>>().Value);
         services.AddScoped<MiniAppSandboxAccess>(); services.AddScoped<MiniAppSandboxSessionService>();
         services.AddScoped<MiniAppSandboxDiagnosticService>();
-        services.AddScoped<MiniAppSandboxProtocolService>();
         services.AddScoped<MiniAppSandboxExecutorService>();
         services.AddScoped<MiniAppSandboxEvidenceReader>();
         services.AddScoped<MiniAppSandboxConfigurationService>();

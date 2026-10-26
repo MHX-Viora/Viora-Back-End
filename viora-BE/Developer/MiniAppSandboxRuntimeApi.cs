@@ -60,9 +60,9 @@ public static class MiniAppSandboxRuntimeApi
         group.MapGet("/context",async(HttpContext http,MiniAppSandboxGrantService service,AppDbContext db,CancellationToken ct)=>
         {
             var session=await service.RequireRuntimeAsync(UniqueCookie(http,RuntimeCookie),ct);
-            var app=await db.MiniApps.AsNoTracking().Where(x=>x.Id==session.MiniAppId).Select(x=>new{x.AppId,x.Name,x.LogoUrl,x.SsoEnabled}).SingleAsync(ct);
+            var app=await db.MiniApps.AsNoTracking().Where(x=>x.Id==session.MiniAppId).Select(x=>new{x.AppId,x.Name,x.LogoUrl}).SingleAsync(ct);
             return Results.Ok(new{sessionId=session.Id,appId=app.AppId,name=app.Name,logoUrl=app.LogoUrl,environment="Sandbox",websiteUrl=session.WebsiteUrl,
-                partnerOrigin=session.PartnerOrigin,ssoEnabled=app.SsoEnabled,expiresAt=DateTime.SpecifyKind(session.ExpiresAt,DateTimeKind.Utc),configurationFingerprint=session.ConfigurationFingerprint});
+                partnerOrigin=session.PartnerOrigin,authBridgeEnabled=true,expiresAt=DateTime.SpecifyKind(session.ExpiresAt,DateTimeKind.Utc),configurationFingerprint=session.ConfigurationFingerprint});
         });
         group.MapPost("/external-links",async(HttpContext http,MiniAppSandboxGrantService grants,MiniAppSandboxNetwork network,AppDbContext db,CancellationToken ct)=>
         {
@@ -70,8 +70,7 @@ public static class MiniAppSandboxRuntimeApi
             var credential=UniqueCookie(http,RuntimeCookie);
             var session=await grants.RequireRuntimeAsync(credential,ct);
             var body=await MiniAppSandboxApi.ReadRequest<SandboxExternalLinkRequest>(http,ct,4096);
-            var callbacks=await db.MiniAppRedirectUris.AsNoTracking().Where(x=>x.MiniAppId==session.MiniAppId&&x.Environment==session.Environment).Select(x=>x.RedirectUri).ToArrayAsync(ct);
-            var url=await network.ValidateExternalAsync(body.Url,session.PartnerOrigin,ct,callbacks);
+            var url=await network.ValidateExternalAsync(body.Url,session.PartnerOrigin,ct);
             // DNS I/O cannot extend a revoked, expired or configuration-stale session.
             await grants.RequireRuntimeAsync(credential,ct);
             return Results.Ok(new{url,expiresAt=DateTime.SpecifyKind(session.ExpiresAt,DateTimeKind.Utc)});

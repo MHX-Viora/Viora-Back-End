@@ -63,7 +63,7 @@ export function startProductionHost({ window, document, fetch, config }) {
     const url = partnerTarget(config);
     document.querySelector('#app-name').textContent = config.name;
     frame = document.createElement('iframe'); frame.title = config.name; frame.referrerPolicy = 'no-referrer';
-    frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms' + (config.ssoEnabled ? ' allow-popups allow-popups-to-escape-sandbox' : ''));
+    frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
     frame.setAttribute('allow', "camera 'none'; microphone 'none'; geolocation 'none'; payment 'none'; usb 'none'");
     let loaded = false, reported = false;
     const waitForSdk = () => {

@@ -7,7 +7,7 @@ namespace Viora.Infrastructure.Developers;
 
 public sealed record MiniAppProductionPolicyTarget(MiniAppProductionTarget Target, string Fingerprint, Guid OperationalRevision, Uri Website, string AppId);
 
-public sealed class MiniAppProductionPolicy(AppDbContext db, TimeProvider clock, MiniAppProductionOptions options, bool ssoEnabled = false)
+public sealed class MiniAppProductionPolicy(AppDbContext db, TimeProvider clock, MiniAppProductionOptions options, bool bridgeEnabled = false)
 {
     public async Task LockAsync(Guid appId, MiniAppProductionActor actor, CancellationToken ct)
     {
@@ -22,9 +22,6 @@ public sealed class MiniAppProductionPolicy(AppDbContext db, TimeProvider clock,
                 JOIN "MiniAppReviewRequests" r ON r."Id"=p."ApprovedReviewRequestId"
                 WHERE p."MiniAppId"={appId} AND p."Status"=0 FOR SHARE OF p,v,r;
             SELECT 1 FROM "MiniAppDomainVerifications" d WHERE d."MiniAppId"={appId} AND d."RevokedAt" IS NULL FOR SHARE OF d;
-            SELECT 1 FROM "MiniAppOAuthClients" c WHERE c."MiniAppId"={appId} AND c."Environment"=1 FOR SHARE OF c;
-            SELECT 1 FROM "MiniAppClientSecrets" s JOIN "MiniAppOAuthClients" c ON c."Id"=s."OAuthClientId"
-                WHERE c."MiniAppId"={appId} AND c."Environment"=1 AND s."RevokedAt" IS NULL FOR SHARE OF s;
             """, ct);
         if (actor.AccountId != null && actor.SourceSocialSessionId != null)
             await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -39,7 +36,6 @@ public sealed class MiniAppProductionPolicy(AppDbContext db, TimeProvider clock,
         if (!options.Enabled) throw Unavailable();
         var now = clock.GetUtcNow().UtcDateTime;
         var target = await MiniAppProductionEligibility.ReadAsync(db, appId, now, ct);
-        if (target.Snapshot.SsoEnabled && !ssoEnabled) throw Unavailable();
         var website = new Uri(PublicWebAddress.Normalize(target.Snapshot.WebsiteUrl!));
         if (!Uri.TryCreate(options.HostOrigin, UriKind.Absolute, out var host) ||
             host.IdnHost.TrimEnd('.').Equals(website.IdnHost.TrimEnd('.'), StringComparison.OrdinalIgnoreCase) || options.IsReservedHost(website.IdnHost)) throw Unavailable();
@@ -49,14 +45,8 @@ public sealed class MiniAppProductionPolicy(AppDbContext db, TimeProvider clock,
         var proof = await db.MiniAppDomainVerifications.AsNoTracking().Where(x => x.MiniAppId == appId && x.Hostname == target.Snapshot.Domain &&
             x.Status == MiniAppDomainStatus.Verified && x.RevokedAt == null && x.ExpiresAt > now)
             .Select(x => new { x.Id, x.Version, x.ExpiresAt }).SingleOrDefaultAsync(ct) ?? throw Unavailable();
-        var client = await db.MiniAppOAuthClients.AsNoTracking().Where(x => x.Id == target.Publication.ProductionOAuthClientId)
-            .Select(x => new { x.Id, x.Version }).SingleOrDefaultAsync(ct);
-        var credentials = target.Snapshot.SsoEnabled && target.Snapshot.Production?.ClientType == "Confidential"
-            ? await db.MiniAppClientSecrets.AsNoTracking().Where(x => x.OAuthClientId == target.Publication.ProductionOAuthClientId &&
-                x.RevokedAt == null && (x.ExpiresAt == null || x.ExpiresAt > now)).OrderBy(x => x.Id).Select(x => new { x.Id, x.ExpiresAt }).ToArrayAsync(ct)
-            : [];
         var fingerprint = MiniAppReviewAuditService.Hash(new { target.Publication.Id, target.Publication.ConcurrencyToken,
-            target.Version.SnapshotHash, owner, OperationalRevision = state.ConcurrencyToken, state.Status, proof, client, credentials });
+            target.Version.SnapshotHash, owner, OperationalRevision = state.ConcurrencyToken, state.Status, proof });
         if (state.Status != MiniAppOperationalStatus.Active) throw Unavailable();
         return new(target, fingerprint, state.ConcurrencyToken, website, owner.AppId);
     }

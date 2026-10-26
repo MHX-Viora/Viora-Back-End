@@ -143,19 +143,6 @@ public sealed class MiniAppReadinessService(AppDbContext db, MiniAppReviewAccess
         if (new[] { snapshot.LogoUrl, snapshot.ShortDescription, snapshot.Description, snapshot.WebsiteUrl, snapshot.PrivacyPolicyUrl, snapshot.TermsOfServiceUrl, snapshot.SupportEmail }.Any(string.IsNullOrWhiteSpace)) blockers.Add("METADATA_INCOMPLETE");
         if (proof is not { Status: MiniAppDomainStatus.Verified } || proof.ExpiresAt <= Now) blockers.Add("DOMAIN_UNVERIFIED");
         if (version.LogoUploadId is { } logo && !await db.MiniAppLogoUploads.AnyAsync(x => x.Id == logo && x.DeveloperAccountId == app.DeveloperAccountId && x.Url == snapshot.LogoUrl, ct)) blockers.Add("VERSION_LOGO_UNAVAILABLE");
-        MiniAppOAuthClient? client = null; MiniAppClientSecret? credential = null;
-        if (snapshot.SsoEnabled)
-        {
-            var intent = snapshot.Production;
-            if (intent?.ClientIdentity is { } identity)
-                client = await db.MiniAppOAuthClients.AsNoTracking().SingleOrDefaultAsync(x => x.Id == identity && x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Production && x.RevokedAt == null && x.ClientKey == intent.ClientId, ct);
-            if (client == null || intent == null || intent.RedirectUris.Length == 0) blockers.Add("PRODUCTION_CANDIDATE_REQUIRED");
-            if (client != null && intent?.ClientType == "Confidential")
-            {
-                credential = await db.MiniAppClientSecrets.AsNoTracking().SingleOrDefaultAsync(x => x.OAuthClientId == client.Id && x.RevokedAt == null && (x.ExpiresAt == null || x.ExpiresAt > Now), ct);
-                if (credential == null) blockers.Add("PRODUCTION_CREDENTIAL_REQUIRED");
-            }
-        }
         if (probe)
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct); deadline.CancelAfter(TimeSpan.FromSeconds(30));
@@ -168,8 +155,7 @@ public sealed class MiniAppReadinessService(AppDbContext db, MiniAppReviewAccess
             catch (PublicFetchException) { blockers.Add("TARGET_PUBLIC_PAGE_UNAVAILABLE"); }
         }
         var fingerprint = MiniAppReviewAuditService.Hash(new { version.SnapshotHash, app.DeveloperAccountId, app.Developer.SecurityVersion, app.Developer.Status,
-            app.Developer.LockedUntil, OperationalRevision = state?.ConcurrencyToken, OperationalStatus = state?.Status, ProofId = proof?.Id, ProofRevision = proof?.Version, proof?.ExpiresAt,
-            ClientId = client?.Id, ClientRevision = client?.Version, CredentialId = credential?.Id, CredentialExpiry = credential?.ExpiresAt });
+            app.Developer.LockedUntil, OperationalRevision = state?.ConcurrencyToken, OperationalStatus = state?.Status, ProofId = proof?.Id, ProofRevision = proof?.Version, proof?.ExpiresAt });
         return new(snapshot, fingerprint, blockers.ToArray());
     }
     public static DeveloperAuthException Changed() => new(409, "REVIEW_READINESS_CHANGED", "Cấu hình hoặc bằng chứng đã thay đổi. Hãy kiểm tra readiness lại.");

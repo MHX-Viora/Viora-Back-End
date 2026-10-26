@@ -2,7 +2,7 @@ const channel='ankt.miniapp';
 const methods=['platform.getContext','platform.close','platform.getEnvironment','platform.isInsideAnkt'];
 const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-const observations={Runtime:['SDK_INITIALIZED','RUNTIME_READY','RUNTIME_ERROR'],SSO:['SSO_SUCCEEDED','SSO_FAILED'],Bridge:['BRIDGE_READY','BRIDGE_ERROR'],Network:['NETWORK_ERROR'],Permission:['PERMISSION_DENIED']};
+const observations={Runtime:['SDK_INITIALIZED','RUNTIME_READY','RUNTIME_ERROR'],Bridge:['BRIDGE_READY','BRIDGE_ERROR'],Network:['NETWORK_ERROR'],Permission:['PERMISSION_DENIED']};
 const diagnostic=value=>record(value)&&['category','code'].every(key=>Object.hasOwn(value,key))&&
   Object.keys(value).every(key=>['category','code','count'].includes(key))&&typeof value.category==='string'&&Object.hasOwn(observations,value.category)&&
   observations[value.category].includes(value.code)&&(!Object.hasOwn(value,'count')||Number.isInteger(value.count)&&value.count>=0&&value.count<=1000000);

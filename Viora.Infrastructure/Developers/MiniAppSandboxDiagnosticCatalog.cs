@@ -11,8 +11,6 @@ public static class MiniAppSandboxDiagnosticCatalog
         ["SDK_INITIALIZED"]=(SandboxDiagnosticCategory.Runtime,SandboxMessageCode.SdkInitialized,SandboxDiagnosticLevel.Info),
         ["RUNTIME_READY"]=(SandboxDiagnosticCategory.Runtime,SandboxMessageCode.RuntimeReady,SandboxDiagnosticLevel.Info),
         ["RUNTIME_ERROR"]=(SandboxDiagnosticCategory.Runtime,SandboxMessageCode.RuntimeError,SandboxDiagnosticLevel.Error),
-        ["SSO_SUCCEEDED"]=(SandboxDiagnosticCategory.Sso,SandboxMessageCode.SsoSucceeded,SandboxDiagnosticLevel.Info),
-        ["SSO_FAILED"]=(SandboxDiagnosticCategory.Sso,SandboxMessageCode.SsoFailed,SandboxDiagnosticLevel.Error),
         ["BRIDGE_READY"]=(SandboxDiagnosticCategory.Bridge,SandboxMessageCode.BridgeReady,SandboxDiagnosticLevel.Info),
         ["BRIDGE_ERROR"]=(SandboxDiagnosticCategory.Bridge,SandboxMessageCode.BridgeError,SandboxDiagnosticLevel.Error),
         ["NETWORK_ERROR"]=(SandboxDiagnosticCategory.Network,SandboxMessageCode.NetworkError,SandboxDiagnosticLevel.Error),

@@ -6,11 +6,9 @@ public sealed record MiniAppCreateRequest(string Name, string Category, Guid Req
 public sealed record MiniAppUpdateRequest(string? Name = null, string? Category = null, string? ShortDescription = null,
     string? Description = null, string? WebsiteUrl = null, string? SupportEmail = null, string? PrivacyPolicyUrl = null,
     string? TermsOfServiceUrl = null, Guid? LogoUploadId = null);
-public sealed record MiniAppRedirectRequest(string[] RedirectUris);
 public sealed record MiniAppDto(string AppId, string Name, string Category, string? LogoUrl, string? ShortDescription,
     string? Description, string? WebsiteUrl, string? SupportEmail, string? PrivacyPolicyUrl, string? TermsOfServiceUrl,
-    string Status, DateTime CreatedAt, DateTime UpdatedAt);
-public sealed record MiniAppCredentialsDto(string AppId, string ClientKey, string ClientSecret, string ClientType, DateTime CreatedAt);
+    string Status, DateTime CreatedAt, DateTime UpdatedAt, Guid AppVersion);
 public sealed record MiniAppActivityDto(string Action, DateTime CreatedAt);
 public sealed record MiniAppLogoDto(Guid UploadId, string Url);
 

@@ -8,7 +8,7 @@ namespace Viora.Infrastructure.Developers;
 public sealed class MiniAppSandboxEvidenceReader(AppDbContext db,MiniAppSandboxSessionService sessions,MiniAppSandboxOptions options,TimeProvider clock)
 {
     private DateTime Now=>clock.GetUtcNow().UtcDateTime;
-    public static bool Handles(SandboxCheckKey key)=>key>=SandboxCheckKey.Runtime;
+    public static bool Handles(SandboxCheckKey key)=>key is SandboxCheckKey.Runtime or SandboxCheckKey.Bridge;
     private bool Browser(SandboxCheckKey key)=>key is SandboxCheckKey.Runtime or SandboxCheckKey.Bridge;
     private SandboxCheckExecution Missing(SandboxCheckKey key)=>Browser(key)&&options.ExecutorKey.Length==0?
         new(SandboxCheckStatus.NotImplemented,SandboxMessageCode.ExecutorUnavailable,SandboxEvidenceSource.Server):
@@ -34,14 +34,7 @@ public sealed class MiniAppSandboxEvidenceReader(AppDbContext db,MiniAppSandboxS
             return row==null?null:new(row.Code==passed?SandboxCheckStatus.Passed:SandboxCheckStatus.Failed,
                 row.Code==passed?SandboxMessageCode.CheckPassed:SandboxMessageCode.CheckFailed,SandboxEvidenceSource.TrustedBrowser,row.CreatedAt);
         }
-        var stage=key switch{SandboxCheckKey.Consent=>SandboxProtocolStage.Authorize,SandboxCheckKey.Token=>SandboxProtocolStage.Token,_=>SandboxProtocolStage.UserInfo};
-        var outcome=key switch{SandboxCheckKey.Consent=>SandboxProtocolOutcome.Authorized,SandboxCheckKey.Token=>SandboxProtocolOutcome.TokenIssued,_=>SandboxProtocolOutcome.UserInfoValidated};
-        var evidence=await db.MiniAppSandboxProtocolEvidence.AsNoTracking().Where(x=>x.TestRunId==runId&&x.TestKey==key&&x.Stage==stage&&x.Outcome==outcome&&
-            x.AuthorizationId!=null&&x.TokenId!=null&&x.CreatedAt>=cutoff&&x.CreatedAt<=ceiling).OrderByDescending(x=>x.CreatedAt).FirstOrDefaultAsync(ct);
-        if(evidence==null)return null;
-        if(key==SandboxCheckKey.UserInfo&&!await db.MiniAppSandboxProtocolEvidence.AnyAsync(x=>x.TestRunId==runId&&x.Stage==SandboxProtocolStage.Token&&
-            x.Outcome==SandboxProtocolOutcome.TokenIssued&&x.TokenId==evidence.TokenId&&x.AuthorizationId==evidence.AuthorizationId&&x.CreatedAt>=cutoff&&x.CreatedAt<=evidence.CreatedAt,ct))return null;
-        return new(SandboxCheckStatus.Passed,SandboxMessageCode.CheckPassed,SandboxEvidenceSource.ServerProtocol,evidence.CreatedAt);
+        return null;
     }
     public Task<Guid?> LatestRunIdAsync(Guid appId,string fingerprint,CancellationToken ct)=>db.MiniAppSandboxTestRuns.AsNoTracking()
         .Where(x=>x.ConfigurationFingerprint==fingerprint&&db.MiniAppSandboxSessions.Any(s=>s.Id==x.SandboxSessionId&&s.MiniAppId==appId))

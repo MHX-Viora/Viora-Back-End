@@ -10,13 +10,6 @@ using Viora.Application.Posts;
 using Viora.Infrastructure.Realtime;
 using viora_BE.Hosting;
 
-// One-time offline provisioning must not load .env, connect to a database or start HTTP.
-if (args.Length > 0 && args[0] == "--provision-sso-certificates")
-{
-    Environment.ExitCode = viora_BE.Sso.SsoCertificateProvisioningCommand.Run(args);
-    return;
-}
-
 LoadDotEnv();
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
 
@@ -175,7 +168,7 @@ viora_BE.Developer.DeveloperApi.AddDeveloperAccounts(builder.Services, builder.C
 viora_BE.Developer.MiniAppApi.AddDeveloperMiniApps(builder.Services, builder.Configuration);
 viora_BE.Production.MiniAppProductionRegistration.AddMiniAppProductionServices(builder.Services, builder.Configuration);
 viora_BE.Production.MiniAppProductionRegistration.AddMiniAppProductionWorker(builder.Services, builder.Configuration);
-viora_BE.Sso.SsoRegistration.AddAnktSso(builder.Services, builder.Configuration);
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -326,13 +319,14 @@ app.MapGet("/group/{inviteCode}", (string inviteCode) =>
 app.MapControllers();
 viora_BE.Production.MiniAppPublicApi.MapMiniAppPublicApi(app);
 viora_BE.Production.MiniAppLaunchApi.MapMiniAppLaunchApi(app);
+viora_BE.Developer.MiniAppAuthBridgeApi.MapMiniAppAuthBridge(app);
 viora_BE.Production.MiniAppProductionHostApi.MapMiniAppProductionHostApi(app);
 viora_BE.Production.MiniAppProductionRuntimeApi.MapMiniAppProductionRuntimeApi(app);
 viora_BE.Production.MiniAppProductionHostDocuments.MapMiniAppProductionHostDocuments(app);
 viora_BE.Developer.DeveloperEndpoints.MapDeveloperEndpoints(app);
 viora_BE.Developer.DeveloperApi.MapDeveloperAccountEndpoints(app);
 viora_BE.Developer.MiniAppApi.MapDeveloperMiniApps(app);
-if (app.Configuration.GetValue<bool>("Sso:Enabled")) viora_BE.Sso.SsoSessionEndpoints.MapSsoSessionEndpoints(app);
+
 app.MapHub<RealtimeHub>("/hubs/realtime");
 app.MapHub<CallHub>("/hubs/calls");
 

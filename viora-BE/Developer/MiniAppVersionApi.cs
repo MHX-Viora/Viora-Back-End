@@ -33,9 +33,6 @@ public static class MiniAppVersionApi
         group.MapPut("/{versionId:guid}", async (string appId, Guid versionId, HttpContext http, MiniAppVersionService service, CancellationToken ct) =>
             Results.Ok(await service.UpdateDraftAsync(Owner(http), Source(http), appId, versionId,
                 await Read<MiniAppVersionUpdateRequest>(http, 16384, ct), ct))).RequireRateLimiting("mini-app-review-write");
-        group.MapPost("/{versionId:guid}/production-credentials", async (string appId, Guid versionId, HttpContext http,
-            MiniAppVersionCredentials service, CancellationToken ct) => Results.Ok(await service.PrepareAsync(Owner(http), Source(http), appId,
-                versionId, await Read<MiniAppVersionCommand>(http, 1024, ct), ct))).RequireRateLimiting("mini-app-review-credentials");
     }
 
     internal static async Task<T> Read<T>(HttpContext http, int maximum, CancellationToken ct)

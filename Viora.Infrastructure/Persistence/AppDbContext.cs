@@ -6,8 +6,6 @@ namespace Viora.Infrastructure.Persistence;
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<Viora.Domain.Developers.SandboxIdentityTemplate> SandboxIdentityTemplates => Set<Viora.Domain.Developers.SandboxIdentityTemplate>();
-    public DbSet<Viora.Domain.Developers.SandboxTestIdentity> SandboxTestIdentities => Set<Viora.Domain.Developers.SandboxTestIdentity>();
-    public DbSet<Viora.Domain.Developers.SandboxIdentitySession> SandboxIdentitySessions => Set<Viora.Domain.Developers.SandboxIdentitySession>();
     public DbSet<Viora.Domain.Developers.MiniAppVersion> MiniAppVersions => Set<Viora.Domain.Developers.MiniAppVersion>();
     public DbSet<Viora.Domain.Developers.MiniAppReviewRequest> MiniAppReviewRequests => Set<Viora.Domain.Developers.MiniAppReviewRequest>();
     public DbSet<Viora.Domain.Developers.MiniAppReviewAction> MiniAppReviewActions => Set<Viora.Domain.Developers.MiniAppReviewAction>();
@@ -21,10 +19,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Viora.Domain.Developers.MiniAppSandboxDiagnostic> MiniAppSandboxDiagnostics => Set<Viora.Domain.Developers.MiniAppSandboxDiagnostic>();
     public DbSet<Viora.Domain.Developers.MiniAppSandboxProtocolEvidence> MiniAppSandboxProtocolEvidence => Set<Viora.Domain.Developers.MiniAppSandboxProtocolEvidence>();
     public DbSet<Viora.Domain.Developers.MiniAppSandboxLaunchGrant> MiniAppSandboxLaunchGrants => Set<Viora.Domain.Developers.MiniAppSandboxLaunchGrant>();
-    public DbSet<Viora.Domain.Developers.AnktSsoSession> AnktSsoSessions => Set<Viora.Domain.Developers.AnktSsoSession>();
-    public DbSet<Viora.Domain.Developers.SsoLoginTransaction> SsoLoginTransactions => Set<Viora.Domain.Developers.SsoLoginTransaction>();
-    public DbSet<Viora.Domain.Developers.MiniAppPairwiseSubject> MiniAppPairwiseSubjects => Set<Viora.Domain.Developers.MiniAppPairwiseSubject>();
-    public DbSet<Viora.Domain.Developers.MiniAppUserConsent> MiniAppUserConsents => Set<Viora.Domain.Developers.MiniAppUserConsent>();
     public DbSet<Viora.Domain.Developers.MiniAppDomainVerification> MiniAppDomainVerifications => Set<Viora.Domain.Developers.MiniAppDomainVerification>();
     public DbSet<Viora.Domain.Developers.MiniApp> MiniApps => Set<Viora.Domain.Developers.MiniApp>();
     public DbSet<Viora.Domain.Developers.MiniAppOAuthClient> MiniAppOAuthClients => Set<Viora.Domain.Developers.MiniAppOAuthClient>();
@@ -104,7 +98,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.UseOpenIddict();
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
         foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetProperties()))

@@ -4,12 +4,11 @@ using Microsoft.EntityFrameworkCore;
 using Viora.Application.Developers;
 using Viora.Domain.Developers;
 using Viora.Infrastructure.Persistence;
-using Viora.Infrastructure.Sso;
 
 namespace Viora.Infrastructure.Developers;
 
 public sealed class MiniAppPublishingService(AppDbContext db, MiniAppReviewAccess access, MiniAppReadinessService readiness, TimeProvider clock,
-    MiniAppOidcRegistry? registry = null, MiniAppPublicationRevocation? revocation = null, MiniAppCatalogProjection? catalog = null)
+    MiniAppCatalogProjection? catalog = null)
 {
     public async Task<MiniAppPublishResultDto> PublishAsync(Guid owner, Guid source, string appId, MiniAppPublishRequest request, CancellationToken ct)
     {
@@ -33,8 +32,6 @@ public sealed class MiniAppPublishingService(AppDbContext db, MiniAppReviewAcces
             await readiness.RevalidatePublicationAsync(ticket, owner, source, appId, ct);
             var version = await db.MiniAppVersions.AsNoTracking().SingleAsync(x => x.Id == request.VersionId && x.MiniAppId == app.Id, ct);
             var safety = await readiness.TargetAsync(version, false, ct);
-            var hasProduction = await db.MiniAppOAuthClients.AnyAsync(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Production, ct);
-            if (hasProduction && (registry == null || revocation == null)) throw new DeveloperAuthException(503, "PUBLICATION_RUNTIME_UNAVAILABLE", "Dịch vụ phát hành Production chưa sẵn sàng.");
             var now = clock.GetUtcNow().UtcDateTime; var appRevision = Guid.NewGuid();
             if (await db.MiniApps.Where(x => x.Id == app.Id && x.DeveloperAccountId == owner && x.DeletedAt == null && x.Version == request.ConcurrencyToken)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Version, appRevision).SetProperty(x => x.Status, MiniAppStatus.Published).SetProperty(x => x.UpdatedAt, now), ct) != 1) throw Conflict();
@@ -49,23 +46,12 @@ public sealed class MiniAppPublishingService(AppDbContext db, MiniAppReviewAcces
             if (state == null) { state = new() { MiniAppId = app.Id }; db.MiniAppOperationalStates.Add(state); }
             if (state.Status != MiniAppOperationalStatus.Active) throw Conflict();
             // Revoke old grants before replacing the library projection, including scope/type/callback changes.
-            if (hasProduction) await revocation!.RevokeProductionAsync(app.Id, ct);
+            await new MiniAppBridgeRevocation(db, clock).RevokeProductionAsync(app.Id, ct);
             Guid? clientId = null;
-            if (safety.Snapshot.SsoEnabled)
-            {
-                var intent = safety.Snapshot.Production!; clientId = intent.ClientIdentity;
-                var clientRevision = Guid.NewGuid();
-                if (await db.MiniAppOAuthClients.Where(x => x.Id == clientId && x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Production && x.RevokedAt == null)
-                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientType, intent.ClientType).SetProperty(x => x.AllowedScopes, string.Join(' ', intent.Scopes))
-                        .SetProperty(x => x.SandboxEnabled, false).SetProperty(x => x.Version, clientRevision), ct) != 1) throw Conflict();
-                await db.MiniAppRedirectUris.Where(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Production).ExecuteDeleteAsync(ct);
-                db.MiniAppRedirectUris.AddRange(intent.RedirectUris.Select(uri => new MiniAppRedirectUri { MiniAppId = app.Id, Environment = MiniAppOAuthEnvironment.Production, RedirectUri = uri }));
-            }
             var publication = new MiniAppPublication { MiniAppId = app.Id, MiniAppVersionId = version.Id, ApprovedReviewRequestId = ready.ApprovedReviewRequestId!.Value,
                 ProductionOAuthClientId = clientId, PublishedAt = now, PublishedByDeveloperId = owner };
             db.MiniAppPublications.Add(publication); await db.SaveChangesAsync(ct);
             if (catalog != null) await catalog.AppendAsync(publication, version, now, ct);
-            if (registry != null) await registry.SynchronizePublicationAsync(app.Id, clientId, ct);
             var applied = await Applied(app, publication, version, appRevision, ct);
             var result = new MiniAppPublishResultDto(Map(publication, version.VersionCode), appRevision, state.ConcurrencyToken);
             var action = await audit.AppendAsync(new() { MiniAppId = app.Id, VersionId = version.Id, ReviewId = ready.ApprovedReviewRequestId, Actor = actor,
@@ -75,7 +61,6 @@ public sealed class MiniAppPublishingService(AppDbContext db, MiniAppReviewAcces
             await new MiniAppReviewNotificationService(db, clock).QueueAsync(action.Id, publication.Id, ct);
             await access.RequireOwnerAsync(owner, source, appId, ct);
             if (await Applied(app, publication, version, appRevision, ct) != applied) throw Conflict();
-            if (registry != null) await registry.VerifyPublicationAsync(app.Id, clientId, ct);
             await tx.CommitAsync(ct); return result;
         }
         catch (Exception error) when (MiniAppVersionService.IsWriteConflict(error)) { db.ChangeTracker.Clear(); throw Conflict(); }
@@ -100,16 +85,13 @@ public sealed class MiniAppPublishingService(AppDbContext db, MiniAppReviewAcces
                 x.Status == MiniAppPublicationStatus.Published && x.ConcurrencyToken == request.PublicationRevision, ct) ?? throw Conflict();
             var state = await db.MiniAppOperationalStates.AsNoTracking().SingleOrDefaultAsync(x => x.MiniAppId == app.Id &&
                 x.Status == MiniAppOperationalStatus.Active && x.ConcurrencyToken == request.OperationalRevision, ct) ?? throw Conflict();
-            var hasProduction = await db.MiniAppOAuthClients.AnyAsync(x => x.MiniAppId == app.Id && x.Environment == MiniAppOAuthEnvironment.Production, ct);
-            if (hasProduction && (registry == null || revocation == null)) throw new DeveloperAuthException(503, "PUBLICATION_RUNTIME_UNAVAILABLE", "Dịch vụ ngừng phát hành Production chưa sẵn sàng.");
             var now = clock.GetUtcNow().UtcDateTime; var revision = Guid.NewGuid(); var publicationRevision = Guid.NewGuid();
             if (await db.MiniApps.Where(x => x.Id == app.Id && x.DeveloperAccountId == owner && x.DeletedAt == null && x.Version == request.ConcurrencyToken && x.Status != MiniAppStatus.Suspended)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Version, revision).SetProperty(x => x.Status, MiniAppStatus.Draft).SetProperty(x => x.UpdatedAt, now), ct) != 1) throw Conflict();
             if (await db.MiniAppPublications.Where(x => x.Id == publication.Id && x.Status == MiniAppPublicationStatus.Published && x.ConcurrencyToken == request.PublicationRevision)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, MiniAppPublicationStatus.UnpublishedByOwner).SetProperty(x => x.UnpublishedAt, (DateTime?)now)
                     .SetProperty(x => x.ConcurrencyToken, publicationRevision), ct) != 1) throw Conflict();
-            if (hasProduction) await revocation!.RevokeProductionAsync(app.Id, ct);
-            if (registry != null) await registry.SynchronizePublicationAsync(app.Id, null, ct);
+            await new MiniAppBridgeRevocation(db, clock).RevokeProductionAsync(app.Id, ct);
             publication.Status = MiniAppPublicationStatus.UnpublishedByOwner; publication.UnpublishedAt = now; publication.ConcurrencyToken = publicationRevision;
             var code = await db.MiniAppVersions.Where(x => x.Id == publication.MiniAppVersionId).Select(x => x.VersionCode).SingleAsync(ct);
             var result = new MiniAppPublishResultDto(Map(publication, code), revision, state.ConcurrencyToken);
@@ -122,7 +104,6 @@ public sealed class MiniAppPublishingService(AppDbContext db, MiniAppReviewAcces
             if (!await db.MiniAppOperationalStates.AnyAsync(x => x.MiniAppId == app.Id && x.Status == MiniAppOperationalStatus.Active && x.ConcurrencyToken == state.ConcurrencyToken, ct) ||
                 !await db.MiniApps.AnyAsync(x => x.Id == app.Id && x.Version == revision && x.Status == MiniAppStatus.Draft, ct) ||
                 await db.MiniAppPublications.AnyAsync(x => x.MiniAppId == app.Id && x.Status == MiniAppPublicationStatus.Published, ct)) throw Conflict();
-            if (registry != null) await registry.VerifyPublicationAsync(app.Id, null, ct);
             await tx.CommitAsync(ct); return result;
         }
         catch (Exception error) when (MiniAppVersionService.IsWriteConflict(error)) { db.ChangeTracker.Clear(); throw Conflict(); }

@@ -38,17 +38,26 @@ public static class TrustedProxyHeaders
 
     public static IApplicationBuilder UseTrustedProxyHeaders(this IApplicationBuilder app)
     {
+        var originalProtoPresent = new object();
+        app.Use(async (context, next) =>
+        {
+            // ForwardedHeaders may consume this header. Capture only presence,
+            // never its value or any cookie/query/credential material.
+            context.Items[originalProtoPresent] = context.Request.Headers.ContainsKey("X-Forwarded-Proto");
+            await next(context);
+        });
         app.UseForwardedHeaders();
         var logger = app.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger("ANKT.ReverseProxy");
+        logger.LogInformation("Trusted proxy HTTPS forwarding is active; only configured ingress peers are trusted.");
         var reported = 0;
         return app.Use(async (context, next) =>
         {
-            if (!context.Request.IsHttps && context.Request.Path == "/.well-known/openid-configuration" &&
-                context.Request.Headers.ContainsKey("X-Forwarded-Proto") && Interlocked.Exchange(ref reported, 1) == 0)
+            if (!context.Request.IsHttps && context.Request.Path == "/api/miniapp/auth/exchange" &&
+                Interlocked.Exchange(ref reported, 1) == 0)
             {
                 // One diagnostic per process: peer IP only; no headers, query, cookies or tokens.
-                logger.LogWarning("SSO discovery still sees HTTP behind a proxy. Immediate peer: {ProxyPeer}. Confirm this peer belongs to your ingress, then configure ReverseProxy__KnownProxies__0 or its confirmed KnownNetworks range. HTTPS enforcement remains enabled.",
-                    context.Connection.RemoteIpAddress);
+                logger.LogWarning("Mini App Auth Bridge still sees HTTP behind a proxy. Immediate peer: {ProxyPeer}. Forwarded proto present: {ProtoPresent}. Confirm this peer belongs to your ingress, then configure ReverseProxy__KnownProxies__0 or its confirmed KnownNetworks range. HTTPS enforcement remains enabled.",
+                    context.Connection.RemoteIpAddress, context.Items[originalProtoPresent] is true);
             }
             await next(context);
         });
