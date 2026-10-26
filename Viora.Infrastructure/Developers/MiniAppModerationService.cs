@@ -7,8 +7,7 @@ using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.Developers;
 
-public sealed class MiniAppModerationService(AppDbContext db, MiniAppReviewAccess access, TimeProvider clock, MiniAppReadinessService readiness,
-    MiniAppBridgeRevocation? revocation = null)
+public sealed class MiniAppModerationService(AppDbContext db, MiniAppReviewAccess access, TimeProvider clock, MiniAppReadinessService readiness)
 {
     public Task<MiniAppModerationResultDto> SuspendAsync(Guid admin, Guid source, string appId, MiniAppModerationRequest request, CancellationToken ct) =>
         ChangeAsync(admin, source, appId, request, false, ct);

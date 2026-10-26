@@ -34,7 +34,7 @@ public static class MiniAppProductionRegistration
         services.TryAddScoped<MiniAppProductionAccess>();
         services.TryAddScoped<MiniAppProductionAudit>();
         services.TryAddScoped(sp => new MiniAppProductionPolicy(sp.GetRequiredService<Viora.Infrastructure.Persistence.AppDbContext>(),
-            sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<MiniAppProductionOptions>(), configuration.GetValue<bool>("MiniAppAuth:Enabled")));
+            sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<MiniAppProductionOptions>()));
         services.TryAddScoped<MiniAppProductionLaunchService>();
         services.TryAddScoped<MiniAppProductionGrantService>();
         services.TryAddScoped<MiniAppProductionRuntimeService>();

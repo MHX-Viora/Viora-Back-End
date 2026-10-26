@@ -7,7 +7,7 @@ namespace Viora.Infrastructure.Developers;
 
 public sealed record MiniAppProductionPolicyTarget(MiniAppProductionTarget Target, string Fingerprint, Guid OperationalRevision, Uri Website, string AppId);
 
-public sealed class MiniAppProductionPolicy(AppDbContext db, TimeProvider clock, MiniAppProductionOptions options, bool bridgeEnabled = false)
+public sealed class MiniAppProductionPolicy(AppDbContext db, TimeProvider clock, MiniAppProductionOptions options)
 {
     public async Task LockAsync(Guid appId, MiniAppProductionActor actor, CancellationToken ct)
     {

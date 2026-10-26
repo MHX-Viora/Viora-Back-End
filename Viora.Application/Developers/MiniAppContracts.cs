@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace Viora.Application.Developers;
 
 public sealed record MiniAppCreateRequest(string Name, string Category, Guid RequestId, Guid? LogoUploadId = null);
