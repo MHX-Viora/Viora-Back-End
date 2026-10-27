@@ -148,6 +148,15 @@ public static class MiniAppAuthBridgeApi
     public static void MapOwnerEndpoints(RouteGroupBuilder apps)
     {
         var group = apps.MapGroup("/{appId}/auth-bridge");
+        group.MapPost("/credentials/reveal", async (string appId, HttpContext http, MiniAppPartnerLoginService service, CancellationToken ct) =>
+        {
+            http.Response.Headers.CacheControl = "no-store";
+            http.Response.Headers.Pragma = "no-cache";
+            http.Response.Headers["Referrer-Policy"] = "no-referrer";
+            var actor = await Actor(http);
+            var request = await MiniAppSandboxApi.ReadRequest<MiniAppCredentialRevealRequest>(http, ct);
+            return Results.Ok(await service.RevealCredentialAsync(actor, appId, request.Environment, ct));
+        }).RequireRateLimiting("mini-app-sensitive");
         group.MapGet("", async (string appId, HttpContext http, MiniAppBridgeService service, CancellationToken ct) =>
         { var actor = await Actor(http); return Results.Ok(await service.ConfigAsync(appId, actor, ct)); });
         group.MapPost("/launch", async (string appId, HttpContext http, MiniAppBridgeService service, CancellationToken ct) =>

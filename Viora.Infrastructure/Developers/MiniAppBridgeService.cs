@@ -27,6 +27,11 @@ public sealed class MiniAppPartnerCredentials
     public string ClientId { get; set; } = "";
     public string SandboxSecretHash { get; set; } = "";
     public string ProductionSecretHash { get; set; } = "";
+    // Optional secret-manager values for owner-only reveal. Never expose options as DTOs.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string SandboxSecret { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ProductionSecret { get; set; } = "";
 }
 
 public sealed class MiniAppBridgeService(AppDbContext db, SandboxTestService sandbox,

@@ -129,7 +129,7 @@ MiniAppAuth__Partners__Nts__ProductionSecretHash=<DIFFERENT-SHA256-HEX>
 Generate two independent 32-byte random secrets using a local cryptographic tool.
 Register their SHA-256 hex hashes under that existing app's exact public AppId in
 ANKT's Render environment. Deliver each plaintext secret privately to the appropriate
-partner backend. This is an operator registration; the Portal never returns it.
+partner backend. This is operator provisioning, not self-service generation. The app owner may reveal/copy the configured secret through the authenticated Portal as described below.
 Hashing protects high-entropy random secrets; do not use human-chosen passwords.
 An unset hash disables that environment's partner login with
 PARTNER_LOGIN_NOT_CONFIGURED. Rotation replaces the hash and requires matching

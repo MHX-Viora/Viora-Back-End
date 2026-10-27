@@ -21,6 +21,11 @@ public sealed record MiniAppBridgeUser(Guid Id, string Username, string DisplayN
 public sealed record MiniAppLoginCode(string Code, int ExpiresIn);
 public sealed record MiniAppPartnerExchange(string Code);
 public sealed record MiniAppPartnerSessionRequest(Guid SessionId);
+public sealed record MiniAppCredentialRevealRequest(string? Environment);
+public sealed record MiniAppCredentialValue(string ClientId, string Environment, string ClientSecret)
+{
+    public override string ToString() => $"{ClientId} ({Environment}): [REDACTED]";
+}
 public sealed record MiniAppPartnerIdentity(MiniAppPartnerUser User, string MiniAppId, string Environment, Guid SessionId, DateTime ExpiresAt);
 public sealed record MiniAppPartnerUser(Guid Id, string DisplayName,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AvatarUrl,

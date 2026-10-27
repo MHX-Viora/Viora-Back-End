@@ -15,6 +15,31 @@ public sealed class MiniAppPartnerLoginService(AppDbContext db, MiniAppBridgeSer
     IOptions<MiniAppBridgeOptions> options, TimeProvider clock)
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
+    public async Task<MiniAppCredentialValue> RevealCredentialAsync(MiniAppBridgeActor actor, string client, string? environment, CancellationToken ct)
+    {
+        var now = Now;
+        if (!actor.IsSandbox || !await db.DeveloperSessions.AnyAsync(x => x.Id == actor.SourceSessionId &&
+            x.DeveloperAccountId == actor.Id && x.RevokedAt == null && x.ExpiresAt > now && x.AbsoluteExpiresAt > now &&
+            x.Account.Status == DeveloperStatus.Active && (x.Account.LockedUntil == null || x.Account.LockedUntil <= now), ct))
+            throw new DeveloperAuthException(401, "SESSION_EXPIRED", "Vui lòng đăng nhập tài khoản Developer.");
+        var app = await db.MiniApps.AsNoTracking().SingleOrDefaultAsync(x => x.AppId == client &&
+            x.DeveloperAccountId == actor.Id && x.DeletedAt == null, ct)
+            ?? throw new DeveloperAuthException(404, "MINI_APP_NOT_FOUND", "Không tìm thấy Mini App.");
+        if (environment is not ("Sandbox" or "Production"))
+            throw new DeveloperAuthException(400, "INVALID_ENVIRONMENT", "Chọn môi trường Sandbox hoặc Production.");
+        static DeveloperAuthException Unavailable() => new(503, "PARTNER_SECRET_UNAVAILABLE",
+            "Client Secret chưa sẵn sàng để sao chép. Liên hệ ANKT để cấu hình credential của app.");
+        if (!options.Value.Enabled) throw Unavailable();
+        var registered = options.Value.Partner(client) ?? throw Unavailable();
+        var secret = environment == "Sandbox" ? registered.SandboxSecret : registered.ProductionSecret;
+        if (secret is null || secret.Length is < 32 or > 256 || secret.Any(char.IsControl)) throw Unavailable();
+        try { Credentials(client, secret, environment == "Sandbox"); }
+        catch (DeveloperAuthException) { throw Unavailable(); }
+        db.MiniAppAuditLogs.Add(new() { MiniAppId = app.Id, ActorDeveloperId = actor.Id,
+            Action = "partner.credential.revealed", Metadata = System.Text.Json.JsonSerializer.Serialize(new { environment }) });
+        await db.SaveChangesAsync(ct);
+        return new(client, environment, secret);
+    }
     private static DeveloperAuthException InvalidCode() => new(400, "INVALID_LOGIN_CODE", "Mã đăng nhập không hợp lệ hoặc đã hết hạn.");
     private void Credentials(string client, string secret, bool sandbox)
     {
