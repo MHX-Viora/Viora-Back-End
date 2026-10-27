@@ -1,15 +1,42 @@
-# Developer Platform Stage 6 — implementation checkpoint
+# Developer Platform Stage 6 — local acceptance complete
 
-Updated 2026-10-19. Spec/plan approved by user instruction to start implementation.
+Updated 2026-10-20. Spec/plan approved by user instruction to start implementation.
 Canonical [spec](../specs/developer-platform-stage-6.md) and
 [32-task plan/evidence](../plans/developer-platform-stage-6.md).
 
-Tasks 1–8 verified; Stage 6 is incomplete. Tasks 9–14 now have implementation and
-automated coverage. Their real browser/deployed-header and authenticated Portal
-acceptance is pending. Tasks 15–20 persistence/diagnostics/retention, test-run
-coordination and configuration readiness are implemented and verified. Resume at Task 21
-while keeping browser acceptance open. No trusted readiness or production popup
-SDK is claimed.
+Tasks 1–32 are complete within the approved local web/controlled-fixture scope.
+The final [acceptance report](developer-platform-stage-6-acceptance.md) records all
+18 categories, 25 security cases, 20 E2E steps and reproduction artifacts. It
+supersedes historical pending statements in the checkpoints below. Real
+Public/Confidential Portal/BFF/SSO and full readiness pass; cookie/CSP/navigation/
+delay failures remain explicit. Public deployment/DNS/TLS/deployed headers/native
+runtime remain separate. No application DB migration, commit, publication or
+Stage 7 was performed.
+
+## Final Tasks 25–32 handoff
+
+- Protocol correlation uses optional `sandbox_run`, server-private code claims,
+  generated internal token IDs and actual validated UserInfo. Missing/stale hints
+  cannot authorize requests or create proof; ordinary SSO stays compatible.
+- Separate authenticated native-CDP executor signs bounded per-run/check proofs.
+  Run-scoped runtime cookies preserve the owner's preview credential. Latest
+  additive migration binds executor grants to run/version with restricted FKs;
+  retention deletes bound grants before runs and rollback consumes those grants.
+- Readiness pins one newest completed run, current configuration/live source,
+  matching persisted proof and five-minute freshness. No owner-authenticated
+  result-writing endpoint; no readiness flag publishes or approves an app.
+- Portal provides selected checks, create/cancel/history/retry, provenance,
+  diagnostics pagination/filtering and allowlisted JSON export. Run hint is visible;
+  SDK `loginPopup({sandboxRunId})` and Confidential library parameters can bind it.
+  Focus restoration waits for React commit. Device switching and responsive
+  keyboard launch/logs/reload/stop are exercised in the actual exported Portal.
+- Final validation: backend 487 passed / 1 existing MoneyAudit skip; SDK 37,
+  host/executor 23, FE/BFF 42; FE types/lint/export, .NET8 Release and EF model pass.
+  Real Public/Confidential SSO, cookie restriction, CSP refusal, origin redirect
+  and delayed-SDK fixtures pass their positive/negative assertions.
+- Provisioning, API/HMAC details, migration precautions and executable commands:
+  [operations](../operations/developer-platform-stage-6.md). Detailed evidence and
+  limits: [final acceptance](developer-platform-stage-6-acceptance.md).
 
 Implemented: `MiniAppSandboxOptions`/validator, typed server actor and live access
 policy, session/grant entities/configuration in shared AppDbContext; additive
@@ -231,3 +258,94 @@ FE `.codex-tmp/stage6-config-portal-tests.log`, `stage6-config-types.log`,
 Next: Task 21; Tasks 21–32 and real browser/Portal/header/security/E2E acceptance
 remain open. No schema/migration, application DB access, deployment, commit,
 publication or Stage 7. Unrelated working-tree changes preserved.
+
+## Deployment compiler compatibility
+
+The Dockerfile builds with SDK 8.0; the local default SDK was 9.0.305. Release
+publish with an isolated official SDK 8.0.426 reproduced all four reported CS1003
+errors at SsoConsentService:99 and SsoTokenService:35. The SDK 8 parser rejected
+the conditional collection expressions in SetDestinations. Both branches now use
+explicit `new[] { ... }` arrays, preserving AccessToken/IdentityToken destinations.
+Release publish then passed using SDK 8.0.426. `.codex-tmp/` is excluded from the
+Docker context, including the isolated SDK and publish/test output.
+
+Evidence: `.codex-tmp/deploy-sdk8-red.log` and `deploy-sdk8-publish.log`.
+Full Release regression on SDK 8.0.426: 444 passed / 1 existing MoneyAudit skip;
+`.codex-tmp/deploy-sdk8-regression.log` and
+`.codex-tmp/test-results/deploy-sdk8-regression.trx`.
+For deployment verification, check `dotnet --version` and publish Release using
+SDK 8; a successful local SDK 9 build does not establish Docker compiler parity.
+Docker CLI is unavailable locally; no Linux container build or redeployment was run.
+
+## Tasks 21–24 — 2026-10-20 checkpoint
+
+Stage 6 remains incomplete. Tasks 21–24 now have implementation and targeted
+automated/browser evidence. Next is Task 25 (actual protocol/run correlation),
+then Tasks 26–32. Authenticated Developer Portal lifecycle, deployed Vercel CSP,
+trusted executor/readiness, final 20-step E2E and security matrix remain open.
+
+Host v2 grants `platform.openExternalUrl` only when its real action is wired.
+Host-only POST `/sandbox-runtime/external-links` accepts exactly `{url}` within
+4 KiB, rejects queries and reuses exact host Origin/runtime-cookie authorization.
+It checks the session partner origin, HTTPS, public DNS, no credentials/query/
+fragment, reserved auth destinations and current registered callback paths.
+Live source/session/configuration are rechecked after DNS I/O; no arbitrary URL
+is fetched. Returned URL/session expiry feed a host-owned modal with textContent,
+native keyboard/focus handling, a 15-second maximum and noopener/noreferrer link.
+Only a trusted user click can confirm. Reset/dispose/close abort pending dialogs;
+one dialog is allowed at a time. v1 permissions stay unchanged. SDK external-link
+requests wait 30 seconds to cover authorization plus the bounded confirmation.
+DNS validation is an eligibility gate, not control over later browser redirects.
+
+SDK `auth.loginPopup({prompt?,timeoutMs?})` is opt-in and opens synchronously from
+the caller's click before awaiting discovery. A known popup source, exact partner
+origin, exact callback schema/path and per-attempt state gate the response before
+the existing library validates PKCE/nonce/signature and exchanges code. No auth
+response/token/verifier crosses the ANKT host bridge. Default top-level login is
+unchanged. Callback helper `completePopupRedirect(registeredRedirectUri)` clears
+query before relaying directly to the partner opener; unavailable opener returns
+false. Blocked/closed/timeout, storage failure, logout/new-login/pagehide and late
+completion fail closed. Tokens remain in the SDK instance's memory.
+
+Public example selects the adapter inside an iframe and revalidates UserInfo.
+Confidential example binds a completion-only signal to its known popup/random
+attempt, exchanges server-side and then calls `/session` from the iframe for
+fresh server UserInfo. A top-level cookie alone cannot imply embedded success.
+Consent HTML/JSON now derives `environment` from the eligible registered client;
+query parameters cannot select the label. Sandbox has a visible test notice;
+Production is tested separately. Existing approval/denial behavior is retained.
+
+The disposable HTTPS fixture needed its current integration/SSO service
+registrations restored after the intervening Sandbox features. Its new Public SDK
+button tests the actual adapter rather than the earlier feasibility prototype.
+Executed Chrome DevTools observations on nested Portal → host → partner:
+
+- Public actual SDK popup: first login, consent, code/token/JWKS/UserInfo success;
+  forced consent denial returns unauthenticated. Consent shows Sandbox.
+- Confidential actual popup: same-origin completion followed by successful
+  embedded `/session`/UserInfo and authenticated iframe with SameSite=None.
+- Separate SameSite=Lax fixture: popup login succeeds, iframe explicitly reports
+  `embedded_session_unavailable`. This is SameSite coverage, not a claim of every
+  global third-party-cookie/partitioned-storage policy.
+- Host/Portal fixture cookies stay separated. Standalone production external-link
+  module UI: confirmation, Escape cancellation/focus return and new tab with both
+  opener/referrer absent. UI fixture is not authenticated host/runtime evidence.
+- COOP-like closed handles/timeouts/source spoofing/state forgery, pending close,
+  navigation cleanup and real signed SDK exchange are covered by focused tests.
+  New adapter's real-browser COOP/storage-denial matrix still needs final E2E.
+
+Verification: full backend **459 passed / 1 existing MoneyAudit skip** (including
+disposable PostgreSQL migrations/races), SDK **36 passed/build**, host Node **18
+passed**, FE/BFF **39 passed**, FE TypeScript and focused SDK ESLint pass. Existing
+HTTPS Public/Confidential protocol E2E **1 passed**. No new dependency/schema/
+migration, configured DB access, deployment, publication, commit or Stage 7.
+Unrelated working-tree edits are preserved.
+Full Release solution build with isolated SDK **8.0.426** passes with zero
+warnings/errors (`.codex-tmp/stage6-popup-sdk8-build.log`).
+
+Evidence: `.codex-tmp/stage6-popup-full-tests.log`,
+`.codex-tmp/test-results/stage6-popup-full.trx`, `stage6-popup-final-focused.log`,
+`stage6-popup-sdk.log`, `stage6-popup-host.log`, `stage6-popup-sdk-lint.log`,
+`stage6-popup-protocol-e2e.log`, `stage6-popup-positive-browser.txt`,
+`stage6-popup-restricted-browser.txt`; FE `.codex-tmp/stage6-popup-portal-tests.log`
+and `stage6-popup-types.log`. Logs are local artifacts, not readiness authority.

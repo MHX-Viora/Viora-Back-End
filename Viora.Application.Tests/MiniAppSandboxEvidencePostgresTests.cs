@@ -16,10 +16,12 @@ public sealed class MiniAppSandboxEvidencePostgresTests
     {
         await using var pg=await IsolatedPostgres.Start();await using var f=await SandboxFixture.Create(pg.ConnectionString);
         var session=await f.Service().CreateAsync(f.Actor,f.App.AppId,default);var account=new Account {Email="sandbox-evidence-pg@example.test"};
-        f.Db.Accounts.Add(account);f.Db.MiniAppUserConsents.Add(new(){AccountId=account.Id,MiniAppId=f.App.Id,OAuthClientId=f.Client.Id,GrantedScopes="openid",GrantedAt=DateTime.UtcNow});
+        f.Db.Accounts.Add(account);
         await f.Db.SaveChangesAsync();f.Db.ChangeTracker.Clear();
         var previous=f.Db.Database.GetMigrations().Single(x=>x.EndsWith("_AddMiniAppSandboxSessions"));
         var current=f.Db.Database.GetMigrations().Single(x=>x.EndsWith("_AddMiniAppSandboxEvidence"));
+        // Isolate this predecessor migration from the later executor grant FK in EnsureCreated.
+        await f.Db.Database.ExecuteSqlRawAsync("ALTER TABLE \"MiniAppSandboxLaunchGrants\" DROP CONSTRAINT \"FK_MiniAppSandboxLaunchGrants_MiniAppSandboxTestRuns_ExecutorR~\";");
         await f.Db.Database.ExecuteSqlRawAsync("DROP TABLE \"MiniAppSandboxProtocolEvidence\"; DROP TABLE \"MiniAppSandboxDiagnostics\"; DROP TABLE \"MiniAppSandboxTestResults\"; DROP TABLE \"MiniAppSandboxTestRuns\"; ALTER TABLE \"MiniAppSandboxSessions\" DROP CONSTRAINT \"AK_MiniAppSandboxSessions_Id_ConfigurationFingerprint\"; CREATE TABLE \"__EFMigrationsHistory\" (\"MigrationId\" varchar(150) PRIMARY KEY, \"ProductVersion\" varchar(32) NOT NULL);");
         var migrator=f.Db.GetService<IMigrator>();var up=migrator.GenerateScript(previous,current);
         Assert.DoesNotContain("DROP TABLE",up);Assert.DoesNotContain("DELETE FROM",up);Assert.DoesNotContain("UPDATE ",up);
@@ -38,7 +40,7 @@ public sealed class MiniAppSandboxEvidencePostgresTests
         }
         Assert.Single(await f.Db.MiniAppSandboxDiagnostics.AsNoTracking().ToListAsync());
         await f.Db.Database.ExecuteSqlRawAsync(migrator.GenerateScript(current,previous));
-        Assert.Single(await f.Db.MiniAppSandboxSessions.AsNoTracking().ToListAsync());Assert.Single(await f.Db.MiniAppUserConsents.AsNoTracking().ToListAsync());
+        Assert.Single(await f.Db.MiniAppSandboxSessions.AsNoTracking().ToListAsync());
         Assert.Single(await f.Db.MiniAppOAuthClients.AsNoTracking().ToListAsync());Assert.Single(await f.Db.Accounts.AsNoTracking().ToListAsync());
         await f.Db.Database.ExecuteSqlRawAsync(up);Assert.Empty(await f.Db.MiniAppSandboxTestRuns.AsNoTracking().ToListAsync());
         Assert.Single(await f.Db.MiniAppSandboxSessions.AsNoTracking().ToListAsync());

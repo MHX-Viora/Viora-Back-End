@@ -56,7 +56,8 @@ public sealed class MiniAppSandboxPostgresTests
         var source=new DeveloperSession {Account=owner,TokenHash="source-pg",ExpiresAt=DateTime.UtcNow.AddHours(1),AbsoluteExpiresAt=DateTime.UtcNow.AddHours(2)};
         var client=new MiniAppOAuthClient {MiniApp=app,ClientKey="sandbox-pg-client",ClientType="Public",SandboxEnabled=true};
         db.DeveloperSessions.Add(source); db.MiniAppOAuthClients.Add(client); await db.SaveChangesAsync();
-        var current=db.Database.GetMigrations().Last();
+        // Exercise the complete Stage 6 chain, independent of later feature migrations.
+        var current=db.Database.GetMigrations().Single(x=>x.EndsWith("_AddSandboxExecutorLaunchBinding"));
         var previous=db.Database.GetMigrations().Single(x=>x.EndsWith("_AddSsoAccountLinks"));
         var migrator=db.GetService<IMigrator>();
         // Recreate the pre-Sandbox schema before exercising all additive Sandbox migrations.

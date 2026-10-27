@@ -1,104 +1,61 @@
 # Sandbox automatic login
 
-Use a separate non-Production backend/test database. The default is disabled and
-`Production` hosts force it off even when configuration says true. This runbook
-supersedes the earlier separate-account deployment instructions.
+Sandbox uses the same Mini App Auth Bridge as Production. Configure the existing
+backend using [Render setup](miniapp-auth-bridge-render.md); no separate service,
+login page, callback, consent screen or test-account password is required.
 
 ## Setup
 
-1. Review migrations `20261024081450_AddSandboxTestIdentities` and
-   `20261026012608_ShareSandboxTestAccount`. Back up the intended **test** database.
-   Run the existing EF migration procedure only against that verified test target.
-   Fresh installations use the same migration chain. Shared mappings prevent
-   downgrade to a unique AccountId index; legacy accounts are preserved for audit.
-2. Preserve existing SSO issuer, HTTPS signing/encryption certificates, BFF secret
-   and Mini App encryption keys. Set `Sso__Enabled=true`,
-   `SandboxTest__Enabled=true`, exact `SandboxTest__PortalOrigin` and a
-   `SandboxTest__SessionMinutes` value from 1 to 15 on the test host.
-   Set its actual environment to Development/Testing/Staging, never Production.
-3. Deploy matching backend and Portal to the test environment. The first valid
-   owner overview/launch idempotently creates the shared Account/User and template.
-   Real Cloudinary URLs are already configured; missing assets fail readiness.
-4. Configure an owned Sandbox OAuth client, exact HTTPS callback and verified
-   website domain. Use a public client with the browser SDK; confidential clients
-   exchange their secret only from their backend.
+1. Review/apply the additive Sandbox account and Bridge migrations to the verified
+   database through the deployment process. Do not remove Accounts/Users or the
+   shared SandboxIdentityTemplates row.
+2. Set `MiniAppAuth__Enabled=true`,
+   `MiniAppAuth__AllowedHostOrigin=https://mxh.ankt.vn`, and
+   `SandboxTest__Enabled=true`. Preserve primary JWT, DeveloperAuth, Gmail and BFF
+   configuration. The backend can remain in ASP.NET Production environment.
+3. Deploy matching Portal/SDK. Register an HTTPS Website URL and verify its domain.
+   The public client ID is the App ID; it also identifies Production launches.
+4. Sign into Developer Portal, select the owned Mini App and open Sandbox.
 
-No application database migration or deployment is performed by the local tests.
-Do not change a production service's environment to enable this feature.
+The backend checks the active DeveloperSession and ownership before choosing the
+persisted `ankt_sandbox_test` Account/User. Creation is idempotent under a shared
+provisioning lock. It preserves linked Account/User, Cloudinary avatar/cover and
+Sandbox flags. Each launch has its own developer-bound Bridge session; shared
+profile identity does not share session authority.
 
-## Developer flow
+## Integration
 
-Đăng nhập Developer Portal → chọn Mini App → Sandbox → **Chạy thử Mini App**.
-Mini App dùng Sandbox OAuth client để tự khởi chạy code + PKCE. Không nhập mật
-khẩu hoặc đồng ý cấp quyền thủ công. **Mở lại Mini App** tạo phiên riêng;
-**Dừng phiên** thu hồi token của phiên đó. UserInfo lấy profile từ database.
-
-The existing SDK calls are `initialize`, `auth.login`, `auth.handleRedirect`,
-`auth.getStatus` and `auth.getUser`; no duplicate getSession/getUserInfo API exists.
-On a dedicated Sandbox entry/callback, reuse the configured SDK instance:
+Use the actual private local SDK artifact; see
+[Mini App integration](miniapp-auth-bridge.md). The SDK calls are:
 
 ```ts
-async function startSandboxMiniApp() {
-  await sdk.initialize();
-  const callback = new URL(window.location.href);
-  if (callback.searchParams.has('code') || callback.searchParams.has('error')) {
-    await sdk.auth.handleRedirect(callback);
-    history.replaceState(null, '', callback.pathname);
-  } else if (sdk.auth.getStatus() !== 'authenticated') {
-    await sdk.auth.login({prompt: 'none'});
-    return; // the browser is navigating to the issuer
-  }
-  const user = await sdk.auth.getUser();
-  renderProfile(user); // sub, id, username, displayName, fullName, isSandbox, images
-}
+await ANKT.init();
+const session = await ANKT.auth.getSession();
+const user = await ANKT.auth.getUserInfo();
 ```
 
-Handle errors visibly; do not loop silently on login_required. With an active
-Sandbox cookie, repeat `auth.login({prompt:'none'})` after token expiry. After
-15 minutes/source-session revocation, return to Portal for a new launch.
-Refresh token grants remain unsupported by policy, and no refresh token is issued.
-SDK tokens remain in memory; only temporary PKCE/state/nonce use sessionStorage.
-Use the normal Production client/consent flow outside Sandbox. The Sandbox cookie
-is client-bound and cannot authorize the Production client or JWT APIs.
+The iframe/native host checks source and origin and receives a one-time code
+bound to the SDK PKCE challenge. Exchange issues a scoped Sandbox token; the
+primary ANKT JWT stays in the host. Production launches instead bind to the
+signed-in real Account/User and an active approved publication. A request cannot
+choose a Sandbox or Production identity by setting an environment field.
 
-## API and data boundaries
+Codes expire after 60 seconds, access tokens after 5 minutes, launch sessions
+after 15 minutes. Source logout/revocation invalidates later exchanges/reads.
+Reopening Sandbox creates an independent session. The SDK keeps tokens in memory
+and can reauthorize while its host session remains active.
 
-- Existing owner APIs under `/api/developer/mini-apps/{appId}/sandbox-test`:
-  GET overview, POST `/sessions` with `{}`, DELETE `/sessions/{id}`.
-- Owner APIs authenticate DeveloperSession; a production Bearer token is not a
-  substitute. Launch POST validates exact Portal Origin and one-time ticket.
-- `/connect/authorize`, `/connect/token`, `/connect/userinfo` remain the OIDC flow.
-  `profile` releases the real shared User id and profile aliases; `openid` alone
-  releases only sub. `email` releases the sample email with email_verified=false.
-- Pairwise sub stays distinct per Mini App despite the shared profile id. Partners
-  must key their accounts/data by validated issuer/client/sub. Private writable
-  test data needs their own developer/app/session partition; the backend exposes
-  no Sandbox write grant. Production profile/payments/notifications APIs reject
-  Sandbox tokens through their separate JWT authentication.
-- `IsVerified=true` is a sample User flag; no KYC record or verified email is forged.
+## Verification and errors
 
-## Local verification
+Verify owner Sandbox launch, UserInfo (`isSandbox=true`, linked profile/images),
+wrong-owner rejection, wrong-origin/client rejection, expired/replayed code,
+revocation, primary JWT API rejection and Production token isolation. Browser and
+native device checks must be reported as unrun when infrastructure is unavailable.
 
-From `viora-BE` with .NET 8 and local PostgreSQL binaries:
+Connection states distinguish pending, connecting, connected and a specific
+failure. HOST_UNAVAILABLE usually requires checking SDK installation, parent
+embedding, `frame-ancestors`, X-Frame-Options and the configured exact host origin.
+Never log code/verifier/access token values.
 
-```powershell
-.\.codex-tmp\sdk8-check\sdk\dotnet.exe test Viora.Application.Tests/Viora.Application.Tests.csproj --filter "FullyQualifiedName~SandboxTestIdentityTests|FullyQualifiedName~SandboxAutoLogin" -m:1 -nr:false -p:UseSharedCompilation=false
-.\.codex-tmp\sdk8-check\sdk\dotnet.exe build tools/SsoE2EHost/SsoE2EHost.csproj -m:1 -nr:false -p:UseSharedCompilation=false
-node tools/SandboxIdentityE2E/run-fixture.mjs
-```
-
-These commands create their own disposable local databases, never read `.env`,
-and never contact the configured application DB. E2E uses real HTTPS/OIDC with
-two local partner fixtures and Chrome. Database evidence goes to
-`.codex-tmp/sandbox-auto-database.json` and the mobile screenshot to
-`.codex-tmp/sandbox-identity-mobile.png`; all fixture databases are removed on exit.
-
-## Troubleshooting
-
-- Disabled/403: verify the non-Production environment and explicit feature flag.
-- Missing assets: verify Cloudinary URLs return 200; do not simulate success.
-- Readiness: check client enabled, exact callback and current domain verification.
-- login_required: the client-bound cookie/session expired; launch again in Portal.
-- Invalid token: check session/source revocation, expiry and client version.
-- Test spawn EPERM/pg_ctl failure: rerun isolated tests with permission to launch
-  local child processes; do not point tests at an existing database service.
+Legacy cookie sessions and consent stores are archived reversibly by
+[the cleanup migration](miniapp-legacy-sso-cleanup.md); physical deletion is deferred.

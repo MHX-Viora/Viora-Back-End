@@ -42,7 +42,7 @@ public sealed class MiniAppReviewSubmissionService(AppDbContext db, MiniAppRevie
                     s.SetProperty(x => x.State, MiniAppVersionState.Submitted).SetProperty(x => x.SubmittedAt, now)
                         .SetProperty(x => x.UpdatedAt, now).SetProperty(x => x.ConcurrencyToken, revision), ct) != 1) throw MiniAppReadinessService.Changed();
             var ready = ticket.Readiness;
-            var attestation = JsonSerializer.Serialize(new MiniAppReviewEvidenceAttestation(1, request.VersionId, ready.SnapshotHash,
+            var attestation = JsonSerializer.Serialize(new MiniAppReviewEvidenceAttestation(ticket.EvidenceSchemaVersion, request.VersionId, ready.SnapshotHash,
                 ready.SandboxRunId!.Value, ready.ConfigurationFingerprint!, ready.EvaluatedAt, ready.RequiredChecks));
             if (Encoding.UTF8.GetByteCount(attestation) > 32768) throw MiniAppReadinessService.Blocked();
             var review = new MiniAppReviewRequest { MiniAppId = app.Id, MiniAppVersionId = request.VersionId, DeveloperAccountId = owner,

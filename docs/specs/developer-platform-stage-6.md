@@ -4,6 +4,9 @@ Status: APPROVED by the user's instruction to begin implementation, 2026-10-17.
 Scope: supplied Stage 6 requirements I–XXVII; the four proposed architecture/policy
 choices below are approved. Read with [the task plan](../plans/developer-platform-stage-6.md).
 
+Implementation/local acceptance completed 2026-10-20; final scope, executed evidence
+and deployment/browser limits are in the [acceptance report](../handoffs/developer-platform-stage-6-acceptance.md).
+
 ## Objective
 
 An active owner opens a real registered partner website in an isolated web host,

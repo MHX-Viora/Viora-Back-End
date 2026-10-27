@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Viora.Application.Developers;
 using Viora.Domain.Developers;
@@ -14,6 +15,51 @@ public sealed class DeveloperIdentityTests
 {
     private const string Password = "A long developer password 2026!";
     private static readonly DeveloperRequestContext Context = new("127.0.0.1", "Identity integration test");
+
+    [Fact]
+    public async Task TokenEmailsUseHtmlWithoutChangingLinksOrTokenLifetimes()
+    {
+        await using var f = await Fixture.Create();
+        await f.Register();
+        var verification = await f.Db.DeveloperActionTokens.SingleAsync();
+        Assert.InRange((verification.ExpiresAt - verification.CreatedAt).TotalSeconds, 86395, 86405);
+        Assert.Contains("/developers/verify-email#token=" + f.Mail.Token, f.Mail.Content!.Html);
+        await f.Service.VerifyEmailAsync(f.Mail.Token, Context, default);
+        Assert.Equal(1, f.Mail.Count); // Activation itself must not introduce a new email.
+        await f.Service.SendEmailActionAsync("developer@example.test", true, Context, default);
+        var reset = await f.Db.DeveloperActionTokens.SingleAsync(t => t.Purpose == DeveloperTokenPurpose.ResetPassword);
+        Assert.InRange((reset.ExpiresAt - reset.CreatedAt).TotalSeconds, 1795, 1805);
+        Assert.Contains("/developers/reset-password#token=" + f.Mail.Token, f.Mail.Content!.Html);
+        Assert.Equal(2, f.Mail.Count);
+    }
+
+    [Fact]
+    public async Task DeliveryFailureDoesNotLogTokenMessageOrProviderSecrets()
+    {
+        var logger = new EmailLogger();
+        await using var f = await Fixture.Create(logger: logger);
+        f.Mail.FailDelivery = true;
+        await f.Register();
+        var log = Assert.Single(logger.Messages);
+        Assert.Contains("InvalidOperationException", log);
+        Assert.DoesNotContain(f.Mail.Token, log);
+        Assert.DoesNotContain("refresh-secret", log);
+        Assert.DoesNotContain("access-secret", log);
+        Assert.DoesNotContain("client-secret", log);
+        Assert.DoesNotContain("developer@example.test", log);
+        Assert.DoesNotContain("<html", log);
+        Assert.DoesNotContain(f.Mail.Content!.Text, log);
+        Assert.Contains(await f.Db.DeveloperAuditLogs.ToListAsync(), a => a.Action == "EmailDeliveryFailed");
+    }
+
+    private sealed class EmailLogger : ILogger<DeveloperIdentityService>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel level) => true;
+        public void Log<TState>(LogLevel level, EventId id, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Messages.Add(formatter(state, exception) + exception?.ToString());
+    }
 
     [Fact]
     public async Task RegisterVerifyLoginAndRevokeUsesRealDatabaseAndPasswordHasher()
@@ -191,9 +237,18 @@ public sealed class DeveloperIdentityTests
         public bool IsConfigured => true;
         public int Count;
         public string Token = "";
+        public DeveloperEmailContent? Content;
+        public bool FailDelivery;
+        public Task SendAsync(string recipient, string subject, DeveloperEmailContent content, CancellationToken ct)
+        {
+            Content = content;
+            return SendAsync(recipient, subject, content.Text, ct);
+        }
         public Task SendAsync(string recipient, string subject, string text, CancellationToken ct)
         {
-            Count++; Token = text.Split("#token=")[1].Split('\n')[0].Trim(); return Task.CompletedTask;
+            Count++; Token = text.Split("#token=")[1].Split('\n')[0].Trim();
+            if (FailDelivery) throw new InvalidOperationException(text + Content?.Html + " refresh-secret access-secret client-secret " + recipient);
+            return Task.CompletedTask;
         }
     }
     private sealed class Fixture(SqliteConnection connection, AppDbContext db, Mail mail, DeveloperIdentityService service) : IAsyncDisposable
@@ -201,7 +256,7 @@ public sealed class DeveloperIdentityTests
         public AppDbContext Db => db;
         public Mail Mail => mail;
         public DeveloperIdentityService Service => service;
-        public static async Task<Fixture> Create(DbCommandInterceptor? interceptor = null)
+        public static async Task<Fixture> Create(DbCommandInterceptor? interceptor = null, ILogger<DeveloperIdentityService>? logger = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
             connection.CreateFunction<string?, int>("char_length", value => value?.Length ?? 0);
@@ -209,7 +264,7 @@ public sealed class DeveloperIdentityTests
             if (interceptor is not null) options.AddInterceptors(interceptor);
             var db = new AppDbContext(options.Options);
             await db.Database.EnsureCreatedAsync(); var mail = new Mail();
-            var service = new DeveloperIdentityService(db, mail, Options.Create(new DeveloperAuthOptions { PortalUrl = "https://mxh.ankt.vn/developers" }), TimeProvider.System, NullLogger<DeveloperIdentityService>.Instance);
+            var service = new DeveloperIdentityService(db, mail, Options.Create(new DeveloperAuthOptions { PortalUrl = "https://mxh.ankt.vn/developers" }), TimeProvider.System, logger ?? NullLogger<DeveloperIdentityService>.Instance);
             return new(connection, db, mail, service);
         }
         public Task Register() => Service.RegisterAsync(new("Developer Test", "developer@example.test", Password, Password, true), Context, default);

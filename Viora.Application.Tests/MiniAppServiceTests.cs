@@ -13,38 +13,20 @@ using Xunit;
 public sealed class MiniAppServiceTests
 {
     [Fact]
-    public async Task CreateIsAtomicIdempotentAndCredentialsAreEncrypted()
+    public async Task CreateIsAtomicIdempotentAndDoesNotIssueAFrontendSecret()
     {
         await using var f = await Fixture.Create();
         var request = new MiniAppCreateRequest("Test app", "utilities", Guid.NewGuid());
         var app = await f.Service.Create(f.Owner, request, default);
         Assert.Equal(app.AppId, (await f.Service.Create(f.Owner, request, default)).AppId);
         Assert.Single(await f.Db.MiniApps.ToListAsync()); Assert.Single(await f.Db.MiniAppOAuthClients.ToListAsync());
-        var credentials = await f.Service.Credentials(f.Owner, app.AppId, false, default);
-        var encrypted = await f.Db.MiniAppClientSecrets.SingleAsync();
-        Assert.NotEqual(credentials.ClientSecret, encrypted.SecretEncrypted);
-        Assert.Equal(credentials.ClientSecret, (await f.Service.Credentials(f.Owner, app.AppId, false, default)).ClientSecret);
-        Assert.DoesNotContain(credentials.ClientSecret, System.Text.Json.JsonSerializer.Serialize(await f.Service.List(f.Owner, 1, default)));
-        Assert.DoesNotContain(credentials.ClientSecret, System.Text.Json.JsonSerializer.Serialize(await f.Service.Get(f.Owner, app.AppId, default)));
-        Assert.All(await f.Db.MiniAppAuditLogs.ToListAsync(), a => Assert.DoesNotContain(credentials.ClientSecret, a.Metadata));
+        var clientId = await f.Db.MiniAppOAuthClients.Select(x => x.ClientKey).SingleAsync();
+        Assert.DoesNotContain(f.Db.Model.GetEntityTypes(), x => x.GetTableName() == "MiniAppClientSecrets");
+        Assert.Equal("Public", await f.Db.MiniAppOAuthClients.Select(x => x.ClientType).SingleAsync());
         var conflict = await Assert.ThrowsAsync<DeveloperAuthException>(() => f.Service.Create(f.Owner, request with { Name = "Changed" }, default));
         Assert.Equal(409, conflict.Status);
         var second = await f.Service.Create(f.Owner, request with { RequestId = Guid.NewGuid() }, default);
-        var otherCredentials = await f.Service.Credentials(f.Owner, second.AppId, false, default);
-        Assert.NotEqual(app.AppId, second.AppId); Assert.NotEqual(credentials.ClientKey, otherCredentials.ClientKey);
-    }
-
-    [Fact]
-    public async Task RotationRevokesOldSecretAndPreservesIdentifiers()
-    {
-        await using var f = await Fixture.Create(); var app = await f.App();
-        var before = await f.Service.Credentials(f.Owner, app.AppId, false, default);
-        var after = await f.Service.Credentials(f.Owner, app.AppId, true, default);
-        Assert.Equal(before.AppId, after.AppId); Assert.Equal(before.ClientKey, after.ClientKey);
-        Assert.NotEqual(before.ClientSecret, after.ClientSecret);
-        Assert.Single(await f.Db.MiniAppClientSecrets.Where(x => x.RevokedAt == null).ToListAsync());
-        Assert.Single(await f.Db.MiniAppClientSecrets.Where(x => x.RevokedAt != null).ToListAsync());
-        Assert.Contains(await f.Service.Activity(f.Owner, app.AppId, default), a => a.Action == "credentials.rotated");
+        Assert.NotEqual(app.AppId, second.AppId); Assert.NotEqual(clientId, await f.Db.MiniAppOAuthClients.Where(x => x.ClientKey != clientId).Select(x => x.ClientKey).SingleAsync());
     }
 
     [Fact]
@@ -55,10 +37,6 @@ public sealed class MiniAppServiceTests
             async () => { await f.Service.Get(other, app.AppId, default); },
             async () => { await f.Service.Update(other, app.AppId, new(Name: "Hijacked"), default); },
             () => f.Service.Delete(other, app.AppId, default),
-            async () => { await f.Service.Credentials(other, app.AppId, false, default); },
-            async () => { await f.Service.Credentials(other, app.AppId, true, default); },
-            async () => { await f.Service.Redirects(other, app.AppId, default); },
-            async () => { await f.Service.SaveRedirects(other, app.AppId, new(["https://example.com/cb"]), default); },
             async () => { await f.Service.Activity(other, app.AppId, default); },
         ];
         foreach (var operation in operations) Assert.Equal(404, (await Assert.ThrowsAsync<DeveloperAuthException>(operation)).Status);
@@ -67,32 +45,22 @@ public sealed class MiniAppServiceTests
     }
 
     [Fact]
-    public async Task DraftCallbacksAndSoftDeletionPersist()
+    public async Task DraftMetadataAndSoftDeletionPersist()
     {
         await using var f = await Fixture.Create(); var app = await f.App();
         await f.Service.Update(f.Owner, app.AppId, new(ShortDescription: "A saved draft", WebsiteUrl: "https://example.com"), default);
-        await f.Service.SaveRedirects(f.Owner, app.AppId, new(["https://example.com/cb", "https://example.com/cb"]), default);
         f.Db.ChangeTracker.Clear();
         Assert.Equal("A saved draft", (await f.Service.Get(f.Owner, app.AppId, default)).ShortDescription);
-        Assert.Single(await f.Service.Redirects(f.Owner, app.AppId, default));
-        await Assert.ThrowsAsync<DeveloperAuthException>(() => f.Service.SaveRedirects(f.Owner, app.AppId, new(["https://example.com/#bad"]), default));
-        Assert.Single(await f.Service.Redirects(f.Owner, app.AppId, default));
         await f.Service.Delete(f.Owner, app.AppId, default);
         Assert.NotNull((await f.Db.MiniApps.SingleAsync()).DeletedAt);
         Assert.NotNull((await f.Db.MiniAppOAuthClients.SingleAsync()).RevokedAt);
-        Assert.NotNull((await f.Db.MiniAppClientSecrets.SingleAsync()).RevokedAt);
         Assert.Equal(404, (await Assert.ThrowsAsync<DeveloperAuthException>(() => f.Service.Get(f.Owner, app.AppId, default))).Status);
     }
 
     [Fact]
-    public async Task MissingEncryptionKeyAndQuotaLeaveNoPartialApp()
+    public async Task QuotaLeavesNoPartialApp()
     {
         await using var f = await Fixture.Create();
-        f.Options.ActiveKeyVersion = "missing";
-        await Assert.ThrowsAsync<DeveloperAuthException>(() => f.App());
-        f.Db.ChangeTracker.Clear();
-        Assert.Empty(await f.Db.MiniApps.ToListAsync()); Assert.Empty(await f.Db.MiniAppOAuthClients.ToListAsync());
-        Assert.Empty(await f.Db.MiniAppClientSecrets.ToListAsync()); Assert.Empty(await f.Db.MiniAppAuditLogs.ToListAsync());
         f.Options.ActiveKeyVersion = "test"; f.Options.MaxAppsPerDeveloper = 1;
         await f.App();
         Assert.Equal("APP_LIMIT_REACHED", (await Assert.ThrowsAsync<DeveloperAuthException>(() => f.App())).Code);
@@ -119,20 +87,14 @@ public sealed class MiniAppServiceTests
     }
 
     [Fact]
-    public async Task DatabaseWriteFailureRollsBackCreationAndRotation()
+    public async Task DatabaseWriteFailureRollsBackCreation()
     {
         await using var f = await Fixture.Create();
         await f.Db.Database.ExecuteSqlRawAsync("CREATE TRIGGER fail_mini_audit BEFORE INSERT ON MiniAppAuditLogs BEGIN SELECT RAISE(ABORT, 'test write failure'); END");
         await Assert.ThrowsAsync<DbUpdateException>(() => f.App());
         f.Db.ChangeTracker.Clear();
-        Assert.Empty(await f.Db.MiniApps.ToListAsync()); Assert.Empty(await f.Db.MiniAppOAuthClients.ToListAsync()); Assert.Empty(await f.Db.MiniAppClientSecrets.ToListAsync());
+        Assert.Empty(await f.Db.MiniApps.ToListAsync()); Assert.Empty(await f.Db.MiniAppOAuthClients.ToListAsync()); Assert.DoesNotContain(f.Db.Model.GetEntityTypes(), x => x.GetTableName() == "MiniAppClientSecrets");
         await f.Db.Database.ExecuteSqlRawAsync("DROP TRIGGER fail_mini_audit");
-        var app = await f.App(); var original = await f.Service.Credentials(f.Owner, app.AppId, false, default);
-        await f.Db.Database.ExecuteSqlRawAsync("CREATE TRIGGER fail_mini_audit BEFORE INSERT ON MiniAppAuditLogs BEGIN SELECT RAISE(ABORT, 'test write failure'); END");
-        await Assert.ThrowsAsync<DbUpdateException>(() => f.Service.Credentials(f.Owner, app.AppId, true, default));
-        f.Db.ChangeTracker.Clear(); await f.Db.Database.ExecuteSqlRawAsync("DROP TRIGGER fail_mini_audit");
-        Assert.Single(await f.Db.MiniAppClientSecrets.ToListAsync());
-        Assert.Equal(original.ClientSecret, (await f.Service.Credentials(f.Owner, app.AppId, false, default)).ClientSecret);
     }
 
     [Fact]

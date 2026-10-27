@@ -2,11 +2,13 @@
 
 Status: APPROVED by the user's instruction to begin implementation, 2026-10-17.
 [Specification](../specs/developer-platform-stage-6.md). Pre-flight complete;
-Tasks 1–8 implemented/verified. Tasks 9–14 have implementation and automated
-checks; browser/header/E2E acceptance remains pending. Tasks 15–20 backend
-foundation/coordinator/configuration readiness implemented with PostgreSQL/HTTP/unit coverage. Tasks 21–32 remain pending.
-Stage 6 is incomplete.
-Progress/evidence is appended below.
+Tasks 1–32 implemented and locally verified, 2026-10-20. Final
+[18-category acceptance, 25-threat mapping and 20-step E2E reconciliation](../handoffs/developer-platform-stage-6-acceptance.md)
+supersedes the historical checkpoints below. Public/Confidential authenticated
+Portal/SSO, restricted-cookie failure and CSP/navigation/SDK-delay negatives pass.
+Stage 6 is complete within the approved web/controlled-fixture scope. Deployed
+headers, public DNS/TLS, application DB rollout and native runtime remain separate;
+no deployment, publication or Stage 7 work was performed.
 
 ## Gate and verified baseline
 
@@ -26,6 +28,20 @@ Progress/evidence is appended below.
   choice changes affected tasks before code starts. No mock SSO fallback.
 
 ## Execution rules and dependency order
+
+Continuation 2026-10-20, Tasks 25–28: bind the non-authenticating `sandbox_run`
+marker to a live run/client/session snapshot inside a server-generated code's
+private claims. Observe generated internal code/token IDs after OpenIddict token
+generation; correlate validated UserInfo by that exact internal token ID. Optional
+observations use separate DI scopes and cannot change ordinary OIDC outcomes.
+Trusted evidence uses a separate disabled-by-default executor key, protected
+per-run/check/version/session/fingerprint/expiry challenges and signed fixed
+outcomes. Persist server-generated challenge IDs in existing diagnostics to reject
+replays, with serializable per-check single ingestion. A later integration fix
+adds nullable executor run/version binding to launch grants; a purpose-specific
+protected runtime cookie expires with that run and cannot rotate/close the owner's
+preview credential. No owner result-writing endpoint. The worker consumes only server protocol/trusted browser
+proof; readiness uses fresh completed runs with matching current fingerprints.
 
 Task 20 continuation: add an owner/Admin-bound `GET /sandbox/readiness` without
 requiring a launched session. Evaluate the ten existing metadata/legal checks
@@ -428,3 +444,25 @@ Web export pass. Details/contracts/evidence: latest handoff and operations.
 TRX `.codex-tmp/test-results/stage6-config-full.trx`; FE log
 `.codex-tmp/stage6-config-portal-tests.log`. Next Task 21. No model/migration,
 configured DB access, deploy, commit, publication or Stage 7.
+
+## Tasks 21–24 checkpoint — 2026-10-20
+
+Implemented validated/confirmed host external links, opt-in SDK popup transport,
+Public/Confidential completion examples and server-bound consent environment.
+Backend DNS/session checks reject stale scope, other origins, auth/callback paths
+and credential-bearing URLs. Bridge permission/schema/cancellation preserve v1.
+Real browser Public SDK exchange/UserInfo and Confidential embedded-session
+revalidation succeeded; restricted SameSite cookie variant reports unavailable
+instead of embedded success. Modal confirmation/cancel/focus and noopener/
+noreferrer were observed. See latest [handoff](../handoffs/developer-platform-stage-6.md)
+for contracts, evidence and narrower browser limits.
+
+RED: missing external host capability, reserved sign-in path bypass, missing popup
+module and consent environment HTML/JSON. GREEN: full backend 459 pass / 1 existing skip; SDK 36
+pass/build; host 18 pass; FE/BFF 39 pass; TypeScript/focused SDK lint pass; existing
+HTTPS protocol E2E 1 pass. PostgreSQL uses isolated disposable storage only.
+
+Tasks 25–32 remain pending; Stage 6 is incomplete. Final authenticated Portal,
+deployed CSP/header acceptance, new-adapter COOP/storage-policy matrix, trusted
+executor/readiness, all 20 E2E steps and 25-threat/18-category report remain open.
+No application DB access/migration, deploy, commit, publication or Stage 7.

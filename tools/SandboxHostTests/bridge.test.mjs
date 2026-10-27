@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {createSandboxBridge} from '../../viora-BE/Developer/SandboxHost/bridge.mjs';
 
-function fixture(validate=async()=>({appId:'app_test',environment:'Sandbox'}),close=async()=>{},report) {
+function fixture(validate=async()=>({appId:'app_test',environment:'Sandbox'}),close=async()=>{},report,openExternal) {
   const source={},sent=[];let validations=0,closed=0;
   const bridge=createSandboxBridge({origin:'https://partner.example.com',source:()=>source,appId:'app_test',
-    validate:async()=>{validations++;return validate();},send:message=>sent.push(message),close:async()=>{closed++;await close();},report});
+    validate:async()=>{validations++;return validate();},send:message=>sent.push(message),close:async()=>{closed++;await close();},report,openExternal});
   const event=(method,extra={})=>({origin:'https://partner.example.com',source,data:{channel:'ankt.miniapp',version:2,type:'request',id:randomUUID(),method},...extra});
   return {bridge,source,sent,event,get validations(){return validations;},get closed(){return closed;}};
 }
@@ -20,6 +20,35 @@ test('host supports v1 and v2 handshakes but advertises only implemented Sandbox
   assert.deepEqual(f.sent.at(-1).result,{appId:'app_test',environment:'Sandbox',runtime:'sandbox-web'});
   await f.bridge.handle(f.event('platform.getEnvironment'));assert.equal(f.sent.at(-1).result,'Sandbox');
   await f.bridge.handle(f.event('platform.isInsideAnkt'));assert.equal(f.sent.at(-1).result,true);
+});
+
+test('external links require v2 negotiated permission, exact params and current authorization',async()=>{
+  const opened=[];const f=fixture(undefined,undefined,undefined,async url=>{opened.push(url);});
+  await f.bridge.handle(f.event('bridge.handshake'));
+  assert.ok(f.sent.at(-1).result.permissions.includes('platform.openExternalUrl'));
+  const request=f.event('platform.openExternalUrl');request.data.params={url:'https://partner.example.com/help'};
+  await f.bridge.handle(request);assert.deepEqual(opened,['https://partner.example.com/help']);assert.equal(f.sent.at(-1).result,null);
+  const extra=f.event('platform.openExternalUrl');extra.data.params={url:'https://partner.example.com/help',confirmed:true};
+  await f.bridge.handle(extra);assert.equal(f.sent.at(-1).error.code,'BRIDGE_PROTOCOL');assert.equal(opened.length,1);
+  const old=f.event('platform.openExternalUrl');old.data.version=1;old.data.params=request.data.params;
+  await f.bridge.handle(old);assert.equal(f.sent.at(-1).error.code,'UNSUPPORTED_METHOD');
+});
+
+test('external cancellation preserves bridge permissions and reset cancels pending confirmation',async()=>{
+  let signal;const f=fixture(undefined,undefined,undefined,async(url,value)=>{signal=value;throw Object.assign(new Error(),{code:'BRIDGE_FORBIDDEN'});});
+  await f.bridge.handle(f.event('bridge.handshake'));
+  const request=f.event('platform.openExternalUrl');request.data.params={url:'https://partner.example.com/help'};
+  await f.bridge.handle(request);assert.equal(f.sent.at(-1).error.code,'BRIDGE_FORBIDDEN');
+  await f.bridge.handle(f.event('platform.getEnvironment'));assert.equal(f.sent.at(-1).result,'Sandbox');
+  f.bridge.reset();assert.equal(signal.aborted,true);
+});
+
+test('close aborts external confirmation before server revocation completes',async()=>{
+  let signal,finish;
+  const f=fixture(undefined,()=>new Promise(resolve=>{finish=resolve;}),undefined,async(url,value)=>{signal=value;});
+  await f.bridge.handle(f.event('bridge.handshake'));const request=f.event('platform.openExternalUrl');request.data.params={url:'https://partner.example.com/help'};
+  await f.bridge.handle(request);const pending=f.bridge.handle(f.event('platform.close'));await new Promise(setImmediate);
+  assert.equal(signal.aborted,true);finish();await pending;
 });
 
 test('concurrent close requests execute only once and deny further actions while closing',async()=>{

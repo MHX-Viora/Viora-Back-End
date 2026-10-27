@@ -10,6 +10,10 @@ using Xunit;
 
 public sealed class MiniAppSandboxEndpointTests
 {
+    private sealed class PublicDns:IPublicDnsResolver
+    {
+        public Task<IPAddress[]> ResolveAsync(string hostname,CancellationToken ct)=>Task.FromResult(new[]{IPAddress.Parse("8.8.8.8")});
+    }
     [Fact]
     public async Task ReadinessIsOwnerBoundBeforeLaunchAndAcceptsNoEnvironmentInput()
     {
@@ -61,7 +65,7 @@ public sealed class MiniAppSandboxEndpointTests
     [Fact]
     public async Task ActualDeveloperSessionOwnsSandboxAndCannotSupplyAnotherActorOrEnvironment()
     {
-        await using var host=await MiniAppApiTests.Host.Create(sandbox:true); var http=host.Client;
+        await using var host=await MiniAppApiTests.Host.Create(sandbox:true,dns:new PublicDns()); var http=host.Client;
         http.BaseAddress=new("https://api.example.com");
         var credential=await host.Login("sandbox-owner@api.test"); http.DefaultRequestHeaders.Authorization=new("DeveloperSession",credential);
         var appResponse=await http.PostAsJsonAsync("/api/developer/mini-apps",new MiniAppCreateRequest("Sandbox HTTP","utilities",Guid.NewGuid()));
@@ -98,6 +102,12 @@ public sealed class MiniAppSandboxEndpointTests
         browser.DefaultRequestHeaders.Remove("Cookie"); browser.DefaultRequestHeaders.Add("Cookie",runtimeCookie);
         var context=await browser.GetAsync("/sandbox-runtime/context"); Assert.Equal(HttpStatusCode.OK,context.StatusCode);
         Assert.DoesNotContain("credential",await context.Content.ReadAsStringAsync(),StringComparison.OrdinalIgnoreCase);
+        var external=await browser.PostAsJsonAsync("/sandbox-runtime/external-links",new SandboxExternalLinkRequest("https://partner.example.com/help"));
+        Assert.Equal(HttpStatusCode.OK,external.StatusCode);
+        Assert.Equal("https://partner.example.com/help",(await external.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("url").GetString());
+        Assert.Equal(HttpStatusCode.Forbidden,(await browser.PostAsJsonAsync("/sandbox-runtime/external-links",new SandboxExternalLinkRequest("https://evil.example.com/help"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await browser.PostAsJsonAsync("/sandbox-runtime/external-links",new{url="https://partner.example.com/help",confirmed=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await browser.PostAsJsonAsync("/sandbox-runtime/external-links?environment=Production",new SandboxExternalLinkRequest("https://partner.example.com/help"))).StatusCode);
         var observation=await browser.PostAsJsonAsync("/sandbox-runtime/sdk-observations",new SandboxDiagnosticBatch([new("Bridge","BRIDGE_READY",1)]));
         Assert.Equal(HttpStatusCode.OK,observation.StatusCode);
         var diagnosticPath=$"/api/developer/mini-apps/{app.AppId}/sandbox/diagnostics?sessionId={session.Id}";
@@ -129,6 +139,7 @@ public sealed class MiniAppSandboxEndpointTests
         Assert.Contains(runDetail.Run.Status,new[]{"Cancelled","Completed"});Assert.NotEqual("Passed",Assert.Single(runDetail.Results,x=>x.Key=="runtime").Status);
         Assert.Equal(HttpStatusCode.NoContent,(await http.DeleteAsync(path+"/"+session.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await browser.GetAsync("/sandbox-runtime/context")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,(await browser.PostAsJsonAsync("/sandbox-runtime/external-links",new SandboxExternalLinkRequest("https://partner.example.com/help"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await browser.PostAsJsonAsync("/sandbox-runtime/sdk-observations",new SandboxDiagnosticBatch([new("Bridge","BRIDGE_READY")]))).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent,(await http.DeleteAsync(path+"/"+session.Id)).StatusCode);
         var current=await (await http.GetAsync(path+"/"+session.Id)).Content.ReadFromJsonAsync<SandboxSessionDto>(); Assert.NotNull(current!.RevokedAt);

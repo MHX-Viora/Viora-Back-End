@@ -65,6 +65,6 @@ public sealed class MiniAppSandboxPolicyTests
         await Assert.ThrowsAsync<DeveloperAuthException>(()=>policy.RequireAsync(actor with {Kind=SandboxActorKind.Admin},app.AppId,default));
         session.RevokedAt=DateTime.UtcNow; await db.SaveChangesAsync();
         await Assert.ThrowsAsync<DeveloperAuthException>(()=>policy.RequireAsync(actor,app.AppId,default));
-        Assert.Empty(db.AnktSsoSessions); Assert.Empty(db.MiniAppUserConsents);
+
     }
 }

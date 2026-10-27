@@ -1,5 +1,10 @@
 # Sandbox Automatic Login — 26/10/2026
 
+> Update: the host-wide Production disable described in this original report has
+> been replaced by explicit opt-in on the existing SSO host. See
+> [shared-host handoff](sandbox-shared-host.md) and the current
+> [runbook](../operations/sandbox-auto-login.md). Other isolation rules remain.
+
 ## Kết quả và phạm vi
 
 Đã sửa trực tiếp BE/Portal, chạy migration PostgreSQL thật và OIDC/Chrome E2E

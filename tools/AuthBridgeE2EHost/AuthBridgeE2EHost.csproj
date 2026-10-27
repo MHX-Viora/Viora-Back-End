@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../viora-BE/viora-BE.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../../Digital-Creative/Digital_Crative_BE/Digital_Crative_BE/Digital_Crative_BE.csproj" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Viora.Application.Tests/IsolatedPostgres.cs" Link="IsolatedPostgres.cs" /></ItemGroup>
+</Project>

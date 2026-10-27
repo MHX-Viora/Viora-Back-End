@@ -1,7 +1,9 @@
 # Stage 6 Sandbox operations — implementation checkpoint
 
-Stage 6 is incomplete. Tasks 15–20 provide persistence/diagnostics/retention,
-test-run coordination and configuration readiness; Tasks 21–32 and final real browser/Portal acceptance remain pending. Canonical
+Stage 6 implementation and local acceptance are recorded in the
+[acceptance report](../handoffs/developer-platform-stage-6-acceptance.md).
+Deployment, public DNS/TLS, native WebView and provider-deployed header acceptance
+remain separate rollout work. Canonical
 [plan](../plans/developer-platform-stage-6.md), [spec](../specs/developer-platform-stage-6.md),
 [handoff](../handoffs/developer-platform-stage-6.md).
 
@@ -16,15 +18,18 @@ The enabled backend requires existing Stage 5 schema plus:
 - `20261017071740_AddMiniAppSandboxSessions`
 - `20261019080250_AddMiniAppSandboxEvidence`
 - `20261019081045_AddMiniAppSandboxDiagnosticCounter`
+- `20261020065352_AddSandboxExecutorLaunchBinding`
 
 Review generated SQL and back up the intended database before a separately
 authorized rollout. Down migrations delete only their Sandbox objects/data; that
-still discards Sandbox history. No automatic migration is performed by the worker.
+still discards Sandbox history. The executor-binding Down consumes outstanding
+executor launch grants before dropping their binding; ordinary owner grants remain.
+No automatic migration is performed by the worker.
 EF design validation can use `VIORA_EF_DESIGN_CONNECTION` pointing to a synthetic
 unreachable database; it must not use application credentials for offline checks.
 
 Configure distinct HTTPS Portal/host/issuer authorities with cookie-isolating
-hostnames, consistent with Stage 5 issuer. Runtime/management/source-session and
+hostnames. Direct Mini App login uses the Auth Bridge host origin. Runtime/management/source-session and
 verified-domain eligibility remain live checks. Admin access requires signed Admin
 role and an explicit `MiniAppSandbox:AdminTesterIds` allowlist. Empty denies all.
 FE `ANKT_SANDBOX_HOST_ORIGIN` must match BE; see FE handoff for scoped Vercel CSP.
@@ -91,7 +96,8 @@ content, SQL parameters or raw exception details.
 No trusted browser executor, protocol observation hooks or readiness aggregation
 is implemented yet. Enum/source constraints protect storage integrity
 but do not authenticate a trusted runner. No external endpoint accepts Passed.
-The Portal diagnostics/results panel is still Task 29; typed API access now exists.
+The Portal displays bounded diagnostics, filtered/paginated events, run history,
+selected checks, cancellation/retry, provenance/remediation and a safe JSON export.
 
 ## Test-run controls
 
@@ -162,8 +168,9 @@ Readiness rechecks actor/configuration/proof after I/O and current SSO eligibili
 snapshot/proof changes return 409 and stale success cannot be committed by a run.
 Evaluation deadline is 30 seconds (504 SANDBOX_CHECK_TIMEOUT); scoped BFF/client
 timeouts are 35/40 seconds. Public HTTPS fetch retains its 8-second deadline.
-readyForReview stays false until independently verified fresh runtime/bridge and
-applicable protocol evidence are implemented and aggregated in Tasks 25–28.
+readyForReview requires independently verified fresh runtime/bridge and applicable
+protocol evidence from one newest completed run. Evidence must match persisted
+results, live source/session/configuration and the five-minute freshness cutoff.
 Neither ready flag changes publication or replaces Admin approval.
 
 ## Reproduce local checks
@@ -188,3 +195,10 @@ Windows sandbox may block child-process spawning; use an authorized test context
 for MSBuild/tsx/Metro and disposable PostgreSQL. Do not replace fixture connection
 strings with application database configuration. These checks do not validate real
 browser policies, native behavior, public DNS or deployed Vercel routing.
+
+## Current embedded login
+
+Use [Mini App Auth Bridge](miniapp-auth-bridge.md) and
+[Sandbox automatic login](sandbox-auto-login.md). The previous popup/callback
+protocol executor is retired; historical acceptance evidence does not validate
+the current Bridge login. Run the current Bridge security and browser fixtures.

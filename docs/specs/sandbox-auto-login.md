@@ -1,5 +1,9 @@
 # Sandbox automatic login — 2026-10-26
 
+> Host policy update: [sandbox-shared-host.md](sandbox-shared-host.md) supersedes
+> the unconditional Production disable below. Explicit opt-in now permits Sandbox
+> on the existing Production-mode SSO host; token/client/session isolation remains.
+
 Status: local implementation and verification complete. Shared account, protocol,
 upgrade migration, API and isolation: 18/18 tests; final SSO regression: 176/176;
 SDK: 37/37; Portal: 7/7; concurrent Chrome E2E passed. Full BE checkpoint:
@@ -36,8 +40,8 @@ typed records, DeveloperAuthException codes, exact origin checks and no-store.
 From viora-BE use `.codex-tmp/sdk8-check/sdk/dotnet.exe test
 Viora.Application.Tests/Viora.Application.Tests.csproj --filter
 FullyQualifiedName~SandboxTestIdentityTests --logger trx` and `dotnet build
-tools/SsoE2EHost/SsoE2EHost.csproj`; browser: `node
-tools/SandboxIdentityE2E/run-fixture.mjs`. SDK: `npm test --prefix
+tools/AuthBridgeE2EHost/AuthBridgeE2EHost.csproj`; browser: `node
+tools/AuthBridgeE2E/run-fixture.mjs tools/AuthBridgeE2EHost/bin/Debug/net8.0/AuthBridgeE2EHost.dll`. SDK: `npm test --prefix
 ../viora/packages/miniapp-sdk`.
 
 ## Boundaries and decisions

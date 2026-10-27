@@ -41,7 +41,7 @@ public sealed class MiniAppSandboxRetentionTests
         f.Db.Add(new MiniAppSandboxDiagnostic {SandboxSessionId=session.Id,TestRunId=run.Id});
         f.Db.Add(new MiniAppSandboxProtocolEvidence {TestRunId=run.Id,TestKey=SandboxCheckKey.Token,Stage=SandboxProtocolStage.Token,EventKey=new string('a',64)});
         f.Db.MiniAppSandboxLaunchGrants.Add(new(){SandboxSessionId=session.Id,GrantHash=new string('b',64),BrowserNonceHash=new string('c',64),Audience=f.Options.HostOrigin,ExpiresAt=DateTime.UtcNow.AddMinutes(1)});
-        var account=new Account {Email="retention-user@example.test"};f.Db.Add(account);f.Db.MiniAppUserConsents.Add(new(){AccountId=account.Id,MiniAppId=f.App.Id,OAuthClientId=f.Client.Id,GrantedScopes="openid",GrantedAt=DateTime.UtcNow});await f.Db.SaveChangesAsync();
+        var account=new Account {Email="retention-user@example.test"};f.Db.Add(account);await f.Db.SaveChangesAsync();
         var old=f.Clock.Now.UtcDateTime.AddDays(-40);var expires=old.AddMinutes(15);var completed=old.AddMinutes(3);
         await f.Db.MiniAppSandboxSessions.Where(x=>x.Id==session.Id).ExecuteUpdateAsync(s=>s.SetProperty(x=>x.CreatedAt,old).SetProperty(x=>x.ExpiresAt,expires).SetProperty(x=>x.RevokedAt,completed));
         await f.Db.MiniAppSandboxTestRuns.ExecuteUpdateAsync(s=>s.SetProperty(x=>x.CreatedAt,old).SetProperty(x=>x.DeadlineAt,expires).SetProperty(x=>x.CompletedAt,completed).SetProperty(x=>x.Status,SandboxTestRunStatus.Completed));
@@ -53,7 +53,7 @@ public sealed class MiniAppSandboxRetentionTests
         await f.Db.MiniAppSandboxDiagnostics.Where(x=>x.SandboxSessionId==active.Id).ExecuteUpdateAsync(s=>s.SetProperty(x=>x.CreatedAt,old));
         var result=await new MiniAppSandboxRetentionService(f.Db,f.Clock).SweepAsync(100,default);
         Assert.Equal(1,result.PurgedRuns);Assert.Equal(1,result.PurgedSessions);Assert.Equal(1,result.PurgedGrants);Assert.Empty(f.Db.MiniAppSandboxProtocolEvidence);Assert.Empty(f.Db.MiniAppSandboxTestResults);
-        Assert.Equal(active.Id,await f.Db.MiniAppSandboxSessions.Select(x=>x.Id).SingleAsync());Assert.Single(f.Db.MiniAppSandboxDiagnostics);Assert.Single(f.Db.MiniAppUserConsents);Assert.Single(f.Db.Accounts);
+        Assert.Equal(active.Id,await f.Db.MiniAppSandboxSessions.Select(x=>x.Id).SingleAsync());Assert.Single(f.Db.MiniAppSandboxDiagnostics);Assert.Single(f.Db.Accounts);
     }
 
     [Fact]

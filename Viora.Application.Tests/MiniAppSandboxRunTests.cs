@@ -14,6 +14,21 @@ public sealed class MiniAppSandboxRunTests
         public Task<SandboxCheckExecution> ExecuteAsync(Guid id,SandboxCheckKey key,CancellationToken ct)=>
             Task.FromResult(new SandboxCheckExecution(SandboxCheckStatus.NotImplemented,SandboxMessageCode.MissingEvidence,SandboxEvidenceSource.Server));
     }
+    [Fact]
+    public async Task NewestFirstHistoryFindsActiveRunBeyondOldestPageAndPaginatesWithoutLoss()
+    {
+        await using var f=await SandboxFixture.Create();var session=await f.Service().CreateAsync(f.Actor,f.App.AppId,default);var service=Coordinator(f);
+        var expected=new List<Guid>();
+        for(var i=0;i<4;i++){
+            var run=await service.CreateAsync(f.Actor,f.App.AppId,new(session.Id,["domain"]),default);expected.Add(run.Id);
+            if(i<3)await service.CancelAsync(f.Actor,f.App.AppId,run.Id,default);
+        }
+        var first=await service.ListAsync(f.Actor,f.App.AppId,session.Id,null,2,default,true);
+        Assert.Equal(expected[3],first.Items[0].Id);Assert.Equal("Queued",first.Items[0].Status);
+        var second=await service.ListAsync(f.Actor,f.App.AppId,session.Id,first.NextCursor,2,default,true);
+        Assert.Null(second.NextCursor);Assert.Equal(expected.AsEnumerable().Reverse(),first.Items.Concat(second.Items).Select(x=>x.Id));
+        var oldest=await service.ListAsync(f.Actor,f.App.AppId,session.Id,null,2,default);Assert.Equal(expected[0],oldest.Items[0].Id);
+    }
 
     [Fact]
     public async Task OwnerQueuesFixedChecksAndCancellationIsIdempotent()

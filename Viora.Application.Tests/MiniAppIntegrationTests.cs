@@ -13,7 +13,7 @@ using Xunit;
 public sealed class MiniAppIntegrationTests
 {
     [Fact]
-    public async Task RegenerationPreservesHistoryAndDatabaseAllowsOnlyOneActiveChallenge()
+    public async Task RegenerationPreservesHistoryAndDatabaseAllowsOnlyOneActiveChallengePerHostname()
     {
         await using var f = await Fixture.Create(); await f.Save();
         var old = await f.Service.File(f.Owner,f.AppId,default); var regenerated=await f.Service.Regenerate(f.Owner,f.AppId,default);
@@ -21,7 +21,8 @@ public sealed class MiniAppIntegrationTests
         Assert.Equal(2,await f.Db.MiniAppDomainVerifications.CountAsync());
         Assert.Single(await f.Db.MiniAppDomainVerifications.Where(x=>x.RevokedAt==null).ToListAsync());
         var appId=(await f.Db.MiniApps.SingleAsync()).Id;
-        f.Db.MiniAppDomainVerifications.Add(new(){ MiniAppId=appId,Hostname="other.example.com",VerificationFileName="ankt-verify-other.txt",ExpiresAt=DateTime.UtcNow.AddDays(1),VerificationTokenHash=new string('a',64),VerificationMaterialEncrypted="test",SecretKeyVersion="test" });
+        var hostname=await f.Db.MiniAppDomainVerifications.Where(x=>x.RevokedAt==null).Select(x=>x.Hostname).SingleAsync();
+        f.Db.MiniAppDomainVerifications.Add(new(){ MiniAppId=appId,Hostname=hostname,VerificationFileName="ankt-verify-other.txt",ExpiresAt=DateTime.UtcNow.AddDays(1),VerificationTokenHash=new string('a',64),VerificationMaterialEncrypted="test",SecretKeyVersion="test" });
         await Assert.ThrowsAsync<DbUpdateException>(()=>f.Db.SaveChangesAsync());
     }
 
@@ -93,11 +94,7 @@ public sealed class MiniAppIntegrationTests
         await f.Service.Verify(f.Owner, f.AppId, default);
         var ready = await f.Service.Readiness(f.Owner, f.AppId, default);
         Assert.True(ready.ConfigurationReady); Assert.False(ready.ReadyForSandbox); Assert.False(ready.ReadyForReview); Assert.False(ready.SandboxAvailable);
-        Assert.Equal("optional", ready.Checks.Single(x => x.Key == "callbacks").Requirement);
-        await f.Service.Save(f.Owner, f.AppId, f.Request with { SsoEnabled = true }, default);
-        Assert.False((await f.Service.Readiness(f.Owner, f.AppId, default)).ConfigurationReady);
-        await f.Service.Save(f.Owner, f.AppId, f.Request with { SsoEnabled = true, RedirectUris = ["https://partner.example.com/cb"] }, default);
-        Assert.True((await f.Service.Readiness(f.Owner, f.AppId, default)).ConfigurationReady);
+        Assert.DoesNotContain(ready.Checks, x => x.Key == "callbacks");
         f.Fetcher.PolicyError = "FILE_NOT_FOUND";
         Assert.False((await f.Service.Readiness(f.Owner, f.AppId, default)).ConfigurationReady);
         f.Clock.Offset = TimeSpan.FromDays(31);
@@ -155,7 +152,7 @@ public sealed class MiniAppIntegrationTests
     {
         public AppDbContext Db => db; public Guid Owner => owner; public string AppId => appId;
         public readonly Fetcher Fetcher = new(); public readonly Clock Clock = new();
-        public MiniAppIntegrationRequest Request = new("https://partner.example.com/app", "support@example.com", "Short description", "Full description", "https://policies.example.com/privacy", "https://policies.example.com/terms", false, []);
+        public MiniAppIntegrationRequest Request = new("https://partner.example.com/app", "support@example.com", "Short description", "Full description", "https://policies.example.com/privacy", "https://policies.example.com/terms");
         public MiniAppService Apps => AppsWith(db);
         public MiniAppService AppsWith(AppDbContext context) => new(context, protector, options, new Environment());
         public MiniAppIntegrationService Service => ServiceWith(Fetcher);

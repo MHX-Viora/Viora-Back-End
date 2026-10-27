@@ -1,17 +1,22 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Viora.Application.Developers;
 using Viora.Domain.Developers;
 using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.Developers;
 
-public sealed class MiniAppCatalogProjection(AppDbContext db, MiniAppProductionOptions? options = null)
+public sealed class MiniAppCatalogProjection(AppDbContext db, MiniAppProductionOptions? options = null,
+    IOptions<MiniAppBridgeOptions>? bridgeOptions = null)
 {
     public async Task AppendAsync(MiniAppPublication publication, MiniAppVersion version, DateTime now, CancellationToken ct)
     {
-        if (options?.Enabled != true) return;
+        var bridgeEnabled = bridgeOptions?.Value.Enabled == true;
+        if (options?.Enabled != true && !bridgeEnabled) return;
         if (db.Database.CurrentTransaction == null) throw new InvalidOperationException("Catalog projection requires the publication transaction.");
-        var target = await MiniAppProductionEligibility.ReadAsync(db, publication.MiniAppId, now, ct);
+        var target = bridgeEnabled
+            ? await MiniAppProductionEligibility.PublicationAsync(db, publication.MiniAppId, now, ct)
+            : await MiniAppProductionEligibility.ReadAsync(db, publication.MiniAppId, now, ct);
         if (target.Publication.Id != publication.Id || target.Version.Id != version.Id || target.Version.SnapshotHash != version.SnapshotHash)
             throw new DeveloperAuthException(409, "PUBLICATION_CHANGED", "Phiên bản phát hành vừa thay đổi.");
         var previous = await db.Set<MiniAppCatalogPublication>().AsNoTracking().SingleOrDefaultAsync(x => x.PublicationId == publication.Id, ct);

@@ -74,6 +74,7 @@ public sealed class GmailDeveloperEmailSenderTests
             using var stream = new MemoryStream(WebEncoders.Base64UrlDecode(raw));
             using var message = await MimeMessage.LoadAsync(stream, ct);
             Assert.Equal("sender@gmail.com", Assert.Single(message.From.Mailboxes).Address);
+            Assert.Equal("ANKT", Assert.Single(message.From.Mailboxes).Name);
             Assert.Equal("dev@example.test", Assert.Single(message.To.Mailboxes).Address);
             Assert.Equal("Xác minh email", message.Subject);
             Assert.Contains("Liên kết xác minh", message.TextBody);
@@ -126,6 +127,37 @@ public sealed class GmailDeveloperEmailSenderTests
         var sender = new GmailDeveloperEmailSender(client, Options.Create(Config()));
         using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sender.SendAsync("dev@example.test", "Subject", "Text", cancellation.Token));
+    }
+
+    [Fact]
+    public async Task GmailApiSendsMultipartHtmlAndTextWithCanonicalBase64Url()
+    {
+        const string link = "https://mxh.ankt.vn/developers/verify-email#token=synthetic-token";
+        var content = DeveloperEmailTemplates.Verification("Nguyễn An", link, 2026);
+        var calls = 0;
+        using var client = new HttpClient(new Transport(async (request, ct) =>
+        {
+            if (++calls == 1) return Json("{\"access_token\":\"access-secret\"}");
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
+            var raw = body.RootElement.GetProperty("raw").GetString()!;
+            Assert.Matches("^[A-Za-z0-9_-]+$", raw);
+            var bytes = WebEncoders.Base64UrlDecode(raw);
+            Assert.Equal(raw, WebEncoders.Base64UrlEncode(bytes));
+            using var stream = new MemoryStream(bytes);
+            using var message = await MimeMessage.LoadAsync(stream, ct);
+            Assert.IsType<MultipartAlternative>(message.Body);
+            Assert.Equal("ANKT", Assert.Single(message.From.Mailboxes).Name);
+            Assert.Equal("mxh@baochi.online", Assert.Single(message.From.Mailboxes).Address);
+            Assert.Contains(link, message.TextBody);
+            Assert.Contains("href=\"" + link + "\"", message.HtmlBody);
+            Assert.Contains("Xác minh địa chỉ email", WebUtility.HtmlDecode(message.HtmlBody));
+            Assert.Equal(content.Text.ReplaceLineEndings("\n"), message.TextBody!.ReplaceLineEndings("\n"));
+            return Json("{\"id\":\"synthetic-message-id\"}");
+        }));
+        var config = Config(); config.GmailFrom = "mxh@baochi.online";
+        var sender = new GmailDeveloperEmailSender(client, Options.Create(config));
+        await sender.SendAsync("dev@example.test", "Xác minh email ANKT Developer", content, default);
+        Assert.Equal(2, calls);
     }
 
     private static HttpResponseMessage Json(string value) => new(HttpStatusCode.OK) { Content = new StringContent(value) };

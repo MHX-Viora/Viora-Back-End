@@ -21,51 +21,10 @@ using Viora.Infrastructure.Persistence;
 using Viora.Infrastructure.Persistence.Migrations;
 using Viora.Infrastructure.Developers;
 using viora_BE.Developer;
-using viora_BE.Sso;
 using Xunit;
 
 public sealed class MiniAppApiTests
 {
-    [Fact]
-    public async Task SsoDiagnosticsMetadataMatchesActualEnabledDiscovery()
-    {
-        using var certificates=new SsoRegistrationTests.Certificates();await using var host=await Host.Create(certificates);
-        var client=host.Client;client.BaseAddress=new("https://issuer.example");
-        client.DefaultRequestHeaders.Authorization=new("DeveloperSession",await host.Login("sso-metadata@example.test"));
-        var app=(await (await client.PostAsJsonAsync("/api/developer/mini-apps",new MiniAppCreateRequest("SSO metadata app","utilities",Guid.NewGuid()))).Content.ReadFromJsonAsync<MiniAppDto>())!;
-        var config=(await client.GetFromJsonAsync<MiniAppSsoDto>("/api/developer/mini-apps/"+app.AppId+"/sso"))!;
-        Assert.True(config.Server!.Enabled);var metadata=await client.GetFromJsonAsync<System.Text.Json.JsonElement>(config.Server.Discovery!);
-        Assert.Equal(metadata.GetProperty("issuer").GetString(),config.Server.Issuer);
-        Assert.Equal(metadata.GetProperty("authorization_endpoint").GetString(),config.Server.AuthorizationEndpoint);
-        Assert.Equal(metadata.GetProperty("token_endpoint").GetString(),config.Server.TokenEndpoint);
-        Assert.Equal(metadata.GetProperty("userinfo_endpoint").GetString(),config.Server.UserInfoEndpoint);
-        Assert.Equal(metadata.GetProperty("jwks_uri").GetString(),config.Server.JwksUri);
-    }
-    [Fact]
-    public async Task SsoConfigurationUsesDeveloperSessionOwnershipAndReportsDisabledRuntimeWithoutInventedMetadata()
-    {
-        await using var host=await Host.Create();var client=host.Client;
-        var missing="/api/developer/mini-apps/app_"+new string('x',43)+"/sso";
-        Assert.Equal(HttpStatusCode.Unauthorized,(await client.GetAsync(missing)).StatusCode);
-        client.DefaultRequestHeaders.Authorization=new("DeveloperSession",await host.Login("sso-owner@example.test"));
-        var app=(await (await client.PostAsJsonAsync("/api/developer/mini-apps",new MiniAppCreateRequest("SSO owner app","utilities",Guid.NewGuid()))).Content.ReadFromJsonAsync<MiniAppDto>())!;
-        var root="/api/developer/mini-apps/"+app.AppId+"/sso";
-        var response=await client.GetAsync(root);Assert.Equal(HttpStatusCode.OK,response.StatusCode);Assert.Contains("no-store",response.Headers.CacheControl!.ToString());
-        var config=(await response.Content.ReadFromJsonAsync<MiniAppSsoDto>())!;Assert.False(config.Server!.Enabled);Assert.Null(config.Server.Issuer);
-        var sandbox=Assert.Single(config.Clients);
-        client.DefaultRequestHeaders.Add("Origin","https://browser.example");
-        Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync(root+"/Sandbox/credential")).StatusCode);
-        client.DefaultRequestHeaders.Remove("Origin");
-        Assert.Equal(HttpStatusCode.OK,(await client.GetAsync(root+"/Sandbox/credential")).StatusCode);
-        var request=new MiniAppSsoRequest("Public",true,true,["openid"],["https://partner.example.com/callback"],config.AppVersion,sandbox.Version);
-        Assert.Equal(HttpStatusCode.OK,(await client.PutAsJsonAsync(root+"/Sandbox",request)).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict,(await client.PutAsJsonAsync(root+"/Sandbox",request)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await client.GetAsync(root+"/Sandbox/credential")).StatusCode);
-        client.DefaultRequestHeaders.Authorization=new("DeveloperSession",await host.Login("sso-other@example.test"));
-        Assert.Equal(HttpStatusCode.NotFound,(await client.GetAsync(root)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound,(await client.PutAsJsonAsync(root+"/Sandbox",request)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound,(await client.GetAsync(root+"/Sandbox/credential")).StatusCode);
-    }
     [Fact]
     public async Task Stage4EndpointsUseRealSessionsOwnerBoundFilesAndFixedVerificationDestination()
     {
@@ -76,7 +35,7 @@ public sealed class MiniAppApiTests
         c.DefaultRequestHeaders.Authorization = new("DeveloperSession",await host.Login("domain-a@example.test"));
         var app = (await (await c.PostAsJsonAsync("/api/developer/mini-apps",new MiniAppCreateRequest("Domain API app","utilities",Guid.NewGuid()))).Content.ReadFromJsonAsync<MiniAppDto>())!;
         var root = "/api/developer/mini-apps/"+app.AppId;
-        var request = new MiniAppIntegrationRequest("https://PARTNER.example.com/app","support@example.com","Description","Full description","https://policies.example.com/privacy","https://policies.example.com/terms",false,[]);
+        var request = new MiniAppIntegrationRequest("https://PARTNER.example.com/app","support@example.com","Description","Full description","https://policies.example.com/privacy","https://policies.example.com/terms");
         var saved=await c.PutAsJsonAsync(root+"/integration",request); Assert.Equal(HttpStatusCode.OK,saved.StatusCode);
         Assert.Equal("https://partner.example.com/app",(await saved.Content.ReadFromJsonAsync<MiniAppIntegrationDto>())!.WebsiteUrl);
         var download=await c.GetAsync(root+"/domain-verification/file"); Assert.Equal(HttpStatusCode.OK,download.StatusCode);
@@ -111,7 +70,7 @@ public sealed class MiniAppApiTests
     {
         await using var host = await Host.Create(); var c = host.Client;
         var id = "app_" + new string('x', 43);
-        foreach (var path in new[] { "", "/" + id, $"/{id}/credentials", $"/{id}/redirect-uris", $"/{id}/activity" })
+        foreach (var path in new[] { "", "/" + id, $"/{id}/activity" })
             Assert.Equal(HttpStatusCode.Unauthorized, (await c.GetAsync("/api/developer/mini-apps" + path)).StatusCode);
         c.DefaultRequestHeaders.Authorization = new("Bearer", "not-a-developer-session");
         Assert.Equal(HttpStatusCode.Unauthorized, (await c.PostAsJsonAsync("/api/developer/mini-apps", new { })).StatusCode);
@@ -123,24 +82,17 @@ public sealed class MiniAppApiTests
         var app = (await response.Content.ReadFromJsonAsync<MiniAppDto>())!; var root = "/api/developer/mini-apps/" + app.AppId;
         var repeated = await c.PostAsJsonAsync("/api/developer/mini-apps", request);
         Assert.Equal(app.AppId, (await repeated.Content.ReadFromJsonAsync<MiniAppDto>())!.AppId);
-        var credentialsResponse = await c.GetAsync(root + "/credentials"); Assert.Equal("no-store", credentialsResponse.Headers.CacheControl!.ToString());
-        var before = (await credentialsResponse.Content.ReadFromJsonAsync<MiniAppCredentialsDto>())!;
-        Assert.DoesNotContain(before.ClientSecret, await (await c.GetAsync("/api/developer/mini-apps")).Content.ReadAsStringAsync());
-        var rotation = await c.PostAsJsonAsync(root + "/credentials/rotate", new { }); Assert.Equal(HttpStatusCode.OK, rotation.StatusCode);
-        var after = (await rotation.Content.ReadFromJsonAsync<MiniAppCredentialsDto>())!;
-        Assert.Equal(before.ClientKey, after.ClientKey); Assert.NotEqual(before.ClientSecret, after.ClientSecret);
+        foreach (var suffix in new[] { "/sso", "/credentials", "/redirect-uris" })
+            Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync(root + suffix)).StatusCode);
         var patch = await c.PatchAsJsonAsync(root, new { name = "Persisted", status = "Approved", appId = "hijacked", clientKey = "hijacked" });
         Assert.Equal(HttpStatusCode.OK, patch.StatusCode); var saved = (await patch.Content.ReadFromJsonAsync<MiniAppDto>())!;
         Assert.Equal("Persisted", saved.Name); Assert.NotEqual("Approved", saved.Status); Assert.Equal(app.AppId, saved.AppId);
-        Assert.Equal(HttpStatusCode.BadRequest, (await c.PutAsJsonAsync(root + "/redirect-uris", new { redirectUris = new[] { "https://example.com/#bad" } })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await c.PutAsJsonAsync(root + "/redirect-uris", new { redirectUris = new[] { "https://example.com/cb" } })).StatusCode);
         using var image = new ByteArrayContent(new byte[30]); image.Headers.ContentType = new("image/png");
         Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsync("/api/developer/mini-apps/logo", image)).StatusCode);
         var tokenB = await host.Login("b@example.test"); c.DefaultRequestHeaders.Authorization = new("DeveloperSession", tokenB);
-        foreach (var path in new[] { "", "/credentials", "/redirect-uris", "/activity" }) Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync(root + path)).StatusCode);
+        foreach (var path in new[] { "", "/activity" }) Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync(root + path)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await c.PatchAsJsonAsync(root, new { name = "Attacker" })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsJsonAsync(root + "/credentials/rotate", new { })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await c.PutAsJsonAsync(root + "/redirect-uris", new { redirectUris = Array.Empty<string>() })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await c.DeleteAsync(root)).StatusCode);
         c.DefaultRequestHeaders.Authorization = new("DeveloperSession", tokenA);
         Assert.Equal(HttpStatusCode.NoContent, (await c.DeleteAsync(root)).StatusCode);
@@ -186,7 +138,7 @@ public sealed class MiniAppApiTests
         }
         public async Task<T> WithServices<T>(Func<IServiceProvider,Task<T>> action)
         { await using var scope=app.Services.CreateAsyncScope(); return await action(scope.ServiceProvider); }
-        public static async Task<Host> Create(SsoRegistrationTests.Certificates? certificates=null, bool sandbox=false)
+        public static async Task<Host> Create(bool sandbox=false, IPublicDnsResolver? dns=null, bool review=false, int? reviewReadLimit=null)
         {
             var connection = new SqliteConnection(sandbox?$"Data Source=sandbox-api-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;Pooling=False":"Data Source=:memory:");
             await connection.OpenAsync(); connection.CreateFunction<string?, int>("char_length", s => s?.Length ?? 0);
@@ -201,7 +153,8 @@ public sealed class MiniAppApiTests
             if(sandbox) b.Configuration.AddInMemoryCollection(new Dictionary<string,string?> {
                 ["MiniAppSandbox:Enabled"]="true",["MiniAppSandbox:PortalOrigin"]="https://portal.ankt.example",
                 ["MiniAppSandbox:HostOrigin"]="https://sandbox.ankt.example",["MiniAppSandbox:Issuer"]="https://identity.ankt.example/"});
-            if(certificates!=null){b.Configuration.AddInMemoryCollection(certificates.Config());b.Services.AddAnktSso(b.Configuration);}
+            if(review)b.Configuration.AddInMemoryCollection(new Dictionary<string,string?> { ["MiniAppReview:Enabled"]="true" });
+            if(reviewReadLimit is {} readLimit)b.Configuration.AddInMemoryCollection(new Dictionary<string,string?> { ["MiniAppReview:ReadLimitPerMinute"]=readLimit.ToString(System.Globalization.CultureInfo.InvariantCulture) });
             b.Services.AddDbContext<AppDbContext>(o =>
             {
                 if(!sandbox){o.UseSqlite(connection);return;}
@@ -210,6 +163,7 @@ public sealed class MiniAppApiTests
                 o.UseSqlite(scoped,contextOwnsConnection:true);
             });
             b.Services.AddDeveloperAccounts(b.Configuration); b.Services.AddDeveloperMiniApps(b.Configuration);
+            if(dns!=null)b.Services.AddSingleton(dns);
             var fetcher=new MiniAppIntegrationTests.Fetcher(); b.Services.AddSingleton<IPublicWebFetcher>(fetcher);
             var mail = new Mail(); b.Services.AddSingleton<IDeveloperEmailSender>(mail); var app = b.Build();
             using (var scope = app.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();

@@ -17,7 +17,8 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 // Only explicitly supplied storage settings are read. Never load a production database or developer secret key.
 builder.Configuration.AddEnvironmentVariables("ANKT_E2E_");
 builder.Logging.ClearProviders(); builder.Logging.AddSimpleConsole(); builder.Logging.SetMinimumLevel(LogLevel.Warning);
-builder.WebHost.UseUrls("http://127.0.0.1:5318");
+var hostPort = int.TryParse(Environment.GetEnvironmentVariable("ANKT_E2E_HOST_PORT"), out var selectedPort) && selectedPort is > 1024 and <= 65535 ? selectedPort : 5318;
+builder.WebHost.UseUrls($"http://127.0.0.1:{hostPort}");
 var testRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "ankt-developer-e2e"));
 var directory = Path.GetFullPath(Path.Combine(testRoot, Guid.NewGuid().ToString("N"))); Directory.CreateDirectory(directory);
 var dbPath = Path.Combine(directory, "developer.sqlite");
@@ -35,7 +36,12 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
 app.UseDeveloperAccountBoundary(); app.UseAuthentication(); app.UseRateLimiter(); app.UseAuthorization();
 app.MapDeveloperEndpoints(); app.MapDeveloperAccountEndpoints(); app.MapDeveloperMiniApps();
-Console.WriteLine("Developer E2E host: http://127.0.0.1:5318 (isolated disposable SQLite database)");
+var stopKey = Environment.GetEnvironmentVariable("ANKT_E2E_STOP_KEY");
+if (!string.IsNullOrEmpty(stopKey)) app.MapPost("/_fixture/stop", (HttpContext http, IHostApplicationLifetime lifetime) => {
+    if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(System.Text.Encoding.UTF8.GetBytes(http.Request.Headers["X-Fixture-Key"].ToString()), System.Text.Encoding.UTF8.GetBytes(stopKey))) return Results.NotFound();
+    lifetime.StopApplication(); return Results.NoContent();
+});
+Console.WriteLine($"Developer E2E host: http://127.0.0.1:{hostPort} (isolated disposable SQLite database)");
 // Keep the service provider alive until external test assets have been cleaned up.
 try { await app.StartAsync(); await app.WaitForShutdownAsync(); }
 finally

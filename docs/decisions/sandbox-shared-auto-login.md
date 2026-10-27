@@ -12,7 +12,9 @@ validated issuer/client/sub, never the shared email or public profile id.
 
 Only a valid bound Sandbox cookie may approve first consent automatically.
 Explicit prompt=consent and ordinary Production consent retain existing behavior.
-Production hosts force the feature off; other hosts require an explicit enable.
+All hosts, including Production, require an explicit SandboxTest:Enabled opt-in.
+Production requires HTTPS issuer and Portal origins. This replaces the original
+environment-wide disable at the user's request; no staging service is required.
 Disabled overview calls do not seed accounts. Existing code/S256 PKCE validation,
 reference tokens, scopes and fresh session checks remain in OpenIddict/services.
 Public Sandbox profile claims add the actual User id and isSandbox boolean.

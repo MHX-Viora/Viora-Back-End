@@ -19,7 +19,7 @@ public static class MiniAppReviewEvidencePolicy
             using var document = JsonDocument.Parse(review.EvidenceAttestationJson, new JsonDocumentOptions { MaxDepth = 8 });
             Unique(document.RootElement);
             var evidence = JsonSerializer.Deserialize<MiniAppReviewEvidenceAttestation>(review.EvidenceAttestationJson, Json) ?? throw Invalid();
-            if (evidence.SchemaVersion != 1 || evidence.VersionId != version.Id || evidence.SnapshotHash != version.SnapshotHash ||
+            if (evidence.SchemaVersion is not (1 or 2) || evidence.SchemaVersion == 2 && snapshot.SsoEnabled || evidence.VersionId != version.Id || evidence.SnapshotHash != version.SnapshotHash ||
                 evidence.SandboxRunId == Guid.Empty || evidence.ConfigurationFingerprint is not { Length: 64 } ||
                 evidence.ConfigurationFingerprint.Any(c => !Uri.IsHexDigit(c)) || evidence.EvaluatedAt < review.SubmittedAt.AddMinutes(-5) ||
                 evidence.EvaluatedAt > review.SubmittedAt.AddSeconds(1) || evidence.Checks?.Length != Enum.GetValues<SandboxCheckKey>().Length) throw Invalid();
@@ -29,9 +29,10 @@ public static class MiniAppReviewEvidencePolicy
                 var wire = char.ToLowerInvariant(key.ToString()[0]) + key.ToString()[1..];
                 var checks = evidence.Checks.Where(x => x != null && x.Key == wire).ToArray(); if (checks.Length != 1) throw Invalid();
                 var check = checks[0];
-                var applicable = snapshot.SsoEnabled || key is not (SandboxCheckKey.Callbacks or SandboxCheckKey.SsoClient or SandboxCheckKey.Discovery
+                var applicable = evidence.SchemaVersion == 2 ? MiniAppBridgeReviewEvidence.Applicable(key) : snapshot.SsoEnabled || key is not (SandboxCheckKey.Callbacks or SandboxCheckKey.SsoClient or SandboxCheckKey.Discovery
                     or SandboxCheckKey.Consent or SandboxCheckKey.Token or SandboxCheckKey.UserInfo);
-                var source = key is SandboxCheckKey.Runtime or SandboxCheckKey.Bridge ? "TrustedBrowser" : key >= SandboxCheckKey.Consent ? "ServerProtocol" : "Server";
+                var source = evidence.SchemaVersion == 2 ? MiniAppBridgeReviewEvidence.Protocol(key) ? "ServerProtocol" : "Server" :
+                    key is SandboxCheckKey.Runtime or SandboxCheckKey.Bridge ? "TrustedBrowser" : key >= SandboxCheckKey.Consent ? "ServerProtocol" : "Server";
                 if (check.Applicable != applicable || !messages.Contains(check.MessageCode) ||
                     (applicable ? check.Status != "Passed" || check.EvidenceSource != source || check.EvidenceAt == null ||
                         check.EvidenceAt < review.SubmittedAt.AddMinutes(-5) || check.EvidenceAt > review.SubmittedAt.AddSeconds(1)

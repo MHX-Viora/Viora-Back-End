@@ -5,12 +5,13 @@ using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.Developers;
 
-public sealed record MiniAppReviewReadinessTicket(MiniAppReviewReadinessDto Readiness, string SafetyFingerprint);
+public sealed record MiniAppReviewReadinessTicket(MiniAppReviewReadinessDto Readiness, string SafetyFingerprint, int EvidenceSchemaVersion = 1);
 public sealed record MiniAppTargetSafety(MiniAppVersionSnapshot Snapshot, string Fingerprint, string[] BlockingReasons);
 public sealed record MiniAppPublicationReadinessTicket(MiniAppPublicationReadinessDto Readiness, string Fingerprint);
 
 public sealed class MiniAppReadinessService(AppDbContext db, MiniAppReviewAccess access, MiniAppVersionService versions,
-    MiniAppSandboxConfigurationService configuration, MiniAppSandboxEvidenceReader evidence, IPublicWebFetcher fetcher, TimeProvider clock)
+    MiniAppSandboxConfigurationService configuration, MiniAppSandboxEvidenceReader evidence, IPublicWebFetcher fetcher, TimeProvider clock,
+    MiniAppBridgeReviewEvidence? bridgeEvidence = null)
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
     private static readonly SandboxCheckKey[] Observations = [SandboxCheckKey.Runtime, SandboxCheckKey.Bridge, SandboxCheckKey.Consent, SandboxCheckKey.Token, SandboxCheckKey.UserInfo];
@@ -67,6 +68,20 @@ public sealed class MiniAppReadinessService(AppDbContext db, MiniAppReviewAccess
         var blockers = new List<string>(safety.BlockingReasons);
         if (working.Snapshot.Hash != version.SnapshotHash || working.Logo != version.LogoUploadId) blockers.Add("VERSION_WORKING_CHANGED");
         if (await db.MiniAppReviewRequests.AnyAsync(x => x.MiniAppId == app.Id && (x.Status == MiniAppReviewStatus.PendingReview || x.Status == MiniAppReviewStatus.InReview), ct)) blockers.Add("REVIEW_ALREADY_ACTIVE");
+        if (bridgeEvidence != null)
+        {
+            var probed = await TargetAsync(version, true, ct);
+            blockers.AddRange(probed.BlockingReasons);
+            var session = await bridgeEvidence.ReadAsync(app, owner, source, null, ct);
+            if (session == null) blockers.Add("BRIDGE_FRESH_SOURCE_REQUIRED");
+            var checks = MiniAppBridgeReviewEvidence.Checks(safety.Snapshot, session, probed.BlockingReasons.Length == 0, Now);
+            var ready = new MiniAppReviewReadinessDto(version.Id, version.SnapshotHash, version.ConcurrencyToken, app.Version,
+                blockers.Count == 0 && checks.All(x => !x.Applicable || x.Status == "Passed"), Now, session?.Id,
+                MiniAppBridgeReviewEvidence.Fingerprint(app, version), checks, blockers.Distinct(StringComparer.Ordinal).ToArray(), []);
+            var bridgeTicket = new MiniAppReviewReadinessTicket(ready, safety.Fingerprint, 2);
+            if (ready.ReadyForReview) await RevalidateAsync(bridgeTicket, owner, source, appId, ct);
+            return bridgeTicket;
+        }
         SandboxReadinessDto sandbox;
         try { sandbox = await configuration.ReadinessAsync(new(SandboxActorKind.Developer, owner, source), appId, ct); }
         catch (DeveloperAuthException error) when (error.Code is "SANDBOX_DISABLED" or "SANDBOX_APP_UNAVAILABLE")
@@ -102,6 +117,13 @@ public sealed class MiniAppReadinessService(AppDbContext db, MiniAppReviewAccess
             (sealedVersion ? version.State != MiniAppVersionState.Submitted : version.State != MiniAppVersionState.Draft || version.ConcurrencyToken != ready.ConcurrencyToken)) throw Changed();
         var safety = await TargetAsync(version, false, ct); var working = await versions.Capture(app, safety.Snapshot.Production, ct);
         if (safety.BlockingReasons.Length != 0 || safety.Fingerprint != ticket.SafetyFingerprint || working.Snapshot.Hash != ready.SnapshotHash || working.Logo != version.LogoUploadId) throw Changed();
+        if (ticket.EvidenceSchemaVersion == 2)
+        {
+            if (bridgeEvidence == null || ready.ConfigurationFingerprint != MiniAppBridgeReviewEvidence.Fingerprint(app, version)) throw Changed();
+            var session = await bridgeEvidence.ReadAsync(app, owner, source, ready.SandboxRunId, ct);
+            if (session == null || ready.RequiredChecks.Where(x => x.EvidenceSource == "ServerProtocol").Any(x => x.EvidenceAt != session.ConsumedAt)) throw Changed();
+            return;
+        }
         if (await evidence.LatestRunIdAsync(app.Id, ready.ConfigurationFingerprint, ct) != ready.SandboxRunId ||
             !await OwnRunAsync(ready.SandboxRunId.Value, app.Id, owner, source, ready.ConfigurationFingerprint, ct) ||
             !await evidence.IsFreshAsync(ready.SandboxRunId.Value, ready.ConfigurationFingerprint, ct)) throw Changed();

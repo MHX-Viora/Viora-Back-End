@@ -4,8 +4,9 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {randomUUID} from 'node:crypto';
 import {createSandboxBridge} from '../../viora-BE/Developer/SandboxHost/bridge.mjs';
+import {createExternalLinkOpener} from '../../viora-BE/Developer/SandboxHost/external-link.mjs';
 
-const script=(await readFile(new URL('../../viora-BE/Developer/SandboxHost/host.mjs',import.meta.url),'utf8')).replace("import {createSandboxBridge} from './bridge.mjs';",'');
+const script=(await readFile(new URL('../../viora-BE/Developer/SandboxHost/host.mjs',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'');
 async function fixture({deferContext=false,failClose=false}={}) {
   const elements=new Map(),listeners=new Map(),sent=[],requests=[];
   const node=()=>({disabled:true,textContent:'',listeners:new Map(),addEventListener(type,fn){this.listeners.set(type,fn);},setAttribute(){},remove(){this.removed=true;},append(value){this.child=value;}});
@@ -16,7 +17,7 @@ async function fixture({deferContext=false,failClose=false}={}) {
   const window={parent,addEventListener:(type,fn)=>listeners.set(type,fn),removeEventListener:(type,fn)=>{if(listeners.get(type)===fn)listeners.delete(type);}};
   const context={sessionId:'11111111-1111-4111-8111-111111111111',appId:'app_test',name:'Partner',environment:'Sandbox',partnerOrigin:'https://partner.example.com',websiteUrl:'https://partner.example.com/app',ssoEnabled:false};
   const timers=new Set();
-  vm.runInNewContext(script,{createSandboxBridge,URL,AbortController,AbortSignal,window,
+  vm.runInNewContext(script,{createSandboxBridge,createExternalLinkOpener,URL,AbortController,AbortSignal,window,
     document:{querySelector:key=>elements.get(key),createElement:()=>frame},
     location:{pathname:'/sandbox-host/'+context.sessionId+'/run'},
     setTimeout:fn=>{timers.add(fn);return fn;},clearTimeout:fn=>timers.delete(fn),setInterval:fn=>fn,clearInterval(){},

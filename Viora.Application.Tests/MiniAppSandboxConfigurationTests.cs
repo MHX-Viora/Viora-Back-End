@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using OpenIddict.Abstractions;
 using Viora.Application.Developers;
 using Viora.Domain.Developers;
 using Viora.Infrastructure.Developers;
@@ -11,6 +10,16 @@ using Xunit;
 
 public sealed class MiniAppSandboxConfigurationTests
 {
+    [Fact]
+    public async Task ConfigurationUsesOnlyItsWebsiteProofWhenOtherHostsAreVerified()
+    {
+        await using var f = await SandboxFixture.Create(); await CompleteMetadata(f);
+        f.Db.Add(MiniAppVersionDomainTests.Proof(f.App.Id, "other.example.com", "configuration-other-host.txt")); await f.Db.SaveChangesAsync();
+        var service = Service(f, new Fetcher());
+        Assert.True((await service.ReadinessAsync(f.Actor, f.App.AppId, default)).ConfigurationReady);
+        f.Proof.RevokedAt = f.Clock.Now.UtcDateTime; f.Proof.Status = MiniAppDomainStatus.Revoked; await f.Db.SaveChangesAsync();
+        Assert.False((await service.ReadinessAsync(f.Actor, f.App.AppId, default)).ConfigurationReady);
+    }
     private sealed class Fetcher : IPublicWebFetcher, IPublicJsonFetcher
     {
         public List<string> Calls {get;}=[];
@@ -80,30 +89,6 @@ public sealed class MiniAppSandboxConfigurationTests
         Assert.DoesNotContain("private upstream",JsonSerializer.Serialize(result),StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task DiscoveryUsesActualPublicDocumentsWithoutProvingProtocol()
-    {
-        await using var f=await SandboxFixture.Create();f.App.SsoEnabled=true;await f.Db.SaveChangesAsync();var fetcher=new Fetcher();var service=Service(f,fetcher);
-        var check=await service.ExecuteAsync(f.App.Id,SandboxCheckKey.Discovery,default);
-        Assert.Equal(SandboxCheckStatus.Passed,check.Status);Assert.Equal(SandboxEvidenceSource.Server,check.EvidenceSource);Assert.Equal(2,fetcher.Calls.Count);
-        foreach(var key in new[]{SandboxCheckKey.Consent,SandboxCheckKey.Token,SandboxCheckKey.UserInfo,SandboxCheckKey.Runtime,SandboxCheckKey.Bridge})
-            Assert.NotEqual(SandboxCheckStatus.Passed,(await service.ExecuteAsync(f.App.Id,key,default)).Status);
-    }
-
-    [Theory]
-    [InlineData("issuer")][InlineData("malformed")][InlineData("duplicate")][InlineData("empty-keys")][InlineData("private-key")][InlineData("blocked")]
-    [InlineData("jwks-origin")][InlineData("pkce")][InlineData("key-operations")]
-    public async Task InvalidDiscoveryAndJwksFailClosed(string kind)
-    {
-        await using var f=await SandboxFixture.Create();f.App.SsoEnabled=true;await f.Db.SaveChangesAsync();var fetcher=new Fetcher();
-        switch(kind){case "issuer":fetcher.Issuer="https://evil.partner.com/";break;case "malformed":fetcher.DiscoveryOverride="[]";break;case "duplicate":fetcher.DiscoveryOverride="{\"issuer\":\"a\",\"issuer\":\"b\"}";break;case "empty-keys":fetcher.JwksOverride="{\"keys\":[]}";break;case "private-key":fetcher.JwksOverride="{\"keys\":[{\"kty\":\"RSA\",\"d\":\"secret\"}]}";break;case "blocked":fetcher.Error="DOMAIN_BLOCKED";break;
-            case "jwks-origin":fetcher.JwksUriOverride="https://169.254.169.254/metadata";break;case "pkce":fetcher.Pkce="plain";break;
-            case "key-operations":fetcher.JwksOverride="{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"encryption-only\",\"key_ops\":[\"encrypt\"]}]}";break;}
-        var result=await Service(f,fetcher).ExecuteAsync(f.App.Id,SandboxCheckKey.Discovery,default);Assert.Equal(SandboxCheckStatus.Failed,result.Status);
-        Assert.True(fetcher.Calls.Count<=2);Assert.Equal(SandboxMessageCode.CheckFailed,result.MessageCode);
-        if(kind=="jwks-origin")Assert.Single(fetcher.Calls);
-    }
-
     [Theory]
     [InlineData("snapshot")][InlineData("actor")][InlineData("expiry")]
     public async Task NetworkWorkCannotPublishAChangedOrExpiredSnapshot(string change)
@@ -149,32 +134,6 @@ public sealed class MiniAppSandboxConfigurationTests
         Assert.Equal("Skipped",Assert.Single(detail.Results).Status);Assert.Equal("MISSING_EVIDENCE",Assert.Single(detail.Results).MessageCode);
     }
 
-    [Theory]
-    [InlineData("permissions")][InlineData("callback")][InlineData("environment")][InlineData("secret")]
-    public async Task CheckerReusesActualSsoProjectionAndCredentialEligibility(string change)
-    {
-        await using var host=await SsoProtocolTestHost.Create();if(change=="secret")await host.MakeConfidential("isolated-checker-secret");
-        await host.WithServices(async services=>
-        {
-            var db=services.GetRequiredService<Viora.Infrastructure.Persistence.AppDbContext>();var app=await db.MiniApps.SingleAsync();
-            var options=new MiniAppSandboxOptions {Enabled=true};var fetcher=new Fetcher();
-            var configuration=new MiniAppSandboxConfigurationService(db,new(db,TimeProvider.System,options),fetcher,fetcher,options,TimeProvider.System,
-                ActivatorUtilities.CreateInstance<MiniAppSsoService>(services));
-            Assert.Equal(SandboxCheckStatus.Passed,(await configuration.ExecuteAsync(app.Id,SandboxCheckKey.SsoClient,default)).Status);
-            if(change=="permissions")
-            {
-                var manager=services.GetRequiredService<IOpenIddictApplicationManager>();var projection=(await manager.FindByClientIdAsync(SsoProtocolTestHost.ClientId))!;
-                var descriptor=new OpenIddictApplicationDescriptor();await manager.PopulateAsync(descriptor,projection);
-                descriptor.Permissions.Remove(OpenIddictConstants.Permissions.Scopes.Profile);await manager.UpdateAsync(projection,descriptor);
-            }
-            else if(change=="callback")await db.MiniAppRedirectUris.ExecuteDeleteAsync();
-            else if(change=="environment")await db.MiniAppOAuthClients.ExecuteUpdateAsync(s=>s.SetProperty(x=>x.Environment,MiniAppOAuthEnvironment.Production));
-            else await db.MiniAppClientSecrets.ExecuteUpdateAsync(s=>s.SetProperty(x=>x.ExpiresAt,DateTime.UtcNow.AddSeconds(-1)));
-            Assert.Equal(SandboxCheckStatus.Failed,(await configuration.ExecuteAsync(app.Id,SandboxCheckKey.SsoClient,default)).Status);
-            return true;
-        });
-    }
-
     private sealed class ActualServerJson(HttpClient client):IPublicJsonFetcher
     {
         public async Task<PublicFetchResult> FetchJsonAsync(Uri uri,int maxBytes,CancellationToken ct)
@@ -182,18 +141,5 @@ public sealed class MiniAppSandboxConfigurationTests
             using var response=await client.GetAsync(uri,ct);response.EnsureSuccessStatusCode();
             return new(await response.Content.ReadAsByteArrayAsync(ct),response.Content.Headers.ContentType!.MediaType!);
         }
-    }
-    [Fact]
-    public async Task CheckerConsumesDiscoveryAndJwksFromActualOpenIddictServer()
-    {
-        const string issuer="https://identity.ankt.com/";
-        await using var host=await SsoProtocolTestHost.Create(configureSso:config=>config["Sso:Issuer"]=issuer);
-        await host.WithServices(async services=>
-        {
-            var db=services.GetRequiredService<Viora.Infrastructure.Persistence.AppDbContext>();var app=await db.MiniApps.SingleAsync();
-            var options=new MiniAppSandboxOptions {Enabled=true,Issuer=issuer};
-            var checker=new MiniAppSandboxConfigurationService(db,new(db,TimeProvider.System,options),new Fetcher(),new ActualServerJson(host.Client),options,TimeProvider.System);
-            Assert.Equal(SandboxCheckStatus.Passed,(await checker.ExecuteAsync(app.Id,SandboxCheckKey.Discovery,default)).Status);return true;
-        });
     }
 }

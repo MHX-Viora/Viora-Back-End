@@ -34,7 +34,7 @@ public sealed class MiniAppSandboxSessionTests
         await using var fixture=await SandboxFixture.Create(); var service=fixture.Service();
         var session=await service.CreateAsync(fixture.Actor,fixture.App.AppId,default);
         Assert.Equal("Sandbox",session.Environment); Assert.True(session.ExpiresAt<=fixture.Clock.Now.UtcDateTime.AddMinutes(15));
-        Assert.False(fixture.App.SsoEnabled); Assert.Empty(fixture.Db.AnktSsoSessions); Assert.Empty(fixture.Db.MiniAppUserConsents);
+        Assert.False(fixture.App.SsoEnabled);
         var conflict=await Assert.ThrowsAsync<DeveloperAuthException>(()=>service.CreateAsync(fixture.Actor,fixture.App.AppId,default));
         Assert.Equal(409,conflict.Status);
         await service.RevokeAsync(fixture.Actor,fixture.App.AppId,session.Id,default);

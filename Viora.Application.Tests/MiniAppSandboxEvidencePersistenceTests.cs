@@ -45,7 +45,7 @@ public sealed class MiniAppSandboxEvidencePersistenceTests
         f.Db.Add(new MiniAppSandboxDiagnostic {SandboxSessionId=first.Id,TestRunId=run.Id,Code=SandboxMessageCode.BridgeReady,Category=SandboxDiagnosticCategory.Bridge,EvidenceSource=SandboxEvidenceSource.Host,Count=1});
         await f.Db.SaveChangesAsync();Assert.Single(await f.Db.MiniAppSandboxDiagnostics.ToListAsync());
         Assert.DoesNotContain(f.Db.Model.FindEntityType(typeof(MiniAppSandboxDiagnostic))!.GetProperties(),p=>p.ClrType==typeof(string));
-        Assert.Empty(f.Db.MiniAppUserConsents);Assert.Empty(f.Db.AnktSsoSessions);
+
     }
 
     [Fact]

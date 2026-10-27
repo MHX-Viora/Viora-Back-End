@@ -17,6 +17,8 @@ public static class MiniAppReviewRegistration
         services.TryAddScoped<MiniAppVersionService>();
         services.TryAddScoped<MiniAppReviewAuditService>();
         services.TryAddScoped<MiniAppReadinessService>();
+        if (configuration?.GetValue<bool>("MiniAppAuth:Enabled") == true)
+            services.TryAddScoped<MiniAppBridgeReviewEvidence>();
         services.TryAddScoped<MiniAppPublishingService>();
         services.TryAddScoped<MiniAppCatalogProjection>();
         services.TryAddScoped<MiniAppModerationService>();
@@ -26,7 +28,11 @@ public static class MiniAppReviewRegistration
         services.TryAddScoped<MiniAppReviewNotificationService>();
         services.TryAddScoped<MiniAppReviewEmailDelivery>();
         services.AddHostedService<MiniAppReviewNotificationWorker>();
-        services.AddOptions<MiniAppReviewOptions>().Configure(o => configuration?.GetSection(MiniAppReviewOptions.SectionName).Bind(o))
+        services.AddOptions<MiniAppReviewOptions>().Configure(o =>
+        {
+            configuration?.GetSection(MiniAppReviewOptions.SectionName).Bind(o);
+            o.Enabled = configuration?.GetValue<bool?>("MiniAppReview:Enabled") ?? configuration?.GetValue<bool>("MiniAppAuth:Enabled") ?? false;
+        })
             .Validate(o => o.ReadLimitPerMinute is >= 1 and <= 1000 && o.MutationLimitPerMinute is >= 1 and <= 120 &&
                 o.CredentialLimitPerMinute is >= 1 and <= 30, "Mini App review limits must be bounded.").ValidateOnStart();
         foreach (var policy in new[] { "mini-app-review-read", "mini-app-review-write", "mini-app-review-credentials" })
