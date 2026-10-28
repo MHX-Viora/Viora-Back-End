@@ -821,6 +821,51 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppPartnerCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<short>("Environment")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("MiniAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SecretEncrypted")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("SecretHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SecretKeyVersion")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MiniAppId", "Environment")
+                        .IsUnique();
+
+                    b.ToTable("MiniAppPartnerCredentials", (string)null);
+                });
+
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppProductionHostSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5090,6 +5135,17 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasForeignKey("MiniAppId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Viora.Domain.Developers.MiniAppPartnerCredential", b =>
+                {
+                    b.HasOne("Viora.Domain.Developers.MiniApp", "MiniApp")
+                        .WithMany()
+                        .HasForeignKey("MiniAppId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("MiniApp");
                 });
 
             modelBuilder.Entity("Viora.Domain.Developers.MiniAppProductionHostSession", b =>

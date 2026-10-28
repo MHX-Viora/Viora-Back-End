@@ -12,51 +12,51 @@ namespace Viora.Infrastructure.Developers;
 // Partner grants reuse Bridge storage, but bind to a parent session UUID instead
 // of a PKCE challenge. A 36-character UUID can never match an S256 challenge.
 public sealed class MiniAppPartnerLoginService(AppDbContext db, MiniAppBridgeService bridge,
-    IOptions<MiniAppBridgeOptions> options, TimeProvider clock)
+    IOptions<MiniAppBridgeOptions> options, TimeProvider clock, MiniAppPartnerCredentialStore credentials)
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
-    public async Task<MiniAppCredentialValue> RevealCredentialAsync(MiniAppBridgeActor actor, string client, string? environment, CancellationToken ct)
+    private async Task<MiniApp> OwnerAsync(MiniAppBridgeActor actor, string client, CancellationToken ct)
     {
         var now = Now;
+        if (!options.Value.Enabled) throw new DeveloperAuthException(503, "HOST_UNAVAILABLE", "Mini App chưa khả dụng.");
         if (!actor.IsSandbox || !await db.DeveloperSessions.AnyAsync(x => x.Id == actor.SourceSessionId &&
             x.DeveloperAccountId == actor.Id && x.RevokedAt == null && x.ExpiresAt > now && x.AbsoluteExpiresAt > now &&
             x.Account.Status == DeveloperStatus.Active && (x.Account.LockedUntil == null || x.Account.LockedUntil <= now), ct))
             throw new DeveloperAuthException(401, "SESSION_EXPIRED", "Vui lòng đăng nhập tài khoản Developer.");
-        var app = await db.MiniApps.AsNoTracking().SingleOrDefaultAsync(x => x.AppId == client &&
-            x.DeveloperAccountId == actor.Id && x.DeletedAt == null, ct)
+        return await db.MiniApps.AsNoTracking().SingleOrDefaultAsync(x => x.AppId == client && x.DeveloperAccountId == actor.Id && x.DeletedAt == null, ct)
             ?? throw new DeveloperAuthException(404, "MINI_APP_NOT_FOUND", "Không tìm thấy Mini App.");
-        if (environment is not ("Sandbox" or "Production"))
-            throw new DeveloperAuthException(400, "INVALID_ENVIRONMENT", "Chọn môi trường Sandbox hoặc Production.");
-        static DeveloperAuthException Unavailable() => new(503, "PARTNER_SECRET_UNAVAILABLE",
-            "Client Secret chưa sẵn sàng để sao chép. Liên hệ ANKT để cấu hình credential của app.");
-        if (!options.Value.Enabled) throw Unavailable();
-        var registered = options.Value.Partner(client) ?? throw Unavailable();
-        var secret = environment == "Sandbox" ? registered.SandboxSecret : registered.ProductionSecret;
-        if (secret is null || secret.Length is < 32 or > 256 || secret.Any(char.IsControl)) throw Unavailable();
-        try { Credentials(client, secret, environment == "Sandbox"); }
-        catch (DeveloperAuthException) { throw Unavailable(); }
-        db.MiniAppAuditLogs.Add(new() { MiniAppId = app.Id, ActorDeveloperId = actor.Id,
-            Action = "partner.credential.revealed", Metadata = System.Text.Json.JsonSerializer.Serialize(new { environment }) });
-        await db.SaveChangesAsync(ct);
-        return new(client, environment, secret);
+    }
+    private async Task AuditCredentialAsync(MiniApp app, MiniAppBridgeActor actor, string action, string environment, CancellationToken ct)
+    {
+        db.MiniAppAuditLogs.Add(new() { MiniAppId = app.Id, ActorDeveloperId = actor.Id, Action = action,
+            Metadata = System.Text.Json.JsonSerializer.Serialize(new { environment }) });
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateConcurrencyException) { throw MiniAppPartnerCredentialStore.ConcurrencyError(); }
+    }
+    public async Task<MiniAppCredentialValue> RevealCredentialAsync(MiniAppBridgeActor actor, string client, string? environment, CancellationToken ct)
+    {
+        var app = await OwnerAsync(actor, client, ct);
+        var row = await credentials.GetOrCreateAsync(app.Id, MiniAppPartnerCredentialStore.Environment(environment), ct);
+        var value = credentials.Value(client, row);
+        await AuditCredentialAsync(app, actor, "partner.credential.revealed", row.Environment.ToString(), ct);
+        return value;
+    }
+    public async Task<MiniAppCredentialValue> ChangeCredentialAsync(MiniAppBridgeActor actor, string client, string? environment, Guid version, bool revoke, CancellationToken ct)
+    {
+        var app = await OwnerAsync(actor, client, ct);
+        var row = await credentials.ChangeAsync(app.Id, MiniAppPartnerCredentialStore.Environment(environment), version, revoke, ct);
+        var value = credentials.Value(client, row);
+        await AuditCredentialAsync(app, actor, revoke ? "partner.credential.revoked" : "partner.credential.rotated", row.Environment.ToString(), ct);
+        return value;
     }
     private static DeveloperAuthException InvalidCode() => new(400, "INVALID_LOGIN_CODE", "Mã đăng nhập không hợp lệ hoặc đã hết hạn.");
-    private void Credentials(string client, string secret, bool sandbox)
-    {
-        var registered = options.Value.Partner(client) ?? throw InvalidClient();
-        var hash = sandbox ? registered.SandboxSecretHash : registered.ProductionSecretHash;
-        if (secret.Length is < 32 or > 256 || hash.Length != 64 ||
-            !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(MiniAppBridgeService.Hash(secret)), Encoding.ASCII.GetBytes(hash.ToUpperInvariant())))
-            throw InvalidClient();
-    }
     private static DeveloperAuthException InvalidClient() => new(401, "INVALID_CLIENT", "Thông tin backend Mini App không hợp lệ.");
 
     public async Task<MiniAppLoginCode> IssueAsync(string token, string origin, string client, CancellationToken ct)
     {
         var parent = await bridge.AuthenticateAsync(token, origin, ct, client);
         await bridge.ProfileAsync(parent, ct);
-        if (options.Value.Partner(client) is not { } registered ||
-            (parent.IsSandbox ? registered.SandboxSecretHash : registered.ProductionSecretHash).Length != 64)
+        if (!await credentials.AvailableAsync(parent.MiniAppId, parent.IsSandbox, ct))
             throw new DeveloperAuthException(503, "PARTNER_LOGIN_NOT_CONFIGURED", "Backend Mini App chưa cấu hình đăng nhập ANKT.");
         var parentId = parent.Id.ToString("D");
         if (await db.Set<MiniAppBridgeSession>().CountAsync(x => x.CodeChallenge == parentId && x.ConsumedAt == null && x.CodeExpiresAt > Now && x.RevokedAt == null, ct) >= 5)
@@ -78,7 +78,7 @@ public sealed class MiniAppPartnerLoginService(AppDbContext db, MiniAppBridgeSer
         var hash = MiniAppBridgeService.Hash(code);
         var grant = await db.Set<MiniAppBridgeSession>().AsNoTracking().SingleOrDefaultAsync(x =>
             x.CodeHash == hash && x.CodeChallenge.Length == 36 && x.ConsumedAt == null && x.CodeExpiresAt > Now, ct) ?? throw InvalidCode();
-        Credentials(client, secret, grant.IsSandbox);
+        await credentials.ValidateAsync(client, secret, grant.IsSandbox, ct);
         if (grant.ClientId != client) throw InvalidClient();
         var identity = await IdentityAsync(grant, ct);
         var now = Now;
@@ -91,7 +91,7 @@ public sealed class MiniAppPartnerLoginService(AppDbContext db, MiniAppBridgeSer
     {
         var grant = await db.Set<MiniAppBridgeSession>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.CodeChallenge.Length == 36 && x.ConsumedAt != null, ct)
             ?? throw new DeveloperAuthException(401, "SESSION_EXPIRED", "Phiên Mini App đã hết hạn.");
-        Credentials(client, secret, grant.IsSandbox);
+        await credentials.ValidateAsync(client, secret, grant.IsSandbox, ct);
         if (grant.ClientId != client) throw InvalidClient();
         return await IdentityAsync(grant, ct);
     }

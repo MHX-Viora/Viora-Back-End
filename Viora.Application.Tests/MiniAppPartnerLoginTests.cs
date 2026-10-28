@@ -23,13 +23,14 @@ public sealed class MiniAppPartnerLoginTests
     private static async Task Configure(MiniAppAuthBridgeTests.Host h)
     {
         // Bind through configuration to exercise the same registration as Render.
-        await h.Scope(s => {
+        await h.Scope(async s => {
             var configuration = s.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
             configuration["MiniAppAuth:Partners:Nts:ClientId"] = Client;
             configuration["MiniAppAuth:Partners:Nts:SandboxSecretHash"] = MiniAppBridgeService.Hash(Secret);
             configuration["MiniAppAuth:Partners:Nts:ProductionSecretHash"] = MiniAppBridgeService.Hash("different-production-secret-at-least-32-bytes");
             s.GetRequiredService<IOptionsMonitorCache<MiniAppBridgeOptions>>().Clear();
-            return Task.FromResult(true);
+            await s.GetRequiredService<MiniAppPartnerCredentialStore>().ImportLegacyAsync(s.GetRequiredService<IOptions<MiniAppBridgeOptions>>().Value, default);
+            return true;
         });
     }
     private static async Task<JsonElement> Code(MiniAppAuthBridgeTests.Host h)

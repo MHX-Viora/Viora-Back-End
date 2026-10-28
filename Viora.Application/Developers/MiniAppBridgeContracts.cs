@@ -22,7 +22,8 @@ public sealed record MiniAppLoginCode(string Code, int ExpiresIn);
 public sealed record MiniAppPartnerExchange(string Code);
 public sealed record MiniAppPartnerSessionRequest(Guid SessionId);
 public sealed record MiniAppCredentialRevealRequest(string? Environment);
-public sealed record MiniAppCredentialValue(string ClientId, string Environment, string ClientSecret)
+public sealed record MiniAppCredentialChangeRequest(string? Environment, Guid Version);
+public sealed record MiniAppCredentialValue(string ClientId, string Environment, string ClientSecret, Guid Version = default, bool Revoked = false)
 {
     public override string ToString() => $"{ClientId} ({Environment}): [REDACTED]";
 }

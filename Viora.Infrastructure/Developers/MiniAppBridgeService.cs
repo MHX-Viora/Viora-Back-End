@@ -14,12 +14,8 @@ public sealed class MiniAppBridgeOptions
 {
     public bool Enabled { get; set; }
     public string AllowedHostOrigin { get; set; } = "https://mxh.ankt.vn";
+    // Legacy import input only. Runtime partner authentication reads the database.
     public Dictionary<string, MiniAppPartnerCredentials> Partners { get; set; } = new();
-    public MiniAppPartnerCredentials? Partner(string client)
-    {
-        var matches = Partners.Where(x => x.Key == client || x.Value.ClientId == client).Select(x => x.Value).ToArray();
-        return matches.Length == 1 ? matches[0] : null;
-    }
 }
 
 public sealed class MiniAppPartnerCredentials

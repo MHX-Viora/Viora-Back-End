@@ -44,6 +44,7 @@ public sealed class MiniAppAuthBridgeTests
             b.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o=>{
                 o.MapInboundClaims=false;o.TokenValidationParameters=new(){ValidIssuer="https://social.test",ValidAudience="ankt",IssuerSigningKey=key,ValidAlgorithms=[SecurityAlgorithms.HmacSha256]};});
             b.Services.AddAuthorization();b.Services.AddRateLimiter(o=>o.RejectionStatusCode=429);b.Services.AddMiniAppAuthBridge(b.Configuration);
+            b.Services.Configure<MiniAppOptions>(o => { o.ActiveKeyVersion = "test-v1"; o.EncryptionKeys["test-v1"] = Convert.ToBase64String(new byte[32]); });
             h.app=b.Build();if(postgres!=null)await h.Scope(async s=>{await s.GetRequiredService<AppDbContext>().Database.MigrateAsync();return true;});
             await h.Scope(async s=>{
                 var db=s.GetRequiredService<AppDbContext>();await db.Database.EnsureCreatedAsync();
@@ -146,6 +147,7 @@ public sealed class MiniAppAuthBridgeTests
             s.GetRequiredService<IOptions<MiniAppBridgeOptions>>().Value.Partners[Client] = new() {
                 ProductionSecretHash = MiniAppBridgeService.Hash(new string('p', 43)),
                 SandboxSecretHash = MiniAppBridgeService.Hash(new string('s', 43)) };
+            await s.GetRequiredService<MiniAppPartnerCredentialStore>().ImportLegacyAsync(s.GetRequiredService<IOptions<MiniAppBridgeOptions>>().Value, default);
             var service = s.GetRequiredService<MiniAppPartnerLoginService>();
             var code = await service.IssueAsync(token.AccessToken, Origin, Client, default);
             await Assert.ThrowsAsync<DeveloperAuthException>(() => service.ExchangeAsync(Client, new string('s', 43), code.Code, default));

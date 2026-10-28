@@ -1,55 +1,24 @@
-# Owner-only Client Secret copy
+# Owner-only Client Secret management
 
-For the explicit Nghệ Thuật Số direct-FE configuration, the UI instead uses public
-build values and does not call this endpoint. That exception publishes its values
-in the FE bundle; the owner-only guarantees below apply to this API, not to that
-direct configuration. Other apps retain this authenticated API path.
+All Mini Apps use the authenticated Developer API. No app has a direct FE env
+exception. Client ID stays public; Client Secret is returned only to an active,
+unlocked owner with a live Developer session, never in public/list DTOs.
 
-The integration Console places an environment selector and visible Client Secret
-beside App ID. It automatically requests the selected credential when the owner
-opens the section or changes environment. Only an authenticated, active/unlocked
-app owner can retrieve it.
-The BFF requires same-origin POST/CSRF headers; the backend uses the existing
-sensitive-operation rate limit and audits only app/actor/environment. Responses are
-no-store. UI keeps the value visible without a timer, clearing it on app/environment
-change or exit and refetching after bfcache restoration. It never stores the value
-in browser storage or a public bundle. The separate Hiện/Ẩn control is removed.
+Opening the integration section lazily provisions a random secret for the selected
+Sandbox or Production environment. Repeat reveal returns the same encrypted-at-rest
+value. Copy stays available until the app/environment changes or the page exits.
+The page supports confirmed rotation and revocation; update the partner backend
+with each newly rotated secret. Other apps and environments are unaffected.
 
-## Operator provisioning
+POST `/api/developer/mini-apps/{appId}/auth-bridge/credentials/reveal` accepts
+`{environment:"Production"}` or Sandbox. `/rotate` and `/revoke` under the same
+credentials prefix accept `{environment,version}` from the last response.
+Responses: `{clientId,environment,clientSecret,version,revoked}` with no-store.
+Revoked and imported hash-only credentials return an empty clientSecret; rotate
+explicitly to get a fresh value. A revoked row never silently regenerates.
+Stale changes: 409 CREDENTIAL_CONFLICT; invalid environment: 400; invalid owner
+session: 401; non-owner/deleted app: 404. All mutations are sensitive-rate-limited
+same-origin POST routes and audit only actor/app/environment, never secret values.
 
-Existing partner authentication continues using the registered SHA-256 hash. Hashes
-cannot be reversed. To enable owner copy, supply the corresponding original value
-from the backend secret manager under the SAME existing label/App ID:
-
-```dotenv
-MiniAppAuth__Partners__YourLabel__ClientId=YOUR_REGISTERED_APP_ID
-MiniAppAuth__Partners__YourLabel__SandboxSecretHash=SHA256_HEX_OF_SANDBOX_SECRET
-MiniAppAuth__Partners__YourLabel__SandboxSecret=ORIGINAL_REGISTERED_SANDBOX_SECRET
-MiniAppAuth__Partners__YourLabel__ProductionSecretHash=SHA256_HEX_OF_PRODUCTION_SECRET
-MiniAppAuth__Partners__YourLabel__ProductionSecret=ORIGINAL_REGISTERED_PRODUCTION_SECRET
-```
-
-These are backend-only secret-manager settings, never frontend, SDK, docs or Git
-values. Use independent high-entropy secrets per app and environment. Do not reuse
-one app's secret for other developers. Preserve the existing operator label; do not
-register a duplicate Client ID under another label. Restart/redeploy the backend.
-Reveal refuses any value that does not match its registered hash. Hash-only
-configurations remain valid for partner login but reveal returns
-PARTNER_SECRET_UNAVAILABLE. No database migration is needed.
-
-When rotating, update plaintext and hash together, plus the partner backend's
-Client Secret. A secret disclosed outside the intended private channel should be
-replaced, not copied into source code as a shared default.
-
-## Private Portal contract
-
-POST `/api/developer/mini-apps/{appId}/auth-bridge/credentials/reveal` with a valid
-owner DeveloperSession and JSON `{ "environment": "Production" }` or `Sandbox`.
-The browser uses the same-origin `/developers/api/account/mini-apps/...` BFF route.
-Response: `{clientId, environment, clientSecret}`. No GET/prefetch or general app-list
-DTO contains this value. No public SDK method exposes the server credential.
-
-Missing/mismatched provisioning: 503 PARTNER_SECRET_UNAVAILABLE. Wrong environment:
-400 INVALID_ENVIRONMENT. Invalid session: 401. Non-owner: 404 without disclosure.
-The feature reveals an existing registered credential; it does not generate or
-rotate credentials and does not alter the partner login protocol.
+See [database credential rollout](miniapp-database-credentials.md) for schema,
+legacy import, encryption keys and deployment order.

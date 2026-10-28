@@ -13,7 +13,7 @@ public sealed class MiniAppCredentialRevealTests
     private const string Client = "app_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string Sandbox = "test-sandbox-secret-with-at-least-32-bytes";
     private const string Production = "test-production-secret-with-at-least-32-bytes";
-    private static Task Configure(MiniAppAuthBridgeTests.Host h, bool mismatch = false, bool hashOnly = false) => h.Scope(s => {
+    private static Task Configure(MiniAppAuthBridgeTests.Host h, bool mismatch = false, bool hashOnly = false) => h.Scope(async s => {
         var config=s.GetRequiredService<IConfiguration>();
         config["MiniAppAuth:Partners:Test:ClientId"]=Client;
         config["MiniAppAuth:Partners:Test:SandboxSecretHash"]=MiniAppBridgeService.Hash(Sandbox);
@@ -21,7 +21,8 @@ public sealed class MiniAppCredentialRevealTests
         config["MiniAppAuth:Partners:Test:SandboxSecret"]=hashOnly ? "" : mismatch ? Production : Sandbox;
         config["MiniAppAuth:Partners:Test:ProductionSecret"]=Production;
         s.GetRequiredService<IOptionsMonitorCache<MiniAppBridgeOptions>>().Clear();
-        return Task.FromResult(true);
+        await s.GetRequiredService<MiniAppPartnerCredentialStore>().ImportLegacyAsync(s.GetRequiredService<IOptions<MiniAppBridgeOptions>>().Value, default);
+        return true;
     });
 
     [Fact] public async Task OwnerCanRevealOnlyTheSelectedEnvironmentAndAuditIsRedacted()
@@ -63,12 +64,18 @@ public sealed class MiniAppCredentialRevealTests
         Assert.Equal(401,error.Status);
     }
 
-    [Theory][InlineData(true,false)][InlineData(false,true)]
-    public async Task MissingOrMismatchedPlaintextIsNeverReturned(bool mismatch,bool hashOnly)
+    [Fact] public async Task MismatchedLegacySecretCannotBeImported()
     {
-        await using var h=await MiniAppAuthBridgeTests.Host.Create();await Configure(h,mismatch,hashOnly);
-        var error=await Assert.ThrowsAsync<DeveloperAuthException>(()=>h.Scope(s=>s.GetRequiredService<MiniAppPartnerLoginService>().RevealCredentialAsync(h.Owner,Client,"Sandbox",default)));
-        Assert.Equal("PARTNER_SECRET_UNAVAILABLE",error.Code);Assert.DoesNotContain(Sandbox,error.Message);
+        await using var h=await MiniAppAuthBridgeTests.Host.Create();
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>Configure(h,mismatch:true));
+    }
+
+    [Fact] public async Task HashOnlyLegacySecretRemainsValidButRequiresRotationToReveal()
+    {
+        await using var h=await MiniAppAuthBridgeTests.Host.Create();await Configure(h,hashOnly:true);
+        var value=await h.Scope(s=>s.GetRequiredService<MiniAppPartnerLoginService>().RevealCredentialAsync(h.Owner,Client,"Sandbox",default));
+        Assert.Empty(value.ClientSecret);Assert.False(value.Revoked);Assert.NotEqual(Guid.Empty,value.Version);
+        await h.Scope(async s=>{await s.GetRequiredService<MiniAppPartnerCredentialStore>().ValidateAsync(Client,Sandbox,true,default);return true;});
     }
 
     [Theory][InlineData("")][InlineData("production")][InlineData("Other")]
