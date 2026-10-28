@@ -5,6 +5,32 @@ namespace Viora.Infrastructure.Persistence;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<Viora.Domain.Developers.SandboxIdentityTemplate> SandboxIdentityTemplates => Set<Viora.Domain.Developers.SandboxIdentityTemplate>();
+    public DbSet<Viora.Domain.Developers.MiniAppVersion> MiniAppVersions => Set<Viora.Domain.Developers.MiniAppVersion>();
+    public DbSet<Viora.Domain.Developers.MiniAppReviewRequest> MiniAppReviewRequests => Set<Viora.Domain.Developers.MiniAppReviewRequest>();
+    public DbSet<Viora.Domain.Developers.MiniAppReviewAction> MiniAppReviewActions => Set<Viora.Domain.Developers.MiniAppReviewAction>();
+    public DbSet<Viora.Domain.Developers.MiniAppPublication> MiniAppPublications => Set<Viora.Domain.Developers.MiniAppPublication>();
+    public DbSet<Viora.Domain.Developers.MiniAppOperationalState> MiniAppOperationalStates => Set<Viora.Domain.Developers.MiniAppOperationalState>();
+    public DbSet<Viora.Domain.Developers.MiniAppReviewNotification> MiniAppReviewNotifications => Set<Viora.Domain.Developers.MiniAppReviewNotification>();
+    public DbSet<Viora.Domain.Developers.MiniAppReviewNotificationDelivery> MiniAppReviewNotificationDeliveries => Set<Viora.Domain.Developers.MiniAppReviewNotificationDelivery>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxSession> MiniAppSandboxSessions => Set<Viora.Domain.Developers.MiniAppSandboxSession>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxTestRun> MiniAppSandboxTestRuns => Set<Viora.Domain.Developers.MiniAppSandboxTestRun>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxTestResult> MiniAppSandboxTestResults => Set<Viora.Domain.Developers.MiniAppSandboxTestResult>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxDiagnostic> MiniAppSandboxDiagnostics => Set<Viora.Domain.Developers.MiniAppSandboxDiagnostic>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxProtocolEvidence> MiniAppSandboxProtocolEvidence => Set<Viora.Domain.Developers.MiniAppSandboxProtocolEvidence>();
+    public DbSet<Viora.Domain.Developers.MiniAppSandboxLaunchGrant> MiniAppSandboxLaunchGrants => Set<Viora.Domain.Developers.MiniAppSandboxLaunchGrant>();
+    public DbSet<Viora.Domain.Developers.MiniAppDomainVerification> MiniAppDomainVerifications => Set<Viora.Domain.Developers.MiniAppDomainVerification>();
+    public DbSet<Viora.Domain.Developers.MiniApp> MiniApps => Set<Viora.Domain.Developers.MiniApp>();
+    public DbSet<Viora.Domain.Developers.MiniAppOAuthClient> MiniAppOAuthClients => Set<Viora.Domain.Developers.MiniAppOAuthClient>();
+    public DbSet<Viora.Domain.Developers.MiniAppClientSecret> MiniAppClientSecrets => Set<Viora.Domain.Developers.MiniAppClientSecret>();
+    public DbSet<Viora.Domain.Developers.MiniAppRedirectUri> MiniAppRedirectUris => Set<Viora.Domain.Developers.MiniAppRedirectUri>();
+    public DbSet<Viora.Domain.Developers.MiniAppAuditLog> MiniAppAuditLogs => Set<Viora.Domain.Developers.MiniAppAuditLog>();
+    public DbSet<Viora.Domain.Developers.MiniAppLogoUpload> MiniAppLogoUploads => Set<Viora.Domain.Developers.MiniAppLogoUpload>();
+    public DbSet<Viora.Domain.Developers.DeveloperAccount> DeveloperAccounts => Set<Viora.Domain.Developers.DeveloperAccount>();
+    public DbSet<Viora.Domain.Developers.DeveloperSession> DeveloperSessions => Set<Viora.Domain.Developers.DeveloperSession>();
+    public DbSet<Viora.Domain.Developers.DeveloperActionToken> DeveloperActionTokens => Set<Viora.Domain.Developers.DeveloperActionToken>();
+    public DbSet<Viora.Domain.Developers.DeveloperExternalIdentity> DeveloperExternalIdentities => Set<Viora.Domain.Developers.DeveloperExternalIdentity>();
+    public DbSet<Viora.Domain.Developers.DeveloperAuditLog> DeveloperAuditLogs => Set<Viora.Domain.Developers.DeveloperAuditLog>();
     private const string InviteCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static readonly Random SharedRandom = Random.Shared;
 
@@ -47,15 +73,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AdminLog> AdminLogs => Set<AdminLog>();
     public DbSet<LegalDocument> LegalDocuments => Set<LegalDocument>();
     public DbSet<UserLegalAcceptance> UserLegalAcceptances => Set<UserLegalAcceptance>();
-    public DbSet<Developer> Developers => Set<Developer>();
-    public DbSet<MiniApp> MiniApps => Set<MiniApp>();
-    public DbSet<MiniAppPermission> MiniAppPermissions => Set<MiniAppPermission>();
-    public DbSet<MiniAppPermissionMapping> MiniAppPermissionMappings => Set<MiniAppPermissionMapping>();
-    public DbSet<MiniAppUserConsent> MiniAppUserConsents => Set<MiniAppUserConsent>();
-    public DbSet<MiniAppLaunchCode> MiniAppLaunchCodes => Set<MiniAppLaunchCode>();
-    public DbSet<MiniAppExternalIdentity> MiniAppExternalIdentities => Set<MiniAppExternalIdentity>();
-    public DbSet<MiniAppAuditLog> MiniAppAuditLogs => Set<MiniAppAuditLog>();
-    public DbSet<MiniAppLaunchLog> MiniAppLaunchLogs => Set<MiniAppLaunchLog>();
     public DbSet<Wallet> Wallets => Set<Wallet>();
     public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
     public DbSet<Payment> Payments => Set<Payment>();

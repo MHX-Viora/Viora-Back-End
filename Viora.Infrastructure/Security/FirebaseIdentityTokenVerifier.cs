@@ -28,7 +28,7 @@ public sealed class FirebaseIdentityTokenVerifier(
         try
         {
             var decodedToken = await FirebaseAuth.GetAuth(app)
-                .VerifyIdTokenAsync(firebaseToken, cancellationToken);
+                .VerifyIdTokenAsync(firebaseToken, checkRevoked: true, cancellationToken);
             var phoneNumber = decodedToken.Claims.TryGetValue("phone_number", out var phoneClaim)
                 ? phoneClaim?.ToString()
                 : null;
@@ -43,7 +43,9 @@ public sealed class FirebaseIdentityTokenVerifier(
 
             return string.IsNullOrWhiteSpace(phoneNumber) && string.IsNullOrWhiteSpace(email)
                 ? null
-                : new FirebaseVerifiedIdentity(email, phoneNumber);
+                : new FirebaseVerifiedIdentity(email, phoneNumber,
+                    decodedToken.Claims.TryGetValue("auth_time", out var authTime) && long.TryParse(authTime?.ToString(), out var seconds)
+                        && seconds >= 0 && seconds <= 253402300799 ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null);
         }
         catch (FirebaseAuthException exception)
         {

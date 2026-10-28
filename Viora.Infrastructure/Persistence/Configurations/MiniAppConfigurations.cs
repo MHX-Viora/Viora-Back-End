@@ -1,158 +1,73 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Viora.Domain.Entities;
+using Viora.Domain.Developers;
 
 namespace Viora.Infrastructure.Persistence.Configurations;
 
-internal sealed class DeveloperConfiguration : IEntityTypeConfiguration<Developer>
-{
-    public void Configure(EntityTypeBuilder<Developer> builder)
-    {
-        builder.ToTable("Developers");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.Name).HasMaxLength(120).IsRequired();
-        builder.Property(x => x.CompanyName).HasMaxLength(160);
-        builder.Property(x => x.Email).HasMaxLength(255).IsRequired();
-        builder.Property(x => x.Phone).HasMaxLength(20);
-        builder.Property(x => x.Website).HasMaxLength(2048);
-        builder.HasIndex(x => x.Email).IsUnique();
-        builder.HasIndex(x => x.AccountId).IsUnique();
-        builder.HasIndex(x => x.Status);
-        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
 internal sealed class MiniAppConfiguration : IEntityTypeConfiguration<MiniApp>
 {
-    public void Configure(EntityTypeBuilder<MiniApp> builder)
+    public void Configure(EntityTypeBuilder<MiniApp> b)
     {
-        builder.ToTable("MiniApps");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.Name).HasMaxLength(120).IsRequired();
-        builder.Property(x => x.Slug).HasMaxLength(120).IsRequired();
-        builder.Property(x => x.Description).HasMaxLength(1000);
-        builder.Property(x => x.IconUrl).HasMaxLength(2048);
-        builder.Property(x => x.CoverUrl).HasMaxLength(2048);
-        builder.Property(x => x.WebUrl).HasMaxLength(2048).IsRequired();
-        builder.Property(x => x.CallbackUrl).HasMaxLength(2048).IsRequired();
-        builder.Property(x => x.ClientId).HasMaxLength(80).IsRequired();
-        builder.Property(x => x.ClientSecretHash).IsRequired();
-        builder.Property(x => x.AllowedDomains).HasColumnType("text[]");
-        builder.HasIndex(x => x.Slug).IsUnique();
-        builder.HasIndex(x => x.ClientId).IsUnique();
-        builder.HasIndex(x => x.DeveloperId);
-        builder.HasIndex(x => x.Status);
-        builder.HasOne(x => x.Developer).WithMany(x => x.MiniApps).HasForeignKey(x => x.DeveloperId).OnDelete(DeleteBehavior.Restrict);
+        b.ToTable("MiniApps"); b.HasKey(x => x.Id);
+        b.Property(x => x.AppId).HasMaxLength(48).IsRequired(); b.HasIndex(x => x.AppId).IsUnique();
+        b.Property(x => x.Name).HasMaxLength(120).IsRequired(); b.Property(x => x.Category).HasMaxLength(32).IsRequired();
+        b.Property(x => x.ShortDescription).HasMaxLength(300); b.Property(x => x.Description).HasMaxLength(10000);
+        b.Property(x => x.SupportEmail).HasMaxLength(254);
+        foreach (var field in new[] { "LogoUrl", "WebsiteUrl", "PrivacyPolicyUrl", "TermsOfServiceUrl" }) b.Property<string>(field).HasMaxLength(2048);
+        b.Property(x => x.CreateFingerprint).HasMaxLength(64).IsRequired(); b.Property(x => x.Version).IsConcurrencyToken();
+        b.HasIndex(x => new { x.DeveloperAccountId, x.CreateRequestId }).IsUnique();
+        b.HasIndex(x => new { x.DeveloperAccountId, x.UpdatedAt }); b.HasIndex(x => x.Status);
+        b.HasOne(x => x.Developer).WithMany().HasForeignKey(x => x.DeveloperAccountId).OnDelete(DeleteBehavior.Restrict);
     }
 }
-
-internal sealed class MiniAppPermissionConfiguration : IEntityTypeConfiguration<MiniAppPermission>
+internal sealed class MiniAppClientConfiguration : IEntityTypeConfiguration<MiniAppOAuthClient>
 {
-    public void Configure(EntityTypeBuilder<MiniAppPermission> builder)
+    public void Configure(EntityTypeBuilder<MiniAppOAuthClient> b)
     {
-        builder.ToTable("MiniAppPermissions");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.Code).HasMaxLength(100).IsRequired();
-        builder.Property(x => x.Name).HasMaxLength(160).IsRequired();
-        builder.Property(x => x.Description).HasMaxLength(500);
-        builder.HasIndex(x => x.Code).IsUnique();
-        builder.HasData(MiniAppPermissionSeed.All);
+        b.ToTable("MiniAppOAuthClients"); b.HasKey(x => x.Id);
+        b.Property(x => x.ClientKey).HasMaxLength(64).IsRequired(); b.HasIndex(x => x.ClientKey).IsUnique();
+        b.Property(x => x.ClientType).HasMaxLength(24).IsRequired();
+        b.Property(x => x.AllowedScopes).HasMaxLength(128).IsRequired(); b.Property(x => x.Version).IsConcurrencyToken();
+        b.HasIndex(x => new { x.MiniAppId, x.Environment }).IsUnique();
+        b.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
     }
 }
-
-internal static class MiniAppPermissionSeed
+internal sealed class MiniAppSecretConfiguration : IEntityTypeConfiguration<MiniAppClientSecret>
 {
-    private static readonly DateTime SeededAt = new(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc);
-    public static readonly MiniAppPermission[] All =
-    [
-        Permission("11111111-1111-1111-1111-111111111101", "identity.login", "Đăng nhập ANKT", false),
-        Permission("11111111-1111-1111-1111-111111111102", "profile.basic", "Hồ sơ cơ bản", false),
-        Permission("11111111-1111-1111-1111-111111111103", "profile.email", "Địa chỉ email", true),
-        Permission("11111111-1111-1111-1111-111111111104", "profile.phone", "Số điện thoại", true),
-        Permission("11111111-1111-1111-1111-111111111105", "app.close", "Đóng Mini App", false),
-        Permission("11111111-1111-1111-1111-111111111106", "app.open_url", "Mở liên kết ngoài", false),
-        Permission("11111111-1111-1111-1111-111111111107", "app.theme", "Đọc giao diện", false),
-    ];
-
-    private static MiniAppPermission Permission(string id, string code, string name, bool sensitive) => new()
+    public void Configure(EntityTypeBuilder<MiniAppClientSecret> b)
     {
-        Id = Guid.Parse(id), Code = code, Name = name, IsSensitive = sensitive,
-        Status = MiniAppPermissionStatus.Active, CreatedAt = SeededAt, UpdatedAt = SeededAt
-    };
-}
-
-internal sealed class MiniAppPermissionMappingConfiguration : IEntityTypeConfiguration<MiniAppPermissionMapping>
-{
-    public void Configure(EntityTypeBuilder<MiniAppPermissionMapping> builder)
-    {
-        builder.ToTable("MiniAppPermissionMappings");
-        builder.HasKey(x => new { x.MiniAppId, x.PermissionId });
-        builder.HasOne(x => x.MiniApp).WithMany(x => x.PermissionMappings).HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.Permission).WithMany(x => x.MiniAppMappings).HasForeignKey(x => x.PermissionId).OnDelete(DeleteBehavior.Restrict);
+        b.ToTable("MiniAppClientSecrets"); b.HasKey(x => x.Id);
+        b.Property(x => x.SecretEncrypted).HasMaxLength(512).IsRequired(); b.Property(x => x.SecretKeyVersion).HasMaxLength(40).IsRequired();
+        b.HasIndex(x => x.OAuthClientId).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
+        b.HasOne(x => x.OAuthClient).WithMany().HasForeignKey(x => x.OAuthClientId).OnDelete(DeleteBehavior.Restrict);
     }
 }
-
-internal sealed class MiniAppUserConsentConfiguration : IEntityTypeConfiguration<MiniAppUserConsent>
+internal sealed class MiniAppRedirectConfiguration : IEntityTypeConfiguration<MiniAppRedirectUri>
 {
-    public void Configure(EntityTypeBuilder<MiniAppUserConsent> builder)
+    public void Configure(EntityTypeBuilder<MiniAppRedirectUri> b)
     {
-        builder.ToTable("MiniAppUserConsents");
-        builder.HasKey(x => x.Id);
-        builder.HasIndex(x => new { x.AccountId, x.MiniAppId, x.PermissionId }).IsUnique();
-        builder.HasIndex(x => new { x.AccountId, x.MiniAppId });
-        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.Permission).WithMany().HasForeignKey(x => x.PermissionId).OnDelete(DeleteBehavior.Restrict);
+        b.ToTable("MiniAppRedirectUris"); b.HasKey(x => x.Id); b.Property(x => x.RedirectUri).HasMaxLength(1024).IsRequired();
+        b.HasIndex(x => new { x.MiniAppId, x.Environment, x.RedirectUri }).IsUnique();
+        b.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
     }
 }
-
-internal sealed class MiniAppLaunchCodeConfiguration : IEntityTypeConfiguration<MiniAppLaunchCode>
+internal sealed class MiniAppAuditConfiguration : IEntityTypeConfiguration<MiniAppAuditLog>
 {
-    public void Configure(EntityTypeBuilder<MiniAppLaunchCode> builder)
+    public void Configure(EntityTypeBuilder<MiniAppAuditLog> b)
     {
-        builder.ToTable("MiniAppLaunchCodes");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
-        builder.HasIndex(x => x.CodeHash).IsUnique();
-        builder.HasIndex(x => x.ExpiresAt);
-        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
+        b.ToTable("MiniAppAuditLogs"); b.HasKey(x => x.Id); b.Property(x => x.Action).HasMaxLength(80).IsRequired();
+        b.Property(x => x.Metadata).HasMaxLength(1024).IsRequired(); b.HasIndex(x => new { x.MiniAppId, x.CreatedAt });
+        b.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.Actor).WithMany().HasForeignKey(x => x.ActorDeveloperId).OnDelete(DeleteBehavior.Restrict);
     }
 }
-
-internal sealed class MiniAppExternalIdentityConfiguration : IEntityTypeConfiguration<MiniAppExternalIdentity>
+internal sealed class MiniAppLogoConfiguration : IEntityTypeConfiguration<MiniAppLogoUpload>
 {
-    public void Configure(EntityTypeBuilder<MiniAppExternalIdentity> builder)
+    public void Configure(EntityTypeBuilder<MiniAppLogoUpload> b)
     {
-        builder.ToTable("MiniAppExternalIdentities");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.Subject).HasMaxLength(64).IsRequired();
-        builder.HasIndex(x => new { x.AccountId, x.MiniAppId }).IsUnique();
-        builder.HasIndex(x => new { x.MiniAppId, x.Subject }).IsUnique();
-        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Cascade);
-    }
-}
-
-internal sealed class MiniAppAuditLogConfiguration : IEntityTypeConfiguration<MiniAppAuditLog>
-{
-    public void Configure(EntityTypeBuilder<MiniAppAuditLog> builder)
-    {
-        builder.ToTable("MiniAppAuditLogs");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.Action).HasMaxLength(80).IsRequired();
-        builder.Property(x => x.Detail).HasMaxLength(500);
-        builder.HasIndex(x => new { x.MiniAppId, x.CreatedAt });
-    }
-}
-
-internal sealed class MiniAppLaunchLogConfiguration : IEntityTypeConfiguration<MiniAppLaunchLog>
-{
-    public void Configure(EntityTypeBuilder<MiniAppLaunchLog> builder)
-    {
-        builder.ToTable("MiniAppLaunchLogs");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.FailureReason).HasMaxLength(80);
-        builder.HasIndex(x => new { x.MiniAppId, x.CreatedAt });
+        b.ToTable("MiniAppLogoUploads"); b.HasKey(x => x.Id); b.Property(x => x.PublicId).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Url).HasMaxLength(2048); b.HasIndex(x => x.ExpiresAt);
+        b.HasOne(x => x.Developer).WithMany().HasForeignKey(x => x.DeveloperAccountId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.MiniApp).WithMany().HasForeignKey(x => x.MiniAppId).OnDelete(DeleteBehavior.Restrict);
     }
 }

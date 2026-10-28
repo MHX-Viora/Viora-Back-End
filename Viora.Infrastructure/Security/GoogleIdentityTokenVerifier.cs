@@ -55,7 +55,10 @@ public sealed class GoogleIdentityTokenVerifier(
             return new GoogleVerifiedIdentity(
                 decoded.Uid,
                 email!,
-                string.IsNullOrWhiteSpace(displayName) ? null : displayName);
+                string.IsNullOrWhiteSpace(displayName) ? null : displayName,
+                decoded.Claims.TryGetValue("auth_time", out var authTime) && long.TryParse(authTime?.ToString(), out var seconds)
+                    && seconds >= 0 && seconds <= 253402300799
+                    ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null);
         }
         catch (FirebaseAuthException exception)
         {

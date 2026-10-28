@@ -27,8 +27,6 @@ using Viora.Application.GroupCalls;
 using Viora.Application.Legal;
 using Viora.Infrastructure.GroupCalls;
 using Viora.Application.Articles;
-using Viora.Application.MiniApps;
-using Viora.Infrastructure.MiniApps;
 using Viora.Application.Stickers;
 using Viora.Application.Wallets;
 using Viora.Infrastructure.Wallets;
@@ -214,6 +212,8 @@ public static class DependencyInjection
         services.AddScoped<IShareLinkService, ShareLinkService>();
         services.AddScoped<IAdminRepository, AdminRepository>();
         services.AddScoped<ILegalDocumentRepository, LegalDocumentRepository>();
+        services.AddScoped<Viora.Application.Utilities.IUtilityBannerRepository, Viora.Infrastructure.Utilities.UtilityBannerRepository>();
+        services.AddScoped<Viora.Application.Utilities.IFeaturedBrandRepository, Viora.Infrastructure.Utilities.FeaturedBrandRepository>();
         services.Configure<FirebaseOptions>(configuration.GetSection("Firebase"));
         services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
         services.AddSingleton<ConnectionRegistry>();
@@ -237,11 +237,6 @@ public static class DependencyInjection
         services.AddScoped<IPushNotificationSender, FirebasePushNotificationSender>();
         services.AddHostedService<CallTimeoutHostedService>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
-        services.AddSingleton<IClientCredentialService, ClientCredentialService>();
-        services.AddScoped<IMiniAppService, MiniAppService>();
-        services.AddScoped<MiniAppManagementService>();
-        services.AddScoped<IMiniAppManagementService>(provider => provider.GetRequiredService<MiniAppManagementService>());
-        services.AddScoped<IDeveloperMiniAppService>(provider => provider.GetRequiredService<MiniAppManagementService>());
         return services;
     }
 }

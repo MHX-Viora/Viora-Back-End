@@ -9,6 +9,8 @@ public sealed class Advertisement : AuditableEntity
     public AdvertisementObjective Objective { get; set; }
     public AdvertisementDestinationType DestinationType { get; set; }
     public string? DestinationUrl { get; set; }
+    public string? Headline { get; set; }
+    public string? Description { get; set; }
     public AdvertisementCtaType CtaType { get; set; }
     public AdvertisementTargetingMode TargetingMode { get; set; }
     public short? MinimumAge { get; set; }

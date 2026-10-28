@@ -19,7 +19,7 @@ public sealed class AdvertisementsController(IAdvertisementService advertisement
             var result = await advertisements.CreateAsync(userId, new(
                 body.PostId, body.Objective, body.DestinationUrl, body.CtaType, body.TargetingMode,
                 body.MinimumAge, body.MaximumAge, body.TargetLocation, body.DailyBudget,
-                body.TotalBudget, body.StartAt, body.EndAt), cancellationToken);
+                body.TotalBudget, body.StartAt, body.EndAt, body.Headline, body.Description), cancellationToken);
             return Created($"/api/advertisements/{result.Id:D}", result);
         });
 
@@ -105,7 +105,9 @@ public sealed record CreateAdvertisementBody(
     [param: Range(typeof(decimal), "50000", "1000000000")] decimal? DailyBudget,
     [param: Range(typeof(decimal), "50000", "1000000000")] decimal TotalBudget,
     DateTime StartAt,
-    DateTime EndAt);
+    DateTime EndAt,
+    [param: StringLength(120)] string? Headline = null,
+    [param: StringLength(240)] string? Description = null);
 
 public sealed record AdvertisementEventBody([param: Required, StringLength(100, MinimumLength = 8)] string ClientEventId);
 public sealed record AdvertisementFeedbackBody(AdvertisementFeedbackType Type, [param: StringLength(500)] string? Reason);

@@ -35,6 +35,8 @@ public sealed class AdvertisementService(
         ValidateTargeting(request);
         var destinationUrl = AdvertisementRules.NormalizeDestinationUrl(request.DestinationUrl);
         AdvertisementRules.RequireCtaDestination(request.CtaType, destinationUrl);
+        var headline = AdvertisementRules.NormalizeCopy(request.Headline, 120);
+        var description = AdvertisementRules.NormalizeCopy(request.Description, 240);
         var now = DateTime.UtcNow;
         if (request.EndAt.ToUniversalTime() <= now)
             throw new AdvertisementValidationException("ADVERTISEMENT_END_IN_PAST", "Thời gian kết thúc quảng cáo phải ở tương lai.");
@@ -56,6 +58,8 @@ public sealed class AdvertisementService(
             existing.Objective = request.Objective;
             existing.DestinationType = destinationUrl is null ? AdvertisementDestinationType.InAppContent : AdvertisementDestinationType.ExternalUrl;
             existing.DestinationUrl = destinationUrl;
+            existing.Headline = headline;
+            existing.Description = description;
             existing.CtaType = request.CtaType;
             existing.TargetingMode = request.TargetingMode;
             existing.MinimumAge = request.TargetingMode == AdvertisementTargetingMode.Custom ? request.MinimumAge : null;
@@ -77,6 +81,8 @@ public sealed class AdvertisementService(
             Objective = request.Objective,
             DestinationType = destinationUrl is null ? AdvertisementDestinationType.InAppContent : AdvertisementDestinationType.ExternalUrl,
             DestinationUrl = destinationUrl,
+            Headline = headline,
+            Description = description,
             CtaType = request.CtaType,
             TargetingMode = request.TargetingMode,
             MinimumAge = request.TargetingMode == AdvertisementTargetingMode.Custom ? request.MinimumAge : null,
@@ -97,7 +103,15 @@ public sealed class AdvertisementService(
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var advertisement = await LoadOwnedEntityAsync(userId, advertisementId, cancellationToken, includePost: true);
-        AdvertisementRules.RequireTransition(advertisement.Status, AdvertisementStatus.Pending);
+        if ((advertisement.Status is AdvertisementStatus.Active or AdvertisementStatus.Approved or AdvertisementStatus.Paused) && advertisement.ReservedAmount > 0)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            await transaction.DisposeAsync();
+            return await LoadResponseAsync(advertisement.Id, cancellationToken);
+        }
+        var now = DateTime.UtcNow;
+        var nextStatus = advertisement.StartAt <= now ? AdvertisementStatus.Active : AdvertisementStatus.Approved;
+        AdvertisementRules.RequireTransition(advertisement.Status, nextStatus);
         RequireAdvertisablePost(advertisement.Post, userId);
         AdvertisementRules.RequireBudget(advertisement.TotalBudget);
         AdvertisementRules.RequireSchedule(advertisement.StartAt, advertisement.EndAt);
@@ -117,8 +131,11 @@ public sealed class AdvertisementService(
         }
 
         advertisement.ReservedAmount = advertisement.TotalBudget;
-        advertisement.Status = AdvertisementStatus.Pending;
-        advertisement.SubmittedAt = DateTime.UtcNow;
+        advertisement.Status = nextStatus;
+        advertisement.SubmittedAt ??= now;
+        advertisement.ApprovedAt ??= now;
+        advertisement.ActivatedAt = nextStatus == AdvertisementStatus.Active ? now : null;
+        advertisement.ReviewReason = null;
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         await transaction.DisposeAsync();
@@ -394,16 +411,19 @@ public sealed class AdvertisementService(
         await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var now = DateTime.UtcNow;
         var starting = await dbContext.Advertisements
-            .Where(item => item.Status == AdvertisementStatus.Approved && item.StartAt <= now && item.EndAt > now && item.ReservedAmount > 0)
+            .Include(item => item.Post).ThenInclude(post => post.User).ThenInclude(user => user.Account)
+            .Where(item => (item.Status == AdvertisementStatus.Pending || item.Status == AdvertisementStatus.Approved && item.StartAt <= now) && item.EndAt > now && item.ReservedAmount > 0)
             .ToListAsync(cancellationToken);
         foreach (var item in starting)
         {
-            item.Status = AdvertisementStatus.Active;
-            item.ActivatedAt ??= now;
+            if (!IsAdvertisablePost(item.Post)) continue;
+            item.Status = item.StartAt <= now ? AdvertisementStatus.Active : AdvertisementStatus.Approved;
+            item.ApprovedAt ??= now;
+            if (item.Status == AdvertisementStatus.Active) item.ActivatedAt ??= now;
         }
 
         var ending = await dbContext.Advertisements
-            .Where(item => (item.Status == AdvertisementStatus.Approved || item.Status == AdvertisementStatus.Active || item.Status == AdvertisementStatus.Paused) &&
+            .Where(item => (item.Status == AdvertisementStatus.Pending || item.Status == AdvertisementStatus.Approved || item.Status == AdvertisementStatus.Active || item.Status == AdvertisementStatus.Paused) &&
                            (item.EndAt <= now || item.ReservedAmount <= 0))
             .ToListAsync(cancellationToken);
         foreach (var item in ending)
@@ -516,7 +536,7 @@ public sealed class AdvertisementService(
             new(post.Id, post.PostType, post.Content, post.Location, post.Link, post.CreatedAt,
                 post.ReactionCount, post.CommentCount, post.ShareCount, post.SaveCount, post.ViewCount,
                 new(post.User.Id, post.User.DisplayName, post.User.AvatarUrl, post.User.IsVerified, post.User.AccountStyle),
-                post.Media.Select(media => new AdvertisementMediaResponse(media.Id, media.MediaUrl, media.ThumbnailUrl)).ToList(), hashtags, article));
+                post.Media.Select(media => new AdvertisementMediaResponse(media.Id, media.MediaUrl, media.ThumbnailUrl)).ToList(), hashtags, article), item.Headline, item.Description);
     }
 
     private static AdvertisementEventResponse EventResponse(AdvertisementEvent trackedEvent, Advertisement advertisement, bool duplicate) =>

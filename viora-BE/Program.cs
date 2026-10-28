@@ -5,16 +5,22 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Text.Json;
-using viora_BE.OpenApi;
 using System.Threading.RateLimiting;
 using Viora.Application.Posts;
 using Viora.Infrastructure.Realtime;
-using Viora.Application.MiniApps;
+using viora_BE.Hosting;
 
 LoadDotEnv();
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
 
 var builder = WebApplication.CreateBuilder(args);
+if (args.Length > 0 && args[0] == "--provision-sandbox-profile")
+{
+    Environment.ExitCode = await viora_BE.Developer.SandboxProfileProvisioningCommand.RunAsync(builder.Configuration,
+        args.Length > 1 ? args[1] : Path.Combine(".codex-tmp", "sandbox-profile-assets.json"));
+    return;
+}
+builder.Services.AddTrustedProxyHeaders(builder.Configuration);
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))
 {
@@ -145,25 +151,24 @@ builder.Services.AddRateLimiter(options => options.AddPolicy("auth", context =>
         })));
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddPolicy("mini-app-launch", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
-    options.AddPolicy("mini-app-exchange", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.ContentType = "application/json";
         await context.HttpContext.Response.WriteAsJsonAsync(new
         {
-            code = MiniAppErrorCodes.RateLimited,
+            code = "RATE_LIMITED",
             message = "Quá nhiều yêu cầu. Vui lòng thử lại sau."
         }, cancellationToken);
     };
 });
 builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration);
+viora_BE.Developer.DeveloperApi.AddDeveloperAccounts(builder.Services, builder.Configuration);
+viora_BE.Developer.MiniAppApi.AddDeveloperMiniApps(builder.Services, builder.Configuration);
+viora_BE.Production.MiniAppProductionRegistration.AddMiniAppProductionServices(builder.Services, builder.Configuration);
+viora_BE.Production.MiniAppProductionRegistration.AddMiniAppProductionWorker(builder.Services, builder.Configuration);
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -176,7 +181,6 @@ builder.Services.AddSwaggerGen(options =>
         BearerFormat = "JWT",
         In = ParameterLocation.Header
     });
-    options.OperationFilter<AuthorizeOperationFilter>();
 });
 
 
@@ -221,6 +225,9 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+app.UseTrustedProxyHeaders();
+viora_BE.Developer.MiniAppSandboxRuntimeApi.UseBoundary(app);
+viora_BE.Production.MiniAppProductionHostBoundary.UseMiniAppProductionHostBoundary(app);
 app.Logger.LogInformation("Starting Viora API on port {Port}", port ?? "launchSettings/default");
 
 app.UseExceptionHandler(errorApp =>
@@ -239,14 +246,6 @@ app.UseExceptionHandler(errorApp =>
 
         if (context.Response.HasStarted)
         {
-            return;
-        }
-
-        if (exception is MiniAppException miniAppException)
-        {
-            context.Response.StatusCode = miniAppException.StatusCode;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(new { code = miniAppException.Code, message = miniAppException.Message });
             return;
         }
 
@@ -278,20 +277,22 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseCors("Web");
-app.UseSwagger();
-app.UseSwaggerUI(options =>
+if (app.Environment.IsDevelopment())
 {
-	options.RoutePrefix = string.Empty;
-	options.SwaggerEndpoint(
-		"/swagger/v1/swagger.json",
-		"Viora API v1"
-	);
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.RoutePrefix = string.Empty;
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Viora API v1");
+    });
+}
 
-app.UseRateLimiter();
 app.UseAuthentication();
+viora_BE.Developer.DeveloperApi.UseDeveloperAccountBoundary(app);
+app.UseRateLimiter();
 app.UseAuthorization();
 
+viora_BE.Operations.PlatformReadiness.MapPlatformReadiness(app);
 app.MapGet("/health", () => Results.Ok(new
 {
 	status = "healthy",
@@ -316,6 +317,16 @@ app.MapGet("/group/{inviteCode}", (string inviteCode) =>
 });
 
 app.MapControllers();
+viora_BE.Production.MiniAppPublicApi.MapMiniAppPublicApi(app);
+viora_BE.Production.MiniAppLaunchApi.MapMiniAppLaunchApi(app);
+viora_BE.Developer.MiniAppAuthBridgeApi.MapMiniAppAuthBridge(app);
+viora_BE.Production.MiniAppProductionHostApi.MapMiniAppProductionHostApi(app);
+viora_BE.Production.MiniAppProductionRuntimeApi.MapMiniAppProductionRuntimeApi(app);
+viora_BE.Production.MiniAppProductionHostDocuments.MapMiniAppProductionHostDocuments(app);
+viora_BE.Developer.DeveloperEndpoints.MapDeveloperEndpoints(app);
+viora_BE.Developer.DeveloperApi.MapDeveloperAccountEndpoints(app);
+viora_BE.Developer.MiniAppApi.MapDeveloperMiniApps(app);
+
 app.MapHub<RealtimeHub>("/hubs/realtime");
 app.MapHub<CallHub>("/hubs/calls");
 

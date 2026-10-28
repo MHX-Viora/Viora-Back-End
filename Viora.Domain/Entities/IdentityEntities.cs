@@ -2,7 +2,9 @@ namespace Viora.Domain.Entities;
 
 public sealed class Account : AuditableEntity
 {
+    public bool IsSandbox { get; set; }
     public string? Email { get; set; }
+    public DateTime? EmailVerifiedAt { get; set; }
     public string? Phone { get; set; }
     public string? PasswordHash { get; set; }
     public AccountRole Role { get; set; } = AccountRole.User;

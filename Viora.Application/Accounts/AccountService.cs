@@ -265,6 +265,7 @@ public sealed class AccountService(
         var phone = NormalizePhone(command.Phone);
         await EnsureUniqueAsync(email, phone, id, cancellationToken);
 
+        if (!string.Equals(account.Email, email, StringComparison.OrdinalIgnoreCase)) account.EmailVerifiedAt = null;
         account.Email = email;
         account.Phone = phone;
         if (!string.IsNullOrWhiteSpace(command.Password))

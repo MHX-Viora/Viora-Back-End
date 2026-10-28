@@ -44,17 +44,19 @@ public sealed class JwtTokenService : ITokenService
 
     public IssuedAccountTokens CreateTokens(Account account, Guid? sessionId = null)
     {
+        if (account.IsSandbox) throw new InvalidOperationException("Sandbox identities cannot receive Production account tokens.");
         var now = DateTimeOffset.UtcNow;
         var accessExpiresAt = now.AddMinutes(options.AccessTokenMinutes);
         var refreshToken = Base64Url(RandomNumberGenerator.GetBytes(64));
         var refreshExpiresAt = now.AddDays(options.RefreshTokenDays);
+        var effectiveSessionId = sessionId ?? Guid.NewGuid();
         return new IssuedAccountTokens(
             new AccountTokens(
-                CreateToken(account, "access", now, accessExpiresAt),
+                CreateToken(account, "access", now, accessExpiresAt, effectiveSessionId),
                 refreshToken,
                 accessExpiresAt.UtcDateTime,
                 refreshExpiresAt.UtcDateTime,
-                sessionId ?? Guid.NewGuid()),
+                effectiveSessionId),
             HashRefreshToken(refreshToken));
     }
 
@@ -65,13 +67,15 @@ public sealed class JwtTokenService : ITokenService
         Account account,
         string tokenType,
         DateTimeOffset issuedAt,
-        DateTimeOffset expiresAt)
+        DateTimeOffset expiresAt,
+        Guid sessionId)
     {
         var payload = new Dictionary<string, object?>
         {
             ["iss"] = options.Issuer,
             ["aud"] = options.Audience,
             ["sub"] = account.Id.ToString(),
+            ["sid"] = sessionId.ToString(),
             ["jti"] = Guid.NewGuid().ToString(),
             ["iat"] = issuedAt.ToUnixTimeSeconds(),
             ["nbf"] = issuedAt.ToUnixTimeSeconds(),

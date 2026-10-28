@@ -9,8 +9,10 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
 {
     public AppDbContext CreateDbContext(string[] args)
     {
-        var appSettingsPath = FindAppSettingsPath();
-        var connectionString = ReadConnectionString(appSettingsPath);
+        // Model/migration validation can run with a synthetic connection without
+        // loading application credentials or contacting an application database.
+        var connectionString = Environment.GetEnvironmentVariable("VIORA_EF_DESIGN_CONNECTION")
+            ?? ReadConnectionString(FindAppSettingsPath());
 
         try
         {

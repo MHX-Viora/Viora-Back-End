@@ -226,6 +226,7 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
             message.Data.TryGetValue("type", out var lifecycleType) &&
             lifecycleType is "CallRejected" or "CallCancelled" or "CallEnded" or "CallAnsweredElsewhere" or
                 "CallMissed" or "CallTimeout" or "GroupCallEnded";
+        var isIncomingCall = message.Data.TryGetValue("type", out var incomingType) && incomingType is "IncomingCall" or "GroupCall";
         var isAndroidDataOnly = isAndroidChat || isAndroidIncomingCall;
         var isDataOnly = isAndroidDataOnly || isWebIncomingCall || isCallLifecycle;
         var data = message.Data.ToDictionary(pair => pair.Key, pair => pair.Value);
@@ -256,9 +257,9 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
                     ? null
                     : new AndroidNotification
                     {
-                        ChannelId = "default",
-                        Sound = "default",
-                        DefaultSound = true
+                        ChannelId = "ankt_notifications_v2",
+                        Sound = "ankt_notification",
+                        DefaultSound = false
                     }
             },
             Apns = new ApnsConfig
@@ -270,7 +271,7 @@ public sealed class FirebaseMessagingClient(FirebaseApp app) : IFirebaseMessagin
                 Aps = new Aps
                 {
                     ContentAvailable = isCallLifecycle,
-                    Sound = isCallLifecycle ? null : "default"
+                    Sound = isCallLifecycle ? null : isIncomingCall ? "default" : "ankt_notification.wav"
                 }
             },
             Webpush = platform == DevicePlatform.Web && (isWebIncomingCall || isCallLifecycle)

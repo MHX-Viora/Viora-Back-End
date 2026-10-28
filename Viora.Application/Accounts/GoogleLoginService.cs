@@ -22,7 +22,7 @@ public sealed class GoogleLoginService(
             return InvalidCredentials();
         }
 
-        var account = await repository.ResolveAccountAsync(identity, cancellationToken);
+        var account = await repository.ResolveAccountAsync(identity with { RequireExplicitExistingAccountLink = command.RequireExplicitExistingAccountLink }, cancellationToken);
         RepairLegacyEmailDisplayName(account, identity);
         if (account.Status == AccountStatus.Banned)
         {
@@ -51,6 +51,7 @@ public sealed class GoogleLoginService(
 
         var issued = tokenService.CreateTokens(account);
         var loginAt = DateTime.UtcNow;
+        if (string.Equals(account.Email, identity.Email, StringComparison.OrdinalIgnoreCase)) account.EmailVerifiedAt ??= loginAt;
         await repository.CompleteLoginAsync(
             account,
             new RefreshToken

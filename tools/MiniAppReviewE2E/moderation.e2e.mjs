@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+export async function moderation(ctx) {
+  const { admin, config, appId, fixture, button, partnerProduction, productionLogin, publish } = ctx;
+  await productionLogin(true); assert.equal(partnerProduction.hasHeld(), true);
+  const socialBefore = await fixture('sso-state');
+  await admin.navigate('https://localhost:5495/mini-apps/' + appId); await admin.wait(`!!${button('Tạm ngưng ứng dụng')}`);
+  await admin.click(button('Tạm ngưng ứng dụng'));
+  await admin.wait(`document.querySelector('dialog[open]')?.contains(document.activeElement)`);
+  await admin.key('Escape');
+  await admin.wait(`!document.querySelector('dialog[open]') && document.activeElement===${button('Tạm ngưng ứng dụng')}`, 'Escape restores moderation trigger focus');
+  await admin.click(button('Tạm ngưng ứng dụng')); await admin.type('dialog textarea[name=reason]', 'Controlled E2E suspension revokes only this partner application.');
+  await admin.click(button('Xác nhận tạm ngưng ứng dụng')); await admin.wait(`!document.querySelector('dialog[open]') && !!${button('Khôi phục ứng dụng')}`);
+  assert.equal(await partnerProduction.userInfoWorks(), false);
+  assert.equal(await partnerProduction.authorizationDenied(), true);
+  assert.deepEqual(await fixture('sso-state'), socialBefore);
+  if (config.partnerClientType === 'Confidential') assert.equal(await partnerProduction.introspectionActive(), false);
+  await assert.rejects(partnerProduction.exchangeHeld());
+  let state = await fixture('review-state'); assert.equal(state.publications.some(x => x.status === 'Published'), false); assert.ok(state.adminSessions >= 1);
+  console.log('REVIEW_FLOW_D_SUSPENSION_DENIES_OLD_TOKEN_USERINFO_INTROSPECTION_AND_HELD_CODE');
+  await admin.click(button('Khôi phục ứng dụng')); await admin.type('dialog textarea[name=reason]', 'Controlled recovery rechecks exact approved target and keeps it unpublished.');
+  await admin.click(button('Xác nhận khôi phục ứng dụng')); await admin.wait(`!document.querySelector('dialog[open]') && !!${button('Tạm ngưng ứng dụng')}`);
+  state = await fixture('review-state'); assert.equal(state.publications.some(x => x.status === 'Published'), false);
+  assert.equal(await partnerProduction.userInfoWorks(), false);
+  const version = state.versions.find(x => state.reviews.some(r => r.miniAppVersionId === x.id && r.status === 'Approved'));
+  await publish(version.versionCode);
+  assert.equal(await partnerProduction.userInfoWorks(), false);
+  if (config.partnerClientType === 'Confidential') assert.equal(await partnerProduction.introspectionActive(), false);
+  await productionLogin();
+  console.log('REVIEW_FLOW_D_RESTORE_UNPUBLISHED_EXPLICIT_REPUBLISH_FRESH_CONSENT');
+}

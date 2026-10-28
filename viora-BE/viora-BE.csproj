@@ -6,9 +6,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>viora_BE</RootNamespace>
     <UserSecretsId>viora-be-local-development</UserSecretsId>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/.sso-certificates/**;**/*.pfx;**/*.p12;**/*.pfx.b64;**/*.password</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Developer/SandboxProfile/avatar.svg" LogicalName="Ankt.SandboxProfile.avatar" />
+    <EmbeddedResource Include="Developer/SandboxProfile/cover.svg" LogicalName="Ankt.SandboxProfile.cover" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.19.2" />
     <PackageReference Include="MediatR" Version="12.4.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
@@ -21,6 +28,16 @@
   <ItemGroup>
     <ProjectReference Include="..\Viora.Application\Viora.Application.csproj" />
     <ProjectReference Include="..\Viora.Infrastructure\Viora.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Developer/SandboxHost/bridge.mjs" LogicalName="Ankt.SandboxHost.Bridge" />
+    <EmbeddedResource Include="Developer/SandboxHost/external-link.mjs" LogicalName="Ankt.SandboxHost.ExternalLink" />
+    <EmbeddedResource Include="Developer/SandboxHost/host.mjs" LogicalName="Ankt.SandboxHost.Script" />
+    <EmbeddedResource Include="Production/Host/host.mjs" LogicalName="Ankt.ProductionHost.Script" />
+    <EmbeddedResource Include="Production/Host/host.css" LogicalName="Ankt.ProductionHost.Style" />
+    <EmbeddedResource Include="Production/Host/bridge.mjs" LogicalName="Ankt.ProductionHost.Bridge" />
+    <EmbeddedResource Include="Production/Host/navigation.mjs" LogicalName="Ankt.ProductionHost.Navigation" />
+    <EmbeddedResource Include="Production/Host/native.mjs" LogicalName="Ankt.ProductionHost.Native" />
   </ItemGroup>
 
 </Project>

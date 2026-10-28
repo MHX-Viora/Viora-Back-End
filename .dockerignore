@@ -28,8 +28,22 @@
 .env.*
 !.env.example
 
+# Local credentials must not enter COPY . . or the published runtime image.
+viora-BE/appsettings.json
+**/appsettings.Local.json
+**/appsettings.*.local.json
+**/firebase-service-account.json
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
+**/.sso-certificates/
+**/*.pfx.b64
+**/*.password
+
 # Test results
 TestResults/
+.codex-tmp/
 
 # OS files
 .DS_Store

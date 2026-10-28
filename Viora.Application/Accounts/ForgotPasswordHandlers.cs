@@ -216,6 +216,7 @@ public sealed class ResetForgottenPasswordHandler(
                 "Mật khẩu mới không được trùng mật khẩu cũ.");
         }
 
+        if (verifiedIdentity.Email != null && string.Equals(verifiedIdentity.Email, account.Email, StringComparison.OrdinalIgnoreCase)) account.EmailVerifiedAt ??= DateTime.UtcNow;
         await repository.ChangePasswordAndRevokeRefreshTokensAsync(
             account,
             passwordHasher.Hash(request.NewPassword),

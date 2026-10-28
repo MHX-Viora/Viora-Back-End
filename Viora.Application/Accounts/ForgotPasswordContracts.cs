@@ -76,7 +76,7 @@ public interface IForgotPasswordRepository
         CancellationToken cancellationToken);
 }
 
-public sealed record FirebaseVerifiedIdentity(string? Email, string? PhoneNumber);
+public sealed record FirebaseVerifiedIdentity(string? Email, string? PhoneNumber, DateTimeOffset? AuthenticatedAt = null);
 
 public interface IFirebaseIdentityTokenVerifier
 {

@@ -40,6 +40,9 @@ secrets.json
 *.p12
 *.pem
 *.key
+.sso-certificates/
+*.pfx.b64
+*.password
 
 # Logs and temporary files
 logs/
