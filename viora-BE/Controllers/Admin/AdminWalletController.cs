@@ -9,6 +9,7 @@ namespace viora_BE.Controllers.Admin;
 [ApiController]
 [Authorize(Roles = "2")]
 [Route("api/admin/finance")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AdminWalletController(IAdminWalletService adminService, IWalletService walletService, IWithdrawalService withdrawalService) : ControllerBase
 {
     [HttpGet("withdrawal-fee-settings")]
@@ -30,14 +31,25 @@ public sealed class AdminWalletController(IAdminWalletService adminService, IWal
     public Task<AdminPage<AdminWalletItem>> Wallets([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, CancellationToken cancellationToken = default) => adminService.GetWalletsAsync(page, pageSize, keyword, cancellationToken);
 
     [HttpGet("transactions")]
-    public Task<AdminPage<AdminTransactionItem>> Transactions([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, CancellationToken cancellationToken = default) => adminService.GetTransactionsAsync(page, pageSize, keyword, cancellationToken);
+    public async Task<ActionResult<AdminPage<AdminTransactionItem>>> Transactions([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, CancellationToken cancellationToken = default, [FromQuery] DateOnly? from = null, [FromQuery] DateOnly? to = null, [FromQuery] Viora.Domain.Entities.WalletTransactionType? type = null, [FromQuery] int? status = null)
+    {
+        try { return Ok(await adminService.GetTransactionsAsync(page, pageSize, keyword, cancellationToken, new(from, to, type, status))); }
+        catch (WalletValidationException error) { return UnprocessableEntity(new { error = new { code = error.Code, message = error.Message } }); }
+    }
 
     [HttpGet("payments")]
-    public Task<AdminPage<AdminPaymentItem>> Payments([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, CancellationToken cancellationToken = default) => adminService.GetPaymentsAsync(page, pageSize, keyword, cancellationToken);
+    public async Task<ActionResult<AdminPage<AdminPaymentItem>>> Payments([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, CancellationToken cancellationToken = default, [FromQuery] DateOnly? from = null, [FromQuery] DateOnly? to = null, [FromQuery] int? status = null)
+    {
+        try { return Ok(await adminService.GetPaymentsAsync(page, pageSize, keyword, cancellationToken, new(from, to, Status: status))); }
+        catch (WalletValidationException error) { return UnprocessableEntity(new { error = new { code = error.Code, message = error.Message } }); }
+    }
 
     [HttpGet("withdrawals")]
-    public Task<WithdrawalPage> Withdrawals([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, [FromQuery] Viora.Domain.Entities.WithdrawalStatus? status = null, CancellationToken cancellationToken = default) =>
-        withdrawalService.GetAdminPageAsync(page, pageSize, cancellationToken, keyword, status);
+    public async Task<ActionResult<WithdrawalPage>> Withdrawals([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, [FromQuery] Viora.Domain.Entities.WithdrawalStatus? status = null, CancellationToken cancellationToken = default, [FromQuery] DateOnly? from = null, [FromQuery] DateOnly? to = null)
+    {
+        try { return Ok(await withdrawalService.GetAdminPageAsync(page, pageSize, cancellationToken, keyword, status, from, to)); }
+        catch (WalletValidationException error) { return UnprocessableEntity(new { error = new { code = error.Code, message = error.Message } }); }
+    }
 
     [HttpGet("withdrawals/{id:guid}")]
     public async Task<ActionResult<AdminWithdrawalDetail>> WithdrawalDetail(Guid id, CancellationToken cancellationToken)

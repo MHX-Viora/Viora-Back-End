@@ -205,12 +205,21 @@ public sealed class WithdrawalService(
         return new(items.Select(Map).ToArray(), page, pageSize, total, total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize));
     }
 
-    public async Task<WithdrawalPage> GetAdminPageAsync(int page, int pageSize, CancellationToken cancellationToken, string? keyword = null, WithdrawalStatus? status = null)
+    public async Task<WithdrawalPage> GetAdminPageAsync(int page, int pageSize, CancellationToken cancellationToken, string? keyword = null, WithdrawalStatus? status = null, DateOnly? from = null, DateOnly? to = null)
     {
-        page = Math.Max(1, page);
+        page = Math.Clamp(page, 1, 1000000);
         pageSize = Math.Clamp(pageSize, 1, 100);
         var query = dbContext.Withdrawals.AsNoTracking().Include(item => item.User).AsQueryable();
-        if (status.HasValue) query = query.Where(item => item.Status == status);
+        if (status.HasValue)
+        {
+            if (!Enum.IsDefined(status.Value)) throw new WalletValidationException("INVALID_WITHDRAWAL_STATUS", "Trạng thái rút tiền không hợp lệ.");
+            query = query.Where(item => item.Status == status);
+        }
+        if (from is not null || to is not null)
+        {
+            var period = FinancePeriod.Create(from, to);
+            query = query.Where(x => x.CreatedAt >= period.StartUtc && x.CreatedAt < period.EndUtc);
+        }
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             var search = keyword.Trim();

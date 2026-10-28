@@ -251,7 +251,7 @@ public interface IWithdrawalService
     Task<WithdrawalResponse> CreateAsync(Guid userId, CreateWithdrawalRequest request, CancellationToken cancellationToken);
     Task<WithdrawalResponse?> GetAsync(Guid userId, Guid withdrawalId, CancellationToken cancellationToken);
     Task<WithdrawalPage> GetPageAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken);
-    Task<WithdrawalPage> GetAdminPageAsync(int page, int pageSize, CancellationToken cancellationToken, string? keyword = null, WithdrawalStatus? status = null);
+    Task<WithdrawalPage> GetAdminPageAsync(int page, int pageSize, CancellationToken cancellationToken, string? keyword = null, WithdrawalStatus? status = null, DateOnly? from = null, DateOnly? to = null);
     Task<WithdrawalResponse> CancelAsync(Guid userId, Guid withdrawalId, CancellationToken cancellationToken);
     Task<WithdrawalResponse> ChangeStatusAsync(Guid withdrawalId, WithdrawalStatus status, string? reason, CancellationToken cancellationToken, Guid? adminId = null);
     Task<AdminWithdrawalDetail?> GetAdminDetailAsync(Guid withdrawalId, CancellationToken cancellationToken);

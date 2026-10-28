@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddSingleton<IAgoraTokenService, AgoraTokenService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IAdminWalletService, AdminWalletService>();
+        services.AddScoped<IAdminFinanceService, AdminFinanceService>();
         services.Configure<WithdrawalOptions>(configuration.GetSection("Wallet"));
         services.AddSingleton<IBankAccountProtector, BankAccountProtector>();
         services.AddScoped<IWithdrawalService, WithdrawalService>();
