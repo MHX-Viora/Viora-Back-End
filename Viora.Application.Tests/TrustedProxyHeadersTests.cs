@@ -15,10 +15,13 @@ using Xunit;
 public sealed class TrustedProxyHeadersTests
 {
     [Theory]
-    [InlineData(null, false)]
-    [InlineData("https", false)]
-    [InlineData("http", true)]
-    public async Task HttpBridgeReportsPeerEvenWhenProtoIsMissingOrConsumed(string? proto, bool trusted)
+    [InlineData("exchange", null, false)]
+    [InlineData("exchange", "https", false)]
+    [InlineData("exchange", "http", true)]
+    [InlineData("config", null, false)]
+    [InlineData("config", "https", false)]
+    [InlineData("config", "http", true)]
+    public async Task HttpBridgeReportsPeerEvenWhenProtoIsMissingOrConsumed(string endpoint, string? proto, bool trusted)
     {
         var capture = new ProxyLogCapture();
         var builder = WebApplication.CreateBuilder(); builder.WebHost.UseTestServer();
@@ -29,13 +32,13 @@ public sealed class TrustedProxyHeadersTests
         await using var app = builder.Build();
         app.Use((context, next) => { context.Connection.RemoteIpAddress = IPAddress.Parse("10.20.30.40"); return next(context); });
         app.UseTrustedProxyHeaders();
-        app.MapGet("/api/miniapp/auth/exchange", (HttpContext context) => context.Request.Scheme);
+        app.MapGet("/api/miniapp/auth/" + endpoint, (HttpContext context) => context.Request.Scheme);
         await app.StartAsync();
         using var client = app.GetTestClient(); client.BaseAddress = new Uri("http://issuer.example");
         if (proto is not null) client.DefaultRequestHeaders.Add("X-Forwarded-Proto", proto);
         client.DefaultRequestHeaders.Add("Cookie", "fixture=private-cookie-fixture");
         for (var request = 0; request < 2; request++)
-            Assert.Equal("http", await client.GetStringAsync("/api/miniapp/auth/exchange?token=private-query-fixture"));
+            Assert.Equal("http", await client.GetStringAsync("/api/miniapp/auth/" + endpoint + "?token=private-query-fixture"));
         var message = Assert.Single(capture.Messages, value => value.Contains("Immediate peer:"));
         Assert.Contains("10.20.30.40", message);
         Assert.Contains("Forwarded proto present: " + (proto is not null), message);

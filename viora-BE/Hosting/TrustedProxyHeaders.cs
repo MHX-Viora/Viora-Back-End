@@ -52,7 +52,7 @@ public static class TrustedProxyHeaders
         var reported = 0;
         return app.Use(async (context, next) =>
         {
-            if (!context.Request.IsHttps && context.Request.Path == "/api/miniapp/auth/exchange" &&
+            if (!context.Request.IsHttps && context.Request.Path.StartsWithSegments("/api/miniapp/auth") &&
                 Interlocked.Exchange(ref reported, 1) == 0)
             {
                 // One diagnostic per process: peer IP only; no headers, query, cookies or tokens.

@@ -118,48 +118,14 @@ Existing: `MiniAppAuth__Enabled=true`, `MiniAppAuth__AllowedHostOrigin` (exact H
 `EXPO_PUBLIC_MINI_APP_AUTH_BRIDGE_ENABLED=true`; native runtime flag as currently
 configured. Keep current ANKT JWT/refresh settings and disabled legacy SSO unchanged.
 
-New backend-only keys (Nts is an operator label, ClientId is the actual public AppId):
+Credentials are now self-service and database-backed. The owner opens the Mini App
+integration page, selects Sandbox/Production and copies its generated Client Secret
+into the partner backend. Adding a Mini App requires no app-specific ANKT env keys.
+Rotation/revocation are performed in that page, not by changing environment hashes.
 
-```text
-MiniAppAuth__Partners__Nts__ClientId=app_<registered-id>
-MiniAppAuth__Partners__Nts__SandboxSecretHash=<SHA256-HEX>
-MiniAppAuth__Partners__Nts__ProductionSecretHash=<DIFFERENT-SHA256-HEX>
-```
-
-Generate two independent 32-byte random secrets using a local cryptographic tool.
-Register their SHA-256 hex hashes under that existing app's exact public AppId in
-ANKT's Render environment. Deliver each plaintext secret privately to the appropriate
-partner backend. This is operator provisioning, not self-service generation. The app owner may reveal/copy the configured secret through the authenticated Portal as described below.
-Hashing protects high-entropy random secrets; do not use human-chosen passwords.
-An unset hash disables that environment's partner login with
-PARTNER_LOGIN_NOT_CONFIGURED. Rotation replaces the hash and requires matching
-partner config/restart; old credentials immediately stop validating sessions.
-
-Partner backend-only configuration:
-`ANKT_API_ORIGIN`, `ANKT_MINI_APP_CLIENT_ID`, `ANKT_MINI_APP_CLIENT_SECRET`,
-`ANKT_MINI_APP_ENVIRONMENT=Sandbox|Production`. Never prefix the secret with
-EXPO_PUBLIC or include it in frontend build variables. API Origin must be HTTPS.
-
-1. Run focused backend tests and SDK build/tests; publish backend using existing
-   Render .NET 8 build/start workflow. No new schema migration/dependency is needed
-   beyond the already-required MiniAppBridgeSessions migration.
-2. Register Sandbox hash only, configure partner Sandbox backend and verified domain.
-   Deploy SDK 0.4.0 browser artifact and updated Portal/example; rebuild native ANKT
-   only for changed host behavior. Keep exact CSP frame-ancestors/source checks.
-3. Test Nghệ Thuật Số: open from Portal; confirm backend account creation/session and
-   main screen. Reopen/refresh, expire/replay code, wrong secret, logout/switch account,
-   offline Retry. Inspect network with credentials redacted. No code/token in URL/log.
-4. Run same checks on Android WebView and iOS WKWebView, including reload, background,
-   back/close and malicious subframes. Node transport tests do not replace devices.
-5. Register production hash after live approval; point the production partner backend
-   to its independent secret/database. Confirm Sandbox codes fail there. Monitor
-   sanitized status/error counts and latency. Host/profile Bridge is limited to 60
-   requests/minute/IP. Server exchange/validation has a separate IP bucket, default
-   6000/minute, configurable by `MiniAppAuth__PartnerRequestsPerMinute` (1–60000).
-   Size deployment capacity before rollout without bypassing validation or trusting cache.
-6. Roll back by unsetting partner hashes and reverting partner/SDK rollout; profile
-   Bridge and existing ANKT login remain available. No data purge or live changes
-   were performed by this task.
+For existing env registrations, follow the explicit one-time import in
+[database credential rollout](miniapp-database-credentials.md) before removing old
+`MiniAppAuth__Partners__*` keys. No runtime env fallback remains.
 
 ## Sources
 

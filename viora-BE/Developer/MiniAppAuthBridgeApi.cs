@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Threading.RateLimiting;
 using Viora.Application.Developers;
 using Viora.Infrastructure.Developers;
@@ -17,6 +18,8 @@ public static class MiniAppAuthBridgeApi
                 "MiniAppAuth requires an exact HTTPS AllowedHostOrigin.");
         services.AddScoped<MiniAppBridgeService>();
         services.AddScoped<MiniAppPartnerLoginService>();
+        services.AddScoped<MiniAppPartnerCredentialStore>();
+        services.TryAddScoped<MiniAppSecretProtector>();
         // No credential cookies are accepted by these endpoints. Actual origin
         // authorization is checked against the launch/session after CORS preflight.
         services.AddCors(o => o.AddPolicy("MiniAppAuthBridge", p => p.SetIsOriginAllowed(origin =>
@@ -157,6 +160,18 @@ public static class MiniAppAuthBridgeApi
             var request = await MiniAppSandboxApi.ReadRequest<MiniAppCredentialRevealRequest>(http, ct);
             return Results.Ok(await service.RevealCredentialAsync(actor, appId, request.Environment, ct));
         }).RequireRateLimiting("mini-app-sensitive");
+        foreach (var operation in new[] { "rotate", "revoke" })
+        {
+            var revoke = operation == "revoke";
+            group.MapPost("/credentials/" + operation, async (string appId, HttpContext http, MiniAppPartnerLoginService service, CancellationToken ct) =>
+            {
+                http.Response.Headers.CacheControl = "no-store"; http.Response.Headers.Pragma = "no-cache";
+                http.Response.Headers["Referrer-Policy"] = "no-referrer";
+                var actor = await Actor(http);
+                var request = await MiniAppSandboxApi.ReadRequest<MiniAppCredentialChangeRequest>(http, ct);
+                return Results.Ok(await service.ChangeCredentialAsync(actor, appId, request.Environment, request.Version, revoke, ct));
+            }).RequireRateLimiting("mini-app-sensitive");
+        }
         group.MapGet("", async (string appId, HttpContext http, MiniAppBridgeService service, CancellationToken ct) =>
         { var actor = await Actor(http); return Results.Ok(await service.ConfigAsync(appId, actor, ct)); });
         group.MapPost("/launch", async (string appId, HttpContext http, MiniAppBridgeService service, CancellationToken ct) =>

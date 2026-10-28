@@ -14,6 +14,11 @@ LoadDotEnv();
 Environment.SetEnvironmentVariable("DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE", "false");
 
 var builder = WebApplication.CreateBuilder(args);
+if (args.Length > 0 && args[0] == "--import-miniapp-partner-credentials")
+{
+    Environment.ExitCode = await viora_BE.Developer.MiniAppCredentialImportCommand.RunAsync(builder.Configuration);
+    return;
+}
 if (args.Length > 0 && args[0] == "--provision-sandbox-profile")
 {
     Environment.ExitCode = await viora_BE.Developer.SandboxProfileProvisioningCommand.RunAsync(builder.Configuration,
