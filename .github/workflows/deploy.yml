@@ -116,6 +116,11 @@ jobs:
                 "$HEALTH_URL"; then
 
                 echo "Health check thành công."
+                if ! curl --fail --silent --show-error --output /dev/null --max-time 15 \
+                  'http://127.0.0.1:8081/api/mini-apps?page=1&pageSize=20'; then
+                  echo "ERROR: Mini App catalog unavailable. Check deployed version, MiniAppAuth__Enabled and container environment."
+                  exit 1
+                fi
                 docker image prune -f
 
                 echo "========================================"
