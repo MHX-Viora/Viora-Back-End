@@ -10,10 +10,9 @@ internal sealed class UtilityBannerConfiguration : IEntityTypeConfiguration<Util
     {
         builder.ToTable("UtilityBanners");
         builder.HasKey(x => x.Id);
-        builder.Property(x => x.Title).HasMaxLength(160).IsRequired();
         builder.Property(x => x.ImageUrl).HasMaxLength(2048).IsRequired();
         builder.Property(x => x.TargetUrl).HasMaxLength(2048);
         builder.Property(x => x.Version).IsConcurrencyToken();
-        builder.HasIndex(x => new { x.IsActive, x.SortOrder });
+        builder.HasIndex(x => new { x.IsActive, x.CreatedAt });
     }
 }

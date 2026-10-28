@@ -13,7 +13,7 @@ public sealed class UtilityBannersController(IUtilityBannerRepository repository
     {
         Response.Headers.CacheControl = "no-store";
         var items = await repository.ListAsync(true, token);
-        return Ok(items.Select(x => new { x.Id, x.Title, x.ImageUrl, x.TargetUrl, x.SortOrder }));
+        return Ok(items.Select(x => new { x.Id, x.ImageUrl, x.TargetUrl }));
     }
 }
 

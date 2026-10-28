@@ -7,8 +7,8 @@ using Xunit;
 
 public sealed class UtilityBannerTests
 {
-    private static SaveUtilityBanner Input(string title = "Banner", int order = 0, bool active = true, long version = 0) =>
-        new(title, "https://images.example.test/banner.webp", "/wallet", order, active, version);
+    private static SaveUtilityBanner Input(bool active = true, long version = 0) =>
+        new("https://images.example.test/banner.webp", "/wallet", active, version);
 
     [Theory]
     [InlineData("http://example.test/a.png", "/wallet")]
@@ -22,9 +22,9 @@ public sealed class UtilityBannerTests
     [Fact]
     public void RejectsEmptyAndOversizedFields()
     {
-        Assert.Throws<ArgumentException>(() => UtilityBannerValidation.Validate(Input(" ")));
-        Assert.Throws<ArgumentException>(() => UtilityBannerValidation.Validate(Input(new string('a', 161))));
-        Assert.Throws<ArgumentException>(() => UtilityBannerValidation.Validate(Input(order: -1)));
+        Assert.Throws<ArgumentException>(() => UtilityBannerValidation.Validate(Input() with { ImageUrl = " " }));
+        Assert.Throws<ArgumentException>(() => UtilityBannerValidation.Validate(Input() with { ImageUrl = "https://example.test/" + new string('a', 2048) }));
+        Assert.Throws<ArgumentException>(() => UtilityBannerValidation.Validate(Input(version: -1)));
     }
 
     [Fact]
@@ -35,13 +35,16 @@ public sealed class UtilityBannerTests
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options);
         await db.Database.EnsureCreatedAsync();
         var store = new UtilityBannerRepository(db);
-        var second = await store.SaveAsync(null, Input("Second", 20), default);
-        var first = await store.SaveAsync(null, Input("First", 10), default);
-        await store.SaveAsync(null, Input("Hidden", 0, false), default);
+        var first = await store.SaveAsync(null, Input(), default);
+        db.Set<Viora.Domain.Entities.UtilityBanner>().Single().CreatedAt = DateTime.UtcNow.AddDays(-1);
+        await db.SaveChangesAsync();
+        var second = await store.SaveAsync(null, Input(), default);
+        await store.SaveAsync(null, Input(active: false), default);
         Assert.Equal(new[] { first.Id, second.Id }, (await store.ListAsync(true, default)).Select(x => x.Id));
         Assert.Equal(3, (await store.ListAsync(false, default)).Count);
-        var updated = await store.SaveAsync(first.Id, Input("Edited", 10, version: first.Version), default);
+        var updated = await store.SaveAsync(first.Id, Input(version: first.Version), default);
         Assert.Equal(first.Version + 1, updated.Version);
+        Assert.Equal(new[] { first.Id, second.Id }, (await store.ListAsync(true, default)).Select(x => x.Id));
         await Assert.ThrowsAsync<UtilityBannerConflictException>(() => store.SaveAsync(first.Id, Input(version: first.Version), default));
         await Assert.ThrowsAsync<UtilityBannerConflictException>(() => store.DeleteAsync(first.Id, first.Version, default));
         Assert.True(await store.DeleteAsync(first.Id, updated.Version, default));

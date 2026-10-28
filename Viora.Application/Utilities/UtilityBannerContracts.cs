@@ -4,14 +4,12 @@ using System.Text.Json.Serialization;
 namespace Viora.Application.Utilities;
 
 public sealed record SaveUtilityBanner(
-    [Required, MaxLength(160)] string Title,
     [Required, MaxLength(2048)] string ImageUrl,
     [MaxLength(2048)] string? TargetUrl,
-    [Range(0, 10000)] int SortOrder,
     [property: JsonRequired] bool IsActive,
     [property: JsonRequired] [Range(0, long.MaxValue)] long Version);
 
-public sealed record UtilityBannerItem(Guid Id, string Title, string ImageUrl, string? TargetUrl, int SortOrder, bool IsActive, long Version);
+public sealed record UtilityBannerItem(Guid Id, string ImageUrl, string? TargetUrl, bool IsActive, long Version);
 public interface IUtilityBannerRepository
 {
     Task<IReadOnlyList<UtilityBannerItem>> ListAsync(bool activeOnly, CancellationToken token);
@@ -24,8 +22,8 @@ public static class UtilityBannerValidation
 {
     public static void Validate(SaveUtilityBanner input)
     {
-        if (string.IsNullOrWhiteSpace(input.Title) || input.Title.Length > 160 || input.SortOrder is < 0 or > 10000 || input.Version < 0)
-            throw new ArgumentException("Tiêu đề hoặc thứ tự banner không hợp lệ.");
+        if (input.Version < 0)
+            throw new ArgumentException("Phiên bản banner không hợp lệ.");
         if (!Https(input.ImageUrl)) throw new ArgumentException("Ảnh banner phải là URL HTTPS hợp lệ (tối đa 2048 ký tự).");
         if (!string.IsNullOrWhiteSpace(input.TargetUrl) && !Https(input.TargetUrl) && !InternalPath(input.TargetUrl))
             throw new ArgumentException("Liên kết phải là HTTPS hoặc đường dẫn trong ứng dụng.");

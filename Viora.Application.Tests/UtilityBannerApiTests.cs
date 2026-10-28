@@ -40,6 +40,11 @@ public sealed class UtilityBannerApiTests
         client.DefaultRequestHeaders.Remove("X-Fixture-Role"); client.DefaultRequestHeaders.Add("X-Fixture-Role", "2");
         var create = await client.PostAsJsonAsync("/api/admin/utility-banners", Input());
         Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        using (var payload = System.Text.Json.JsonDocument.Parse(await create.Content.ReadAsStringAsync()))
+        {
+            Assert.False(payload.RootElement.TryGetProperty("title", out _));
+            Assert.False(payload.RootElement.TryGetProperty("sortOrder", out _));
+        }
         var item = (await create.Content.ReadFromJsonAsync<UtilityBannerItem>())!;
         var list = await client.GetFromJsonAsync<UtilityBannerItem[]>("/api/admin/utility-banners"); Assert.Single(list!);
         Assert.Single((await client.GetFromJsonAsync<object[]>("/api/utility-banners"))!);
@@ -52,7 +57,7 @@ public sealed class UtilityBannerApiTests
         Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/admin/utility-banners/{item.Id}?version={item.Version + 1}")).StatusCode);
     }
 
-    private static SaveUtilityBanner Input() => new("Sample", "https://images.example.test/banner.png", null, 0, true, 0);
+    private static SaveUtilityBanner Input() => new("https://images.example.test/banner.png", null, true, 0);
     private sealed class Auth(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
