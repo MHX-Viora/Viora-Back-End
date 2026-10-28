@@ -14,6 +14,12 @@ public sealed class AdvertisementConflictException(string code, string message) 
 
 public static class AdvertisementRules
 {
+    public static string? NormalizeCopy(string? value, int maximumLength)
+    {
+        if (value?.Length > maximumLength)
+            throw new AdvertisementValidationException("INVALID_AD_COPY", $"Nội dung quảng cáo không được vượt quá {maximumLength} ký tự.");
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
     public const decimal MinimumBudget = 50_000m;
     public const decimal MaximumBudget = 1_000_000_000m;
 
@@ -71,6 +77,9 @@ public static class AdvertisementRules
         var allowed = (current, next) switch
         {
             (AdvertisementStatus.Draft, AdvertisementStatus.Pending) => true,
+            (AdvertisementStatus.Draft, AdvertisementStatus.Active) => true,
+            (AdvertisementStatus.Draft, AdvertisementStatus.Approved) => true,
+            (AdvertisementStatus.Pending, AdvertisementStatus.Active) => true,
             (AdvertisementStatus.Pending, AdvertisementStatus.Approved) => true,
             (AdvertisementStatus.Pending, AdvertisementStatus.Rejected) => true,
             (AdvertisementStatus.Approved, AdvertisementStatus.Active) => true,

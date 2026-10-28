@@ -95,7 +95,8 @@ export async function productionWebHost({ directory, config, ownerBrowser, fixtu
     else assert.ok(partnerProduction.embeddedMetrics().userInfo > beforeReopen.userInfo, 'Reopen requires a fresh partner UserInfo check');
     console.log('STAGE8_EMBEDDED_SSO_FRESH_HOST_REOPEN_' + config.partnerClientType.toUpperCase());
     samples.push(await lifecycleSample(parent, 'after-close-retry'));
-    phase = 'replace'; await parent.click(button('Mở lại'));
+    phase = 'replace'; await parent.click(button('Quay về ANKT'));
+    await parent.navigate(config.productionAppOrigin + '/mini-apps/' + appId);
     await parent.wait(`document.body.textContent.includes('Đã kết nối SDK · Production')`, 'replacement launch and disposal');
     state = await fixture('production-state'); assert.equal(state.sessions, before.sessions + 3);
     for (let attempt = 0; attempt < 50 && state.activeSessions !== 1; attempt++) { await delay(100); state = await fixture('production-state'); }

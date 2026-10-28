@@ -2128,6 +2128,10 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
                     b.Property<short>("DestinationType")
                         .HasColumnType("smallint");
 
@@ -2137,6 +2141,10 @@ namespace Viora.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("EndAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Headline")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
 
                     b.Property<short?>("MaximumAge")
                         .HasColumnType("smallint");
@@ -2797,6 +2805,39 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("ExternalLogins", (string)null);
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.FeaturedBrand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LogoUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive", "SortOrder");
+
+                    b.ToTable("FeaturedBrands", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.Follow", b =>
@@ -4505,6 +4546,43 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_UserStickerPacks_PurchasePrice", "\"PurchasePrice\" >= 0");
                         });
+                });
+
+            modelBuilder.Entity("Viora.Domain.Entities.UtilityBanner", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive", "SortOrder");
+
+                    b.ToTable("UtilityBanners", (string)null);
                 });
 
             modelBuilder.Entity("Viora.Domain.Entities.ViewHistory", b =>

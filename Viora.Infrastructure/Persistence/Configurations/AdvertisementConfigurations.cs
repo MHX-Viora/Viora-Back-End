@@ -16,6 +16,8 @@ internal sealed class AdvertisementConfiguration : IEntityTypeConfiguration<Adve
         });
         builder.HasKey(x => x.Id);
         builder.Property(x => x.DestinationUrl).HasMaxLength(2048);
+        builder.Property(x => x.Headline).HasMaxLength(120);
+        builder.Property(x => x.Description).HasMaxLength(240);
         builder.Property(x => x.TargetLocation).HasMaxLength(120);
         builder.Property(x => x.ReviewReason).HasMaxLength(500);
         builder.Property(x => x.DailyBudget).HasPrecision(18, 2);

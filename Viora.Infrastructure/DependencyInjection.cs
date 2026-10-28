@@ -212,6 +212,8 @@ public static class DependencyInjection
         services.AddScoped<IShareLinkService, ShareLinkService>();
         services.AddScoped<IAdminRepository, AdminRepository>();
         services.AddScoped<ILegalDocumentRepository, LegalDocumentRepository>();
+        services.AddScoped<Viora.Application.Utilities.IUtilityBannerRepository, Viora.Infrastructure.Utilities.UtilityBannerRepository>();
+        services.AddScoped<Viora.Application.Utilities.IFeaturedBrandRepository, Viora.Infrastructure.Utilities.FeaturedBrandRepository>();
         services.Configure<FirebaseOptions>(configuration.GetSection("Firebase"));
         services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
         services.AddSingleton<ConnectionRegistry>();

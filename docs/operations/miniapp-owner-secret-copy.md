@@ -1,10 +1,19 @@
 # Owner-only Client Secret copy
 
-The integration Console places an environment selector and masked Client Secret
-beside App ID. Only an authenticated, active/unlocked app owner can request reveal.
+For the explicit Nghệ Thuật Số direct-FE configuration, the UI instead uses public
+build values and does not call this endpoint. That exception publishes its values
+in the FE bundle; the owner-only guarantees below apply to this API, not to that
+direct configuration. Other apps retain this authenticated API path.
+
+The integration Console places an environment selector and visible Client Secret
+beside App ID. It automatically requests the selected credential when the owner
+opens the section or changes environment. Only an authenticated, active/unlocked
+app owner can retrieve it.
 The BFF requires same-origin POST/CSRF headers; the backend uses the existing
 sensitive-operation rate limit and audits only app/actor/environment. Responses are
-no-store. UI clears the value after 60 seconds and on app/environment change or exit.
+no-store. UI keeps the value visible without a timer, clearing it on app/environment
+change or exit and refetching after bfcache restoration. It never stores the value
+in browser storage or a public bundle. The separate Hiện/Ẩn control is removed.
 
 ## Operator provisioning
 

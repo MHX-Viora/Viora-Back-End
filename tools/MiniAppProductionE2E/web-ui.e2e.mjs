@@ -56,7 +56,8 @@ async function dimensions(width, host = false) {
   assert.equal(await read('document.documentElement.scrollWidth<=innerWidth+1'), true, 'Overflow at ' + width);
   const controls = await read(`[...document.querySelectorAll('[role=button]')].map(e=>({label:e.getAttribute('aria-label')||e.textContent.trim(),height:e.getBoundingClientRect().height,width:e.getBoundingClientRect().width}))`);
   assert.ok(controls.length > 0);
-  assert.ok(controls.every(control => control.height >= 44 && control.width >= 44), '44px controls at ' + width);
+  assert.ok(controls.every(control => { const minimum=['Quay về ANKT','Hỗ trợ Mini App'].includes(control.label)?36:44; return control.height>=minimum&&control.width>=minimum; }), 'Touch controls at ' + width);
+  if(host)assert.equal(await read(`document.querySelector('[data-testid="mini-app-toolbar"]').getBoundingClientRect().height`),40,'Compact toolbar height');
   if ([320, 1440].includes(width)) {
     const shot = await rpc('Page.captureScreenshot', { format: 'png' });
     await writeFile(join(output, `stage8-ui-${host ? 'host' : 'catalog'}-${width}.png`), Buffer.from(shot.data, 'base64'));
@@ -96,20 +97,23 @@ async function main() {
   const node = await rpc('Runtime.evaluate', { expression: control('Mở <script>alert(1)</script>') });
   await rpc('DOM.focus', { objectId: node.result.objectId }); await key('Enter');
   await wait(`!!document.querySelector('[aria-label="Simulated host"]')`, 'host mounted');
-  assert.equal(await read('document.activeElement.textContent.trim()'), 'Đóng Mini App', 'Focus moves to host close');
+  assert.equal(await read('document.activeElement.getAttribute("aria-label")'), 'Quay về ANKT', 'Focus moves to host back arrow');
   for (const width of [320, 375, 768, 1440]) await dimensions(width, true);
   await click('Fixture: SDK connected'); await click('Fixture: website loaded');
   assert.equal(await read('document.body.textContent.includes("Đã kết nối SDK · Production")'), true);
-  phase = 'reopen'; await click('Mở lại');
+  phase = 'support'; await click('Hỗ trợ Mini App');
+  await wait(`window.__miniAppUi.lastNavigation==='/support'&&!!document.querySelector('main')`, 'support navigation');
+  await wait(`!!${control('Mở <script>alert(1)</script>')}`, 'catalog after support');
+  await click('Mở <script>alert(1)</script>');
   await wait('window.__miniAppUi.mounts===2&&window.__miniAppUi.disposed===1', 'reopen disposal');
   await click('Fixture: session revoked'); await wait('window.__miniAppUi.disposed===2', 'revocation disposal');
   await click('Thử lại'); await wait('window.__miniAppUi.mounts===3', 'fresh retry');
   await click('Fixture: confirmed close'); await wait('window.__miniAppUi.disposed===3', 'confirmed close');
   await click('Thử lại'); await wait('window.__miniAppUi.mounts===4', 'reopen after close');
-  await click('Đóng Mini App'); await wait('!!document.querySelector("main")&&window.__miniAppUi.disposed===4', 'return to catalog');
+  await click('Quay về ANKT'); await wait('!!document.querySelector("main")&&window.__miniAppUi.disposed===4', 'return to catalog');
   assert.equal(issues.length, 0, 'Console issues: ' + issues.join(', '));
   assert.ok([...requests].every(url => url.startsWith(origin + '/') || url.startsWith('data:')), 'Fixture sent external request');
-  console.log('PASS UI-only: exact 320/375/768/1440 viewports, 44px controls, no overflow, escaped names, pagination/error/empty/retry/reconnect, keyboard open/focus, SDK status ordering, close/reopen/revoke disposal. Zero console issues/external requests. Services simulated; no business/native acceptance.');
+  console.log('PASS UI-only: exact 320/375/768/1440 viewports, 40px toolbar with 36px icons, no overflow, escaped names, pagination/error/empty/retry, keyboard focus, back/support navigation, SDK status ordering and close/revoke disposal. Zero console issues/external requests. Services simulated; no business/native acceptance.');
 }
 try { await main(); } catch (error) { console.error(phase + ': ' + error.message); process.exitCode = 1; }
 finally {

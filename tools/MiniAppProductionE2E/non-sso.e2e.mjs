@@ -32,7 +32,7 @@ export async function nonSsoWeb({ directory, config, ownerBrowser, fixture, appI
     await parent.click(`document.querySelector('[aria-label^="Mở "]')`);
     await parent.wait(`document.body.textContent.includes('Đã kết nối SDK · Production')`, 'authenticated non-SSO launch from Utilities');
     assert.equal((await fixture('production-state')).authenticatedSessions, 1);
-    await parent.click(control('Đóng Mini App'));
+    await parent.click(control('Quay về ANKT'));
     await parent.wait(`location.pathname==='/utilities'&&!!${control('Nạp tiền')}`, 'return to Utilities');
     await parent.wait(`${control('Nạp tiền')}.getAttribute('aria-disabled')!=='true'`);
     for (let attempt = 0; attempt < 30 && walletReads < reads + 1; attempt++) await delay(100);

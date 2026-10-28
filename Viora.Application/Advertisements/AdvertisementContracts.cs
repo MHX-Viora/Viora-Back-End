@@ -27,7 +27,9 @@ public sealed record CreateAdvertisementRequest(
     decimal? DailyBudget,
     decimal TotalBudget,
     DateTime StartAt,
-    DateTime EndAt);
+    DateTime EndAt,
+    string? Headline = null,
+    string? Description = null);
 
 public sealed record AdvertisementUserResponse(
     Guid Id,
@@ -87,7 +89,9 @@ public sealed record AdvertisementResponse(
     long Impressions,
     long Clicks,
     decimal ClickThroughRate,
-    AdvertisementContentResponse Content);
+    AdvertisementContentResponse Content,
+    string? Headline = null,
+    string? Description = null);
 
 public sealed record AdvertisementPage(
     IReadOnlyList<AdvertisementResponse> Items,
