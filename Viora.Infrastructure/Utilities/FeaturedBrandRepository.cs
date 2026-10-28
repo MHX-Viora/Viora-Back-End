@@ -20,7 +20,7 @@ public sealed class FeaturedBrandRepository(AppDbContext db) : IFeaturedBrandRep
         if (id.HasValue && entity.Version != input.Version) throw new FeaturedBrandConflictException();
         if (!id.HasValue && input.Version != 0) throw new ArgumentException("Phiên bản tạo mới phải bằng 0.");
         if (!id.HasValue) db.Add(entity);
-        entity.Name = input.Name.Trim(); entity.LogoUrl = input.LogoUrl;
+        entity.Name = string.IsNullOrWhiteSpace(input.Name) ? "Thương hiệu" : input.Name.Trim(); entity.LogoUrl = input.LogoUrl;
         entity.SortOrder = input.SortOrder; entity.IsActive = input.IsActive;
         if (id.HasValue) entity.Version++;
         try { await db.SaveChangesAsync(token); }

@@ -50,6 +50,9 @@ public sealed class FeaturedBrandApiTests
         Assert.Equal(HttpStatusCode.Conflict, (await client.DeleteAsync($"/api/admin/featured-brands/{item.Id}?version={item.Version}")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/admin/featured-brands/{item.Id}?version={item.Version + 1}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/admin/featured-brands/{item.Id}?version={item.Version + 1}")).StatusCode);
+        var unnamed = await client.PostAsJsonAsync("/api/admin/featured-brands", new { LogoUrl = "https://images.example.test/logo.png", SortOrder = 0, IsActive = true, Version = 0 });
+        Assert.Equal(HttpStatusCode.OK, unnamed.StatusCode);
+        Assert.Equal("Thương hiệu", (await unnamed.Content.ReadFromJsonAsync<FeaturedBrandItem>())!.Name);
     }
 
     private static SaveFeaturedBrand Input() => new("Sample", "https://images.example.test/logo.png", 0, true, 0);

@@ -20,10 +20,25 @@ public sealed class FeaturedBrandTests
     [Fact]
     public void RejectsInvalidNameOrderAndVersion()
     {
-        Assert.Throws<ArgumentException>(() => FeaturedBrandValidation.Validate(Input(" ")));
         Assert.Throws<ArgumentException>(() => FeaturedBrandValidation.Validate(Input(new string('a', 161))));
         Assert.Throws<ArgumentException>(() => FeaturedBrandValidation.Validate(Input(order: -1)));
         Assert.Throws<ArgumentException>(() => FeaturedBrandValidation.Validate(Input(version: -1)));
+    }
+
+    [Theory]
+    [InlineData(null)] [InlineData("")] [InlineData("   ")]
+    public async Task Name_is_optional_and_unnamed_logos_remain_visible(string? name)
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        connection.CreateFunction<string?, int>("char_length", value => value?.Length ?? 0);
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options);
+        await db.Database.EnsureCreatedAsync(); var store = new FeaturedBrandRepository(db);
+        var input = Input() with { Name = name! };
+        var results = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        Assert.True(System.ComponentModel.DataAnnotations.Validator.TryValidateObject(input, new(input), results, true));
+        var item = await store.SaveAsync(null, input, default);
+        Assert.Equal("Thương hiệu", item.Name);
+        Assert.Single(await store.ListAsync(true, default));
     }
 
     [Fact]

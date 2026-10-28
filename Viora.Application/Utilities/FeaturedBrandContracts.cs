@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Viora.Application.Utilities;
 
 public sealed record SaveFeaturedBrand(
-    [Required, MaxLength(160)] string Name,
+    [MaxLength(160)] string? Name,
     [Required, MaxLength(2048)] string LogoUrl,
     [Range(0, 10000)] int SortOrder,
     [property: JsonRequired] bool IsActive,
@@ -23,7 +23,7 @@ public static class FeaturedBrandValidation
 {
     public static void Validate(SaveFeaturedBrand input)
     {
-        if (string.IsNullOrWhiteSpace(input.Name) || input.Name.Length > 160 || input.SortOrder is < 0 or > 10000 || input.Version < 0)
+        if (input.Name is { Length: > 160 } || input.SortOrder is < 0 or > 10000 || input.Version < 0)
             throw new ArgumentException("Tên hoặc thứ tự thương hiệu không hợp lệ.");
         var value = input.LogoUrl;
         if (value is not { Length: > 0 and <= 2048 } || value.Any(char.IsWhiteSpace) || value.Any(char.IsControl) || value.Contains('\\')
