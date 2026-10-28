@@ -17,7 +17,7 @@ public sealed class AdminImagesController(IAdminImageStorage storage) : Controll
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<UploadResponse>> Upload([FromForm] AdminImageUploadRequest request, CancellationToken token)
     {
-        if (!Guid.TryParse(User.FindFirstValue("user_id"), out var adminId)) return Unauthorized();
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var adminId)) return Unauthorized();
         if (request.File is null) return ValidationProblem("Vui lòng chọn ảnh.");
         try
         {
