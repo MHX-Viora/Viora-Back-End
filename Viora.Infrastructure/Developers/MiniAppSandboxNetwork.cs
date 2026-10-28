@@ -13,7 +13,7 @@ public sealed class MiniAppSandboxNetwork(IPublicDnsResolver resolver)
         // Reject escaped delimiters/double encoding and auth/callback routes, including encoded names.
         var path=Uri.UnescapeDataString(uri.AbsolutePath);
         if(path.IndexOfAny(['%','\\','?','#',';'])>=0||path.Any(char.IsControl)||path.StartsWith("/.well-known",StringComparison.OrdinalIgnoreCase)||
-            path.Split(['/', '.', '-', '_'],StringSplitOptions.RemoveEmptyEntries).Any(segment=>
+            path.Split(new char[] { '/', '.', '-', '_' },StringSplitOptions.RemoveEmptyEntries).Any(segment=>
                 new[]{"auth","authorize","authorization","oauth","oauth2","oidc","connect","callback","signin","sign","login","logout","token","userinfo","sso"}
                     .Contains(segment,StringComparer.OrdinalIgnoreCase))||
             callbackUrls?.Any(callback=>Uri.TryCreate(callback,UriKind.Absolute,out var destination)&&destination.GetLeftPart(UriPartial.Authority)==partnerOrigin&&
