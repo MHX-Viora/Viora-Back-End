@@ -6,10 +6,11 @@ public sealed record AdminWalletItem(Guid Id, Guid UserId, string DisplayName, d
 public sealed record AdminTransactionItem(Guid Id, Guid WalletId, Guid UserId, string DisplayName, WalletTransactionType Type, decimal Amount, WalletTransactionStatus Status, string ReferenceType, string ReferenceId, string? Description, DateTime CreatedAt, decimal BalanceBefore, decimal BalanceAfter, decimal HeldBefore, decimal HeldAfter, Guid? AdminId, string? AdjustmentReason, long? CoinAmount);
 public sealed record AdminPaymentItem(Guid Id, Guid UserId, string DisplayName, decimal Amount, string Currency, string Provider, long ProviderOrderCode, string? ProviderTransactionId, PaymentStatus Status, DateTime CreatedAt, DateTime? PaidAt);
 public sealed record AdminPage<T>(IReadOnlyList<T> Data, int Page, int PageSize, int TotalItems, int TotalPages);
+public sealed record AdminFinanceFilter(DateOnly? From = null, DateOnly? To = null, WalletTransactionType? Type = null, int? Status = null);
 
 public interface IAdminWalletService
 {
     Task<AdminPage<AdminWalletItem>> GetWalletsAsync(int page, int pageSize, string? keyword, CancellationToken cancellationToken);
-    Task<AdminPage<AdminTransactionItem>> GetTransactionsAsync(int page, int pageSize, string? keyword, CancellationToken cancellationToken);
-    Task<AdminPage<AdminPaymentItem>> GetPaymentsAsync(int page, int pageSize, string? keyword, CancellationToken cancellationToken);
+    Task<AdminPage<AdminTransactionItem>> GetTransactionsAsync(int page, int pageSize, string? keyword, CancellationToken cancellationToken, AdminFinanceFilter? filter = null);
+    Task<AdminPage<AdminPaymentItem>> GetPaymentsAsync(int page, int pageSize, string? keyword, CancellationToken cancellationToken, AdminFinanceFilter? filter = null);
 }

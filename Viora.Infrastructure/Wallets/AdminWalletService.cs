@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Viora.Application.Wallets;
+using Viora.Domain.Entities;
 using Viora.Infrastructure.Persistence;
 
 namespace Viora.Infrastructure.Wallets;
@@ -21,10 +22,27 @@ public sealed class AdminWalletService(AppDbContext dbContext) : IAdminWalletSer
         return Page(data, page, pageSize, total);
     }
 
-    public async Task<AdminPage<AdminTransactionItem>> GetTransactionsAsync(int page, int pageSize, string? keyword, CancellationToken cancellationToken)
+    public async Task<AdminPage<AdminTransactionItem>> GetTransactionsAsync(int page, int pageSize, string? keyword, CancellationToken cancellationToken, AdminFinanceFilter? filter = null)
     {
         (page, pageSize) = Normalize(page, pageSize);
-        var query = dbContext.WalletTransactions.AsNoTracking().AsQueryable();
+        var query = dbContext.WalletTransactions.AsNoTracking().Where(x =>
+            x.Type != WalletTransactionType.LiveGiftSent && x.Type != WalletTransactionType.LiveGiftReceived);
+        if (filter?.Type is { } type)
+        {
+            if (!Enum.IsDefined(type) || type is WalletTransactionType.LiveGiftSent or WalletTransactionType.LiveGiftReceived)
+                throw new WalletValidationException("INVALID_TRANSACTION_TYPE", "Loại giao dịch không hợp lệ.");
+            query = query.Where(x => x.Type == type);
+        }
+        if (filter?.Status is { } status)
+        {
+            if (status is < 0 or > 3) throw new WalletValidationException("INVALID_TRANSACTION_STATUS", "Trạng thái giao dịch không hợp lệ.");
+            query = query.Where(x => x.Status == (WalletTransactionStatus)status);
+        }
+        if (filter?.From is not null || filter?.To is not null)
+        {
+            var period = FinancePeriod.Create(filter.From, filter.To);
+            query = query.Where(x => x.CreatedAt >= period.StartUtc && x.CreatedAt < period.EndUtc);
+        }
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             var value = keyword.Trim();
@@ -36,10 +54,20 @@ public sealed class AdminWalletService(AppDbContext dbContext) : IAdminWalletSer
         return Page(data, page, pageSize, total);
     }
 
-    public async Task<AdminPage<AdminPaymentItem>> GetPaymentsAsync(int page, int pageSize, string? keyword, CancellationToken cancellationToken)
+    public async Task<AdminPage<AdminPaymentItem>> GetPaymentsAsync(int page, int pageSize, string? keyword, CancellationToken cancellationToken, AdminFinanceFilter? filter = null)
     {
         (page, pageSize) = Normalize(page, pageSize);
         var query = dbContext.Payments.AsNoTracking().AsQueryable();
+        if (filter?.Status is { } status)
+        {
+            if (status is < 0 or > 4) throw new WalletValidationException("INVALID_PAYMENT_STATUS", "Trạng thái nạp tiền không hợp lệ.");
+            query = query.Where(x => x.Status == (PaymentStatus)status);
+        }
+        if (filter?.From is not null || filter?.To is not null)
+        {
+            var period = FinancePeriod.Create(filter.From, filter.To);
+            query = query.Where(x => x.CreatedAt >= period.StartUtc && x.CreatedAt < period.EndUtc);
+        }
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             var value = keyword.Trim();
@@ -51,6 +79,6 @@ public sealed class AdminWalletService(AppDbContext dbContext) : IAdminWalletSer
         return Page(data, page, pageSize, total);
     }
 
-    private static (int Page, int PageSize) Normalize(int page, int pageSize) => (Math.Max(page, 1), Math.Clamp(pageSize, 1, 100));
+    private static (int Page, int PageSize) Normalize(int page, int pageSize) => (Math.Clamp(page, 1, 1000000), Math.Clamp(pageSize, 1, 100));
     private static AdminPage<T> Page<T>(IReadOnlyList<T> data, int page, int pageSize, int total) => new(data, page, pageSize, total, total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize));
 }
