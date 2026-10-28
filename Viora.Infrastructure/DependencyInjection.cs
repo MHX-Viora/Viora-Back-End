@@ -124,6 +124,7 @@ public static class DependencyInjection
         services.AddSingleton(Options.Create(cloudinaryOptions));
         services.AddSingleton<IProfileImageStorage, CloudinaryProfileImageStorage>();
         services.AddSingleton<IMediaStorage, CloudinaryMediaStorage>();
+        services.AddSingleton<Viora.Application.Admin.IAdminImageStorage>(provider => (CloudinaryMediaStorage)provider.GetRequiredService<IMediaStorage>());
         services.AddSingleton<IStickerMediaStorage>(provider => (CloudinaryMediaStorage)provider.GetRequiredService<IMediaStorage>());
         services.AddScoped<IValidator<CreatePostCommand>, CreatePostValidator>();
         services.AddScoped<IValidator<CreateArticleCommand>, CreateArticleValidator>();
