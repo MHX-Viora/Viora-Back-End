@@ -52,6 +52,8 @@ public sealed class LiveGift : AuditableEntity
     public string Name { get; set; } = null!;
     public string ImageUrl { get; set; } = null!;
     public string? AnimationUrl { get; set; }
+    public byte[]? AnimationData { get; set; }
+    public int AnimationDurationMs { get; set; }
     public long PriceCoin { get; set; }
     public long Price { get; set; }
     public LiveGiftAnimationType AnimationType { get; set; }
