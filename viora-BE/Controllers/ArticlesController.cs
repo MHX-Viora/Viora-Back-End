@@ -78,7 +78,7 @@ public sealed class ArticlesController(IMediator mediator, IMediaStorage mediaSt
         try
         {
             var response = await mediator.Send(new CreateArticleCommand(
-                userId, request.Title, request.Visibility, request.Blocks), cancellationToken);
+                userId, request.Title, request.Visibility, request.Blocks, request.Hashtags), cancellationToken);
             return CreatedAtAction(nameof(Get), new { id = response.Id }, response);
         }
         catch (ValidationException exception)
@@ -101,7 +101,7 @@ public sealed class ArticlesController(IMediator mediator, IMediaStorage mediaSt
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
         return ToResult(await mediator.Send(new UpdateArticleCommand(
-            userId, id, request.Title, request.Visibility, request.Blocks), cancellationToken));
+            userId, id, request.Title, request.Visibility, request.Blocks, request.Hashtags), cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
@@ -160,12 +160,14 @@ public sealed class ArticlesController(IMediator mediator, IMediaStorage mediaSt
 public sealed record CreateArticleRequest(
     string Title,
     PostVisibility Visibility,
-    IReadOnlyList<CreateArticleBlockRequest> Blocks);
+    IReadOnlyList<CreateArticleBlockRequest> Blocks,
+    IReadOnlyList<string>? Hashtags = null);
 
 public sealed record UpdateArticleRequest(
     string Title,
     PostVisibility Visibility,
-    IReadOnlyList<UpdateArticleBlockRequest> Blocks);
+    IReadOnlyList<UpdateArticleBlockRequest> Blocks,
+    IReadOnlyList<string>? Hashtags = null);
 
 public sealed class ArticleMediaUploadRequest
 {

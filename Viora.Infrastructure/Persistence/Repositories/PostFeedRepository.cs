@@ -149,10 +149,12 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
         if (!string.IsNullOrWhiteSpace(query.Keyword))
         {
             var keyword = $"%{query.Keyword.Trim()}%";
+            var hashtagKeyword = $"%{query.Keyword.Trim().TrimStart('#')}%";
             posts = posts.Where(post =>
                 EF.Functions.ILike(post.User.DisplayName, keyword) ||
                 (post.Content != null && EF.Functions.ILike(post.Content, keyword)) ||
-                (post.Location != null && EF.Functions.ILike(post.Location, keyword)));
+                (post.Location != null && EF.Functions.ILike(post.Location, keyword)) ||
+                dbContext.PostHashtags.Any(tag => tag.PostId == post.Id && EF.Functions.ILike(tag.Hashtag.Name, hashtagKeyword)));
         }
 
         var totalItems = await posts.CountAsync(cancellationToken);
