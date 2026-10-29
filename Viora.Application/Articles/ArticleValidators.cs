@@ -1,5 +1,6 @@
 using FluentValidation;
 using Viora.Domain.Entities;
+using Viora.Application.Hashtags;
 
 namespace Viora.Application.Articles;
 
@@ -14,6 +15,8 @@ public sealed class CreateArticleValidator : AbstractValidator<CreateArticleComm
             .WithMessage("OrderIndex phải liên tục, bắt đầu từ 0 và không trùng.")
             .WithErrorCode("ARTICLE_BLOCK_ORDER_INVALID");
         RuleForEach(x => x.Blocks).SetValidator(new CreateArticleBlockValidator());
+        RuleForEach(x => x.Hashtags).MaximumLength(100)
+            .Must(value => HashtagNormalizer.Normalize(value).Length > 0).WithMessage("Chủ đề không được để trống.");
     }
 
     internal static bool HasContinuousOrder<T>(IReadOnlyList<T> blocks) where T : notnull =>
@@ -40,6 +43,8 @@ public sealed class UpdateArticleValidator : AbstractValidator<UpdateArticleComm
         RuleFor(x => x.Blocks).Must(blocks => blocks is not null && blocks.Where(x => x.Id.HasValue).Select(x => x.Id).Distinct().Count() == blocks.Count(x => x.Id.HasValue))
             .WithErrorCode("ARTICLE_BLOCK_ID_DUPLICATE");
         RuleForEach(x => x.Blocks).SetValidator(new UpdateArticleBlockValidator());
+        RuleForEach(x => x.Hashtags).MaximumLength(100)
+            .Must(value => HashtagNormalizer.Normalize(value).Length > 0).WithMessage("Chủ đề không được để trống.");
     }
 }
 

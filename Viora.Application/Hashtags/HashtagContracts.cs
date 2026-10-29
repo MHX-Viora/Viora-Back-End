@@ -54,7 +54,7 @@ public interface IHashtagRepository
     Task<HashtagSearchResponse> SearchAsync(SearchHashtagsQuery query, CancellationToken cancellationToken);
 }
 
-internal static class HashtagNormalizer
+public static class HashtagNormalizer
 {
     public static string Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value)

@@ -25,14 +25,16 @@ public sealed record CreateArticleCommand(
     Guid UserId,
     string Title,
     PostVisibility Visibility,
-    IReadOnlyList<CreateArticleBlockRequest> Blocks) : IRequest<ArticleResponse>;
+    IReadOnlyList<CreateArticleBlockRequest> Blocks,
+    IReadOnlyList<string>? Hashtags = null) : IRequest<ArticleResponse>;
 
 public sealed record UpdateArticleCommand(
     Guid UserId,
     Guid ArticleId,
     string Title,
     PostVisibility Visibility,
-    IReadOnlyList<UpdateArticleBlockRequest> Blocks) : IRequest<Result<ArticleResponse>>;
+    IReadOnlyList<UpdateArticleBlockRequest> Blocks,
+    IReadOnlyList<string>? Hashtags = null) : IRequest<Result<ArticleResponse>>;
 
 public sealed record GetArticleQuery(Guid UserId, Guid ArticleId)
     : IRequest<Result<ArticleResponse>>;
@@ -72,7 +74,10 @@ public sealed record ArticleResponse(
     int ViewCount,
     bool IsOwner,
     ArticleAuthorResponse Author,
-    IReadOnlyList<ArticleBlockResponse> Blocks);
+    IReadOnlyList<ArticleBlockResponse> Blocks)
+{
+    public IReadOnlyList<PostDetailHashtagResponse> Hashtags { get; init; } = [];
+}
 
 public interface IArticleRepository
 {
@@ -80,6 +85,7 @@ public interface IArticleRepository
     Task AddAsync(Post article, CancellationToken cancellationToken);
     Task<Post?> GetForUpdateAsync(Guid articleId, CancellationToken cancellationToken);
     Task PrepareBlockOrderUpdateAsync(Post article, CancellationToken cancellationToken);
+    Task SetHashtagsAsync(Post article, IReadOnlyList<string> hashtags, CancellationToken cancellationToken);
     Task<bool> RecordViewAsync(Guid userId, Guid articleId, CancellationToken cancellationToken);
     Task<Result<ArticleResponse>> GetAsync(Guid userId, Guid articleId, CancellationToken cancellationToken);
 }

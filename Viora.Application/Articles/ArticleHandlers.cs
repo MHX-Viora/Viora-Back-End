@@ -37,8 +37,11 @@ public sealed class CreateArticleHandler(
             ArticleBlocks = request.Blocks.Select(ToEntity).ToList()
         };
 
-        await unitOfWork.ExecuteInTransactionAsync(
-            token => repository.AddAsync(article, token), cancellationToken);
+        await unitOfWork.ExecuteInTransactionAsync(async token =>
+        {
+            await repository.AddAsync(article, token);
+            if (request.Hashtags is not null) await repository.SetHashtagsAsync(article, request.Hashtags, token);
+        }, cancellationToken);
 
         var result = await repository.GetAsync(request.UserId, article.Id, cancellationToken);
         return result.Value ?? throw new InvalidOperationException("Article vừa tạo không thể được tải lại.");
@@ -91,6 +94,7 @@ public sealed class UpdateArticleHandler(
         {
             article.Content = request.Title.Trim();
             article.Visibility = request.Visibility;
+            if (request.Hashtags is not null) await repository.SetHashtagsAsync(article, request.Hashtags, token);
             await repository.PrepareBlockOrderUpdateAsync(article, token);
             var requestedIds = request.Blocks.Where(x => x.Id.HasValue).Select(x => x.Id!.Value).ToHashSet();
             foreach (var removed in article.ArticleBlocks.Where(x => !requestedIds.Contains(x.Id)).ToArray())

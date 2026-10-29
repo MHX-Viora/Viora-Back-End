@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Viora.Application.Articles;
 using Viora.Application.Posts;
 using Viora.Domain.Entities;
+using Viora.Application.Hashtags;
 
 namespace Viora.Infrastructure.Persistence.Repositories;
 
@@ -17,6 +18,28 @@ public sealed class ArticleRepository(AppDbContext dbContext) : IArticleReposito
 
     public Task<Post?> GetForUpdateAsync(Guid articleId, CancellationToken cancellationToken) =>
         dbContext.Posts.Include(x => x.ArticleBlocks).SingleOrDefaultAsync(x => x.Id == articleId, cancellationToken);
+
+    public async Task SetHashtagsAsync(Post article, IReadOnlyList<string> hashtags, CancellationToken cancellationToken)
+    {
+        var names = hashtags.Select(HashtagNormalizer.Normalize).Where(name => name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var links = await dbContext.PostHashtags.Include(link => link.Hashtag)
+            .Where(link => link.PostId == article.Id).ToListAsync(cancellationToken);
+        foreach (var removed in links.Where(link => !names.Contains(link.Hashtag.Name)))
+        {
+            removed.Hashtag.PostCount = Math.Max(0, removed.Hashtag.PostCount - 1);
+            dbContext.PostHashtags.Remove(removed);
+        }
+        var added = names.Except(links.Select(link => link.Hashtag.Name), StringComparer.OrdinalIgnoreCase).ToList();
+        var existing = await dbContext.Hashtags.Where(tag => added.Contains(tag.Name)).ToListAsync(cancellationToken);
+        foreach (var name in added)
+        {
+            var tag = existing.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (tag is null) { tag = new Hashtag { Name = name }; dbContext.Hashtags.Add(tag); }
+            tag.PostCount++;
+            dbContext.PostHashtags.Add(new PostHashtag { Post = article, Hashtag = tag });
+        }
+    }
 
     public async Task PrepareBlockOrderUpdateAsync(Post article, CancellationToken cancellationToken)
     {
@@ -123,6 +146,11 @@ public sealed class ArticleRepository(AppDbContext dbContext) : IArticleReposito
             data.Post.ViewCount,
             isOwner,
             data.Author,
-            data.Blocks));
+            data.Blocks)
+        {
+            Hashtags = await dbContext.PostHashtags.AsNoTracking().Where(link => link.PostId == articleId)
+                .OrderBy(link => link.Hashtag.Name)
+                .Select(link => new PostDetailHashtagResponse(link.Hashtag.Id, link.Hashtag.Name)).ToListAsync(cancellationToken)
+        });
     }
 }

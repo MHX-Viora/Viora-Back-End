@@ -64,6 +64,7 @@ internal sealed class LiveGiftConfiguration : IEntityTypeConfiguration<LiveGift>
         builder.Property(x => x.Name).HasMaxLength(100).IsRequired();
         builder.Property(x => x.ImageUrl).HasMaxLength(2048).IsRequired();
         builder.Property(x => x.AnimationUrl).HasMaxLength(2048);
+        builder.Property(x => x.AnimationDurationMs).HasDefaultValue(0);
         builder.Property(x => x.EffectType).HasDefaultValue(LiveGiftEffectType.None);
         builder.Property(x => x.EffectTier).HasDefaultValue((short)0);
         builder.Property(x => x.EffectDurationMs).HasDefaultValue(0);

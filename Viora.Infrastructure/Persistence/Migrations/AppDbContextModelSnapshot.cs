@@ -3311,6 +3311,14 @@ namespace Viora.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<byte[]>("AnimationData")
+                        .HasColumnType("bytea");
+
+                    b.Property<int>("AnimationDurationMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<short>("AnimationType")
                         .HasColumnType("smallint");
 
