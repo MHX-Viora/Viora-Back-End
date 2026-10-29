@@ -34,7 +34,10 @@ public sealed record VideoFeedItemResponse(
     ReactionType? ReactionType,
     IReadOnlyList<VideoFeedMediaResponse> Media,
     IReadOnlyList<string> Hashtags,
-    VideoFeedUserResponse User);
+    VideoFeedUserResponse User)
+{
+    public PostAdvertisementResponse? Advertisement { get; init; }
+}
 
 public sealed record VideoFeedMediaResponse(
     Guid Id,

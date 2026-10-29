@@ -4,6 +4,14 @@ using Viora.Application.Mentions;
 
 namespace Viora.Application.Posts;
 
+public sealed record PostAdvertisementResponse(
+    Guid Id,
+    AdvertisementCtaType CtaType,
+    string? DestinationUrl,
+    string? Headline,
+    string? Description,
+    bool IsPreview);
+
 public sealed record GetCommunityPostsQuery(
     int Page,
     int PageSize,
@@ -54,6 +62,7 @@ public sealed record PostFeedItemResponse(
 {
     public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
     public ArticleFeedSummaryResponse? Article { get; init; }
+    public PostAdvertisementResponse? Advertisement { get; init; }
 }
 
 public sealed record ArticleFeedSummaryResponse(
@@ -120,6 +129,7 @@ public sealed record PostDetailResponse(
     IReadOnlyList<PostDetailHashtagResponse> Hashtags)
 {
     public IReadOnlyList<MentionResponse> Mentions { get; init; } = [];
+    public PostAdvertisementResponse? Advertisement { get; init; }
 }
 
 public sealed record PostDetailUserResponse(

@@ -90,8 +90,11 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
 
         var mentions = await MentionProjection.LoadAsync(
             dbContext, [response.Id], [MentionTargetType.Post], cancellationToken);
+        var advertisements = await PostAdvertisementProjection.LoadAsync(
+            dbContext, [response.Id], query.UserId, cancellationToken);
         return Result<PostDetailResponse>.Success(response with
         {
+            Advertisement = advertisements.GetValueOrDefault(response.Id),
             Mentions = mentions.GetValueOrDefault(response.Id) ?? []
         });
     }
@@ -407,8 +410,12 @@ public sealed class PostFeedRepository(AppDbContext dbContext) : IPostFeedReposi
             .ToArray();
         var mentions = await MentionProjection.LoadAsync(
             dbContext, postIds, [MentionTargetType.Post], cancellationToken);
+        var advertisements = query.UserId.HasValue
+            ? await PostAdvertisementProjection.LoadAsync(dbContext, items.Select(item => item.Id).ToArray(), viewerUserId, cancellationToken)
+            : new Dictionary<Guid, PostAdvertisementResponse>();
         var mappedItems = items.Select(item => item with
         {
+            Advertisement = advertisements.GetValueOrDefault(item.Id),
             Mentions = mentions.GetValueOrDefault(item.Id) ?? [],
             Article = articleSummaries.GetValueOrDefault(item.Id),
             OriginalPost = item.OriginalPost is null

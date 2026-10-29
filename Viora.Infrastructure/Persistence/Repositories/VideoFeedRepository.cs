@@ -125,6 +125,12 @@ public sealed class VideoFeedRepository(AppDbContext dbContext) : IVideoFeedRepo
                     item.Post.User.AccountStyle)))
             .ToListAsync(cancellationToken);
 
+        if (query.UserId.HasValue)
+        {
+            var advertisements = await PostAdvertisementProjection.LoadAsync(
+                dbContext, items.Select(item => item.Id).ToArray(), viewerUserId, cancellationToken);
+            items = items.Select(item => item with { Advertisement = advertisements.GetValueOrDefault(item.Id) }).ToList();
+        }
         return new VideoFeedResponse(page, pageSize, totalItems, totalPages, items);
     }
 
