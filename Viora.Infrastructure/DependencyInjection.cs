@@ -223,6 +223,7 @@ public static class DependencyInjection
         services.AddSingleton<IOnlineUserRegistry>(provider => provider.GetRequiredService<ConnectionRegistry>());
         services.AddSingleton<IUserIdProvider, UserIdProvider>();
         services.Configure<LiveChatOptions>(configuration.GetSection("LiveChat"));
+        services.AddMemoryCache();
         services.AddSingleton<ILiveCommentBuffer, InMemoryLiveCommentBuffer>();
         services.AddSingleton<LiveCommentCountFlusher>();
         services.AddHostedService(provider => provider.GetRequiredService<LiveCommentCountFlusher>());
