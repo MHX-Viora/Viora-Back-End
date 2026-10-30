@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 using Viora.Application.Live;
 using Viora.Domain.Entities;
@@ -18,7 +19,8 @@ public sealed class RealtimeHub(
     ILiveCommentBuffer commentBuffer,
     ILiveReactionBuffer reactionBuffer,
     IOptions<LiveChatOptions> chatOptions,
-    ILogger<RealtimeHub> logger) : Hub
+    ILogger<RealtimeHub> logger,
+    IMemoryCache presentationCache) : Hub
 {
     public override async Task OnConnectedAsync()
     {
@@ -119,7 +121,20 @@ public sealed class RealtimeHub(
         await Groups.AddToGroupAsync(Context.ConnectionId, LiveGroup(liveId));
         await Clients.Group(LiveGroup(liveId)).SendAsync("LiveViewerCount", new { liveId, count = live.CurrentViewerCount });
         var comments = commentBuffer.GetRecent(liveId, chatOptions.Value.ClientDisplayLimit);
-        return new { viewerCount = live.CurrentViewerCount, reactionCount = live.TotalReactions + reactionBuffer.GetPendingCount(liveId), comments, pinnedComment = commentBuffer.GetPinned(liveId) };
+        return new { viewerCount = live.CurrentViewerCount, reactionCount = live.TotalReactions + reactionBuffer.GetPendingCount(liveId), comments, pinnedComment = commentBuffer.GetPinned(liveId), presentation = presentationCache.Get<LivePresentation>($"live-presentation:{liveId}") };
+    }
+
+    public async Task SetLivePresentation(Guid liveId, LivePresentation? presentation)
+    {
+        if (!TryGetUserId(out var userId)) throw new HubException("Authentication required.");
+        if (presentation is not null && !presentation.IsValid) throw new HubException("Invalid live presentation.");
+        var live = await dbContext.Lives.AsNoTracking().SingleOrDefaultAsync(x => x.Id == liveId);
+        if (live is null || live.HostUserId != userId || live.Status is not (LiveStatus.Live or LiveStatus.Reconnecting))
+            throw new HubException("Presentation unavailable.");
+        var key = $"live-presentation:{liveId}";
+        if (presentation is null) presentationCache.Remove(key);
+        else presentationCache.Set(key, presentation, TimeSpan.FromSeconds(45));
+        await Clients.Group(LiveGroup(liveId)).SendAsync("LivePresentation", new { liveId, presentation });
     }
 
     public async Task LeaveLive(Guid liveId)
