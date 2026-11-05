@@ -15,6 +15,7 @@ namespace viora_BE.Controllers;
 [Authorize]
 public sealed class FeedController(IMediator mediator) : ControllerBase
 {
+    private const long PostRequestLimit = 100_000_000;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [HttpGet]
@@ -38,6 +39,7 @@ public sealed class FeedController(IMediator mediator) : ControllerBase
     }
 
     [HttpPost]
+    [RequestSizeLimit(PostRequestLimit)]
     [Consumes("multipart/form-data")]
     [ProducesResponseType<CreatePostResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]

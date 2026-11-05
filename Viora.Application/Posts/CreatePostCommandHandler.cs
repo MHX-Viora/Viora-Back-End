@@ -28,7 +28,15 @@ public sealed class CreatePostCommandHandler(
         var uploads = new List<UploadedMedia>(request.Files.Count);
         foreach (var file in request.Files)
         {
-            uploads.Add(await mediaStorage.UploadPostImageAsync(request.UserId, file, cancellationToken));
+            try
+            {
+                uploads.Add(await mediaStorage.UploadPostImageAsync(request.UserId, file, cancellationToken));
+            }
+            catch (CreatePostException exception)
+            {
+                throw new CreatePostException(exception.Code,
+                    $"Không thể tải ảnh thứ {uploads.Count + 1}/{request.Files.Count}. Bài viết chưa được tạo. Vui lòng thử lại.", exception);
+            }
         }
 
         var post = new Post
@@ -44,11 +52,14 @@ public sealed class CreatePostCommandHandler(
             Link = string.IsNullOrWhiteSpace(request.Link) ? null : request.Link.Trim()
         };
 
-        foreach (var upload in uploads)
+        var mediaCreatedAt = DateTime.UtcNow;
+        foreach (var (upload, index) in uploads.Select((upload, index) => (upload, index)))
         {
             post.Media.Add(new PostMedia
             {
                 Post = post,
+                // PostgreSQL stores microseconds; distinct timestamps preserve selection order without a new column.
+                CreatedAt = mediaCreatedAt.AddTicks(index * 10L),
                 MediaUrl = upload.MediaUrl,
                 ThumbnailUrl = upload.ThumbnailUrl
             });

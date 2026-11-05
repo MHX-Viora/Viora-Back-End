@@ -155,7 +155,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             if (entry.State == EntityState.Added && entry.Metadata.FindProperty("CreatedAt") is not null)
             {
-                entry.Property("CreatedAt").CurrentValue = now;
+                entry.Property("CreatedAt").CurrentValue = entry.Entity is PostMedia media && media.CreatedAt != default
+                    ? media.CreatedAt
+                    : now;
             }
 
             if (entry.State is EntityState.Added or EntityState.Modified && entry.Metadata.FindProperty("UpdatedAt") is not null)
