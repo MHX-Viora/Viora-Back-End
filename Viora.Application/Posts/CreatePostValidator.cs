@@ -5,12 +5,14 @@ namespace Viora.Application.Posts;
 
 public sealed class CreatePostValidator : AbstractValidator<CreatePostCommand>
 {
+    public const int MaxContentLength = 50000;
+    public const int MaxImages = 20;
     private static readonly string[] AllowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
 
     public CreatePostValidator()
     {
         RuleFor(command => command.UserId).NotEmpty();
-        RuleFor(command => command.Content).MaximumLength(5000);
+        RuleFor(command => command.Content).MaximumLength(MaxContentLength);
         RuleFor(command => command.Visibility).Must(Enum.IsDefined);
         RuleFor(command => command.Latitude)
             .InclusiveBetween(-90, 90)
@@ -20,8 +22,8 @@ public sealed class CreatePostValidator : AbstractValidator<CreatePostCommand>
             .When(command => command.Longitude.HasValue);
         RuleFor(command => command.LocationName).MaximumLength(255);
         RuleFor(command => command.Link).MaximumLength(255);
-        RuleFor(command => command.Files).Must(files => files.Count <= 10)
-            .WithMessage("Tối đa 10 ảnh.");
+        RuleFor(command => command.Files).Must(files => files.Count <= MaxImages)
+            .WithMessage($"Tối đa {MaxImages} ảnh.");
         RuleFor(command => command).Must(command =>
                 !string.IsNullOrWhiteSpace(command.Content) || command.Files.Count > 0)
             .WithMessage("Bài viết phải có nội dung hoặc ảnh.");

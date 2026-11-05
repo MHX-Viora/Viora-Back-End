@@ -261,7 +261,7 @@ public sealed class CreatePostFormRequest
     public string? Post { get; init; }
 
     [FromForm(Name = "content")]
-    [MaxLength(5000)]
+    [MaxLength(CreatePostValidator.MaxContentLength)]
     public string? Content { get; init; }
 
     [FromForm(Name = "visibility")]
